@@ -1,9 +1,13 @@
+using CustomCodeFramework.Auth.DependencyInjection;
 using Dhole.Crm.Api.Grpc;
+using Dhole.Crm.Api.Endpoints;
 using Dhole.Crm.Application.Health;
 using Dhole.Crm.Infrastructure.DependencyInjection;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddCrmInfrastructure();
+builder.Services.AddCustomCodeAuth(builder.Configuration);
+builder.Services.AddAuthorization();
 builder.Services.AddGrpc();
 builder.WebHost.ConfigureKestrel(options =>
 {
@@ -19,6 +23,9 @@ app.MapGet("/health/ready", async (IDependencyVerifier verifier, CancellationTok
         postgres = state.PostgresReachable, redis = state.RedisReachable },
         statusCode: state.IsReady ? 200 : 503);
 });
+app.UseAuthentication();
+app.UseAuthorization();
+app.MapCrmDataEndpoints();
 app.MapGrpcService<CrmDiagnosticsService>();
 app.Run();
 
