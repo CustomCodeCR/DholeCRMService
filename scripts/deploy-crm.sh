@@ -62,6 +62,14 @@ docker run --rm --network "$DHOLE_NETWORK" \
   fullstorydev/grpcurl:v1.9.3 -plaintext -import-path / -proto crm.proto \
   -d '{}' crm-api:8081 dhole.crm.diagnostics.v1.CrmDiagnostics/Check | \
   python3 scripts/validate-grpc-result.py
+# Regression smoke checks for pre-existing services; fail promotion if any is down.
+for upstream in auth-api config-api pricing-api api-gateway; do
+  docker run --rm --network "$DHOLE_NETWORK" curlimages/curl:8.15.0 \
+    -fsS --max-time 12 "http://${upstream}:8080/health" >/dev/null || {
+      echo "Existing Dhole service health check failed: ${upstream}" >&2
+      exit 1
+    }
+done
 if [[ -n "$previous" && "$previous" != "$GITHUB_SHA" ]]; then
   printf '%s\n' "$previous" > "$release_dir/${mode}-previous.sha"
 fi
