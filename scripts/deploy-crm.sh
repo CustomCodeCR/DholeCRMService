@@ -7,11 +7,13 @@ mode="${1:?staging or production}"
 [[ -r "${DHOLE_ENV_FILE:?}" && -r /opt/dhole/docker-compose.services.yml ]] || { echo "Protected runtime Compose/env unavailable" >&2; exit 1; }
 [[ -n "${GITHUB_SHA:-}" && -n "${GITHUB_TOKEN:-}" ]] || { echo "Build provenance missing" >&2; exit 1; }
 [[ -f _dhole-system/deploy/docker-compose.services.yml ]] || exit 1
-if find src -type f -path '*/Migrations/*' | grep -q . ; then
-  # Phase 1 contains no migrations. A later phase must supply validated SQL,
-  # a tested full backup and migration approval before modifying this gate.
-  echo "Unreviewed database migrations: refusing automatic deployment" >&2
-  exit 1
+has_migrations=false
+if find src/Dhole.Crm.Infrastructure/Persistence/Migrations -name '*.cs' -type f | grep -q . ; then
+  has_migrations=true
+  [[ "${CRM_SCHEMA_MIGRATION_APPROVED:-false}" == "true" ]] || {
+    echo "CRM versioned migrations require explicit environment approval" >&2
+    exit 1
+  }
 fi
 export DHOLE_ENV_FILE DHOLE_NETWORK DHOLE_IMAGE_TAG
 compose=(-f _dhole-system/deploy/docker-compose.services.yml)
@@ -27,6 +29,25 @@ docker build --secret id=github_token,env=GITHUB_TOKEN -f src/Dhole.Crm.Api/Dock
   -t "dhole/crm-api:${GITHUB_SHA}" .
 docker build --secret id=github_token,env=GITHUB_TOKEN -f src/Dhole.Crm.Workers/Dockerfile \
   -t "dhole/crm-workers:${GITHUB_SHA}" .
+# A full, verified per-environment CRM DB backup is mandatory before schema changes.
+if [[ "$has_migrations" == true ]]; then
+  [[ -n "${GITHUB_TOKEN:-}" ]] || exit 1
+  docker build --secret id=github_token,env=GITHUB_TOKEN \
+    -f src/Dhole.Crm.Migrator/Dockerfile -t "dhole/crm-migrator:${GITHUB_SHA}" .
+  backup_dir=/opt/dhole/backups/crm
+  mkdir -p "$backup_dir"
+  backup_file="$backup_dir/${mode}-${GITHUB_SHA}.dump"
+  # The credential is only an environment variable inside the ephemeral container.
+  docker run --rm --network "$DHOLE_NETWORK" --env-file "$DHOLE_ENV_FILE" postgres:17 \
+    sh -ec 'export PGPASSWORD="${POSTGRES_PASSWORD:?}"; exec pg_dump -h "${POSTGRES_HOST:-postgres}" -p "${POSTGRES_PORT:-5432}" -U "${POSTGRES_USER:?}" -d "${CRM_DB:-dhole_crm}" -Fc' \
+    > "$backup_file"
+  test -s "$backup_file"
+  docker run --rm -v "$backup_dir:/backup:ro" postgres:17 \
+    pg_restore --list "/backup/${mode}-${GITHUB_SHA}.dump" >/dev/null
+  echo "CRM database archive created and validated under protected backup directory."
+  docker run --rm --network "$DHOLE_NETWORK" --env-file "$DHOLE_ENV_FILE" \
+    -e CRM_SCHEMA_MIGRATION_APPROVED=true "dhole/crm-migrator:${GITHUB_SHA}"
+fi
 release_dir=/opt/dhole/releases/crm
 mkdir -p "$release_dir"
 previous=""

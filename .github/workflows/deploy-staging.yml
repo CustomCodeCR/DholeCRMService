@@ -61,5 +61,6 @@ jobs:
           DHOLE_ENV_FILE: /opt/dhole/.env.staging
           DHOLE_NETWORK: dhole-staging
           DHOLE_IMAGE_TAG: staging
+          CRM_SCHEMA_MIGRATION_APPROVED: ${{ vars.CRM_SCHEMA_MIGRATION_APPROVED }}
           COMPOSE_PROJECT: dhole-staging
         run: bash scripts/deploy-crm.sh staging
