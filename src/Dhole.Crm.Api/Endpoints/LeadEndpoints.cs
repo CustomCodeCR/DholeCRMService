@@ -152,7 +152,38 @@ internal static class LeadEndpoints
                 x => x.Id == request.ExistingAccountId.Value && x.ArchivedAt == null, ct);
             if (matched is null) return Results.NotFound();
             if (!CrmAccess.AccountAccess(http, matched.ExecutiveUserId)) return CrmAccess.Denied();
-            return CrmDataEndpoints.Conflict("Manual linking of existing accounts requires reviewed duplicate resolution");
+            // Explicit operator-selected linkage, never fuzzy automatic matching.
+            // Require a matching fiscal identity when one exists; no-tax cases require
+            // the elevated account assignment scope in addition to own-record access.
+            var leadTax = CrmDataEndpoints.NormalizeTax(lead.TaxId);
+            if (leadTax is not null &&
+                (matched.CountryId != lead.CountryId || matched.NormalizedTaxId != leadTax ||
+                 matched.TaxIdTypeCode != request.TaxIdTypeCode))
+                return CrmDataEndpoints.Conflict("Existing account fiscal identity does not match prospect");
+            if (leadTax is null && !CrmAccess.Scope(http, "crm.account.assign"))
+                return CrmAccess.Denied();
+            var currentUser = CrmAccess.UserId(http);
+            lead.ConvertedAt = DateTime.UtcNow;
+            lead.ConvertedAccountId = matched.Id;
+            lead.QualificationStatus = "Converted";
+            lead.UpdatedAt = DateTime.UtcNow;
+            lead.UpdatedByUserId = currentUser;
+            lead.RowVersion++;
+            db.LeadConversions.Add(new LeadConversion
+            {
+                LeadId = id, AccountId = matched.Id, ConvertedBy = currentUser,
+                CreatedByUserId = currentUser, Notes = request.Notes
+            });
+            try
+            {
+                await db.SaveChangesAsync(ct);
+                await tx.CommitAsync(ct);
+                return Results.Ok(new { leadId = id, accountId = matched.Id, alreadyConverted = false });
+            }
+            catch (DbUpdateException)
+            {
+                return CrmDataEndpoints.Conflict("Prospect already converted concurrently");
+            }
         }
         if (string.IsNullOrWhiteSpace(request.CustomerTypeCode) ||
             request.CustomerTypeCode is not ("cash" or "credit") ||
