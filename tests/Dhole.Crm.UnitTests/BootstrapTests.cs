@@ -8,7 +8,7 @@ namespace Dhole.Crm.UnitTests;
 [TestClass]
 public sealed class BootstrapTests
 {
-    [DataTestMethod]
+    [TestMethod]
     [DataRow(true, true, true)]
     [DataRow(true, false, false)]
     [DataRow(false, true, false)]
