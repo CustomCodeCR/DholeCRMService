@@ -2,7 +2,7 @@
 
 ## Scope and dependencies
 
-This release has **zero CRM EF migrations and zero business tables**. It verifies PostgreSQL and Redis using live SELECT 1 / PING. It does not publish or consume business events until the relevant later phases. Credentials must stay in `/opt/dhole/.env[.staging]`; GitHub token is passed only as a Docker BuildKit secret to private NuGet restore.
+Phase 1 has no schema changes. Phase 2 adds a versioned additive CRM migration; its application is expressly guarded. It verifies PostgreSQL and Redis using live SELECT 1 / PING. It does not publish or consume business events until the relevant later phases. Credentials must stay in `/opt/dhole/.env[.staging]`; GitHub token is passed only as a Docker BuildKit secret to private NuGet restore.
 
 Runtime Compose is provided by `CustomCodeCR/DholeSystem/deploy/docker-compose.services.yml`, which **includes** `/opt/dhole/docker-compose.services.yml`; never copy/replace it. An effective Compose preflight must pass; unmerged `DholeSystem` overrides or duplicate `api-gateway` cause a safe failure.
 
@@ -22,7 +22,7 @@ The self-hosted runner needs dotnet 10, Docker Compose, Docker BuildKit, outboun
 
 Staging tag `staging`; production tag `latest` plus immutable commit SHA. The successful SHA is recorded under `/opt/dhole/releases/crm/{staging,production}-success.sha`; previous SHA preserved. Commands only recreate `crm-api` and `crm-workers` with `--no-deps`; production promotion requires staging success.
 
-Any migration file appearing under `*/Migrations/*` **fails closed** in phase 1. Before phase 2, replace this safety gate with versioned, separately reviewed migration preflight, verified backups and guarded migrations; never drop tables or rollback user data automatically.
+During Phase 2, a protected GitHub environment/repository variable `CRM_SCHEMA_MIGRATION_APPROVED=true` must be explicitly approved for each deployment. The staging/production deployment script refuses migration if approval is not present. It creates a full compressed PostgreSQL backup at `/opt/dhole/backups/crm/{environment}-{commit SHA}.dump`, verifies the archive using `pg_restore --list`, then executes the dedicated `crm-migrator` container. A failed backup blocks migration. This script must not run until the live Compose (including the host-included file) is inspected and approved. The migrator does not drop tables and refuses unknown migrations; SQL Down refuses automatic data loss. Restore is an operator-only procedure, never an automatic rollback.
 
 ## Rollback (images only)
 
