@@ -15,6 +15,10 @@ public static class CrmDataEndpoints
         group.MapAccounts();
         group.MapLeads();
         group.MapContacts();
+        group.MapCommercialPipeline();
+        group.MapCommercialOpportunities();
+        group.MapCommercialActivities();
+        group.MapCommercialAnalyses();
         return app;
     }
 

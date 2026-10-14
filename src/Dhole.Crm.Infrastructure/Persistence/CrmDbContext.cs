@@ -4,7 +4,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Dhole.Crm.Infrastructure.Persistence;
 
-public sealed class CrmDbContext(DbContextOptions<CrmDbContext> options) : DbContext(options)
+public sealed partial class CrmDbContext(DbContextOptions<CrmDbContext> options) : DbContext(options)
 {
     public DbSet<Account> Accounts => Set<Account>();
     public DbSet<Lead> Leads => Set<Lead>();
@@ -16,6 +16,19 @@ public sealed class CrmDbContext(DbContextOptions<CrmDbContext> options) : DbCon
     public DbSet<ContactPreference> ContactPreferences => Set<ContactPreference>();
     public DbSet<MarketingConsent> MarketingConsents => Set<MarketingConsent>();
     public DbSet<AccountBusinessActivity> AccountBusinessActivities => Set<AccountBusinessActivity>();
+    public DbSet<SalesPipeline> SalesPipelines => Set<SalesPipeline>();
+    public DbSet<SalesPipelineStage> SalesPipelineStages => Set<SalesPipelineStage>();
+    public DbSet<Opportunity> Opportunities => Set<Opportunity>();
+    public DbSet<OpportunityStageHistory> OpportunityStageHistories => Set<OpportunityStageHistory>();
+    public DbSet<OpportunityContact> OpportunityContacts => Set<OpportunityContact>();
+    public DbSet<OpportunityNegotiation> OpportunityNegotiations => Set<OpportunityNegotiation>();
+    public DbSet<Activity> Activities => Set<Activity>();
+    public DbSet<ActivityParticipant> ActivityParticipants => Set<ActivityParticipant>();
+    public DbSet<ActivityNote> ActivityNotes => Set<ActivityNote>();
+    public DbSet<CommercialAnalysis> CommercialAnalyses => Set<CommercialAnalysis>();
+    public DbSet<CommercialAnalysisRoute> CommercialAnalysisRoutes => Set<CommercialAnalysisRoute>();
+    public DbSet<CommercialAnalysisService> CommercialAnalysisServices => Set<CommercialAnalysisService>();
+    public DbSet<CustomerTradeProfile> CustomerTradeProfiles => Set<CustomerTradeProfile>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -97,6 +110,7 @@ public sealed class CrmDbContext(DbContextOptions<CrmDbContext> options) : DbCon
             e.HasOne<Account>().WithMany().HasForeignKey(x => x.AccountId).OnDelete(DeleteBehavior.Restrict);
             e.HasIndex(x => new { x.AccountId, x.ActivityCode }).IsUnique();
         });
+        ConfigureCommercialModel(b);
         foreach (var t in b.Model.GetEntityTypes())
         {
             foreach (var prop in t.GetProperties())

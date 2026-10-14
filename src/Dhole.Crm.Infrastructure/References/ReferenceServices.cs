@@ -33,9 +33,27 @@ public sealed class AuthReferenceService(HttpClient http, IConfiguration configu
 public interface IConfigReferenceService
 {
     Task<bool> IsActiveCountryAsync(Guid countryId, CancellationToken ct);
+    Task<bool> IsActiveCodeAsync(string catalogGroupSlug, string itemCode, CancellationToken ct);
 }
 public sealed class ConfigReferenceService(IConfiguration configuration) : IConfigReferenceService
 {
+    public async Task<bool> IsActiveCodeAsync(string catalogGroupSlug, string itemCode, CancellationToken ct)
+    {
+        var url = configuration["Grpc:Clients:Config:Address"];
+        if (string.IsNullOrWhiteSpace(url))
+            throw new InvalidOperationException("Config gRPC endpoint is not configured.");
+        using var channel = GrpcChannel.ForAddress(url);
+        var client = new ConfigCatalogGrpc.ConfigCatalogGrpcClient(channel);
+        var result = await client.GetCatalogItemByCodeAsync(
+            new GetCatalogItemByCodeGrpcRequest
+            {
+                CatalogGroupSlug = catalogGroupSlug,
+                CatalogItemCode = itemCode
+            }, deadline: DateTime.UtcNow.AddSeconds(5), cancellationToken: ct);
+        return result.Found && result.Item.IsActive &&
+               string.Equals(result.Item.CatalogGroupSlug,catalogGroupSlug,StringComparison.OrdinalIgnoreCase);
+    }
+
     public async Task<bool> IsActiveCountryAsync(Guid countryId, CancellationToken ct)
     {
         var url = configuration["Grpc:Clients:Config:Address"];
