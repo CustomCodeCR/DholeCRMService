@@ -22,7 +22,7 @@ if (!string.Equals(Environment.GetEnvironmentVariable("CRM_SCHEMA_MIGRATION_APPR
 var options = new DbContextOptionsBuilder<CrmDbContext>().UseNpgsql(pg.ConnectionString).Options;
 await using var db = new CrmDbContext(options);
 var known = db.Database.GetMigrations().ToArray();
-if (known.Length != 2 || known.Any(x => x is not ("20261014193000_InitialCrmData" or "20261014210000_AddCommercialPipelineActivitiesAnalysis"))
+if (known.Length != 2 || known.Any(x => x is not ("20261014193000_InitialCrmData" or "20261014210000_AddCommercialPipelineActivitiesAnalysis")))
     throw new InvalidOperationException("The migrator has an unexpected migration set.");
 await db.Database.MigrateAsync();
 Console.WriteLine("DholeCRM versioned migrations applied successfully. No data dropped.");
