@@ -59,6 +59,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          # Test-only random JWT key; generated at execution time, never checked in.
+          export Auth__Jwt__SecretKey="$(openssl rand -hex 32)"
+          export Auth__Jwt__Issuer=CRM-CI
+          export Auth__Jwt__Audience=CRM-CI
           dotnet run --no-build -c Release --project src/Dhole.Crm.Api > "$RUNNER_TEMP/crm-api.log" 2>&1 &
           api_pid=$!
           dotnet run --no-build -c Release --project src/Dhole.Crm.Workers > "$RUNNER_TEMP/crm-workers.log" 2>&1 &
@@ -70,7 +74,14 @@ jobs:
                curl -fsS http://127.0.0.1:8082/health/ready >/dev/null 2>&1; then ready=1; break; fi
             sleep 2
           done
-          test "$ready" -eq 1
+          if test "$ready" -ne 1; then
+            echo "::error::CRM API/worker process readiness failed during CI."
+            # Only emit safe exception type identifiers, never application configuration.
+            for file in "$RUNNER_TEMP/crm-api.log" "$RUNNER_TEMP/crm-workers.log"; do
+              grep -oE '[A-Za-z.]+Exception' "$file" | sort -u || true
+            done
+            exit 1
+          fi
           dotnet run -c Release --project tests/Dhole.Crm.Smoke -- \
             http://127.0.0.1:8080 http://127.0.0.1:8081 http://127.0.0.1:8082
       - name: Build both deployable Docker images with mounted GitHub package token
