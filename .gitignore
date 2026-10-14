@@ -1,0 +1,11 @@
+**/bin/
+**/obj/
+.vs/
+.idea/
+TestResults/
+.env
+.env.*
+!.env.example
+**/appsettings.Production.json
+**/appsettings.Staging.json
+*.user
