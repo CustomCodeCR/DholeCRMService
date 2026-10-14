@@ -1,0 +1,15 @@
+syntax = "proto3";
+option csharp_namespace = "Dhole.Crm.Contracts.Grpc";
+package dhole.crm.diagnostics.v1;
+
+// Internal infrastructure diagnostic only; no commercial API before phase 4.
+service CrmDiagnostics {
+  rpc Check (CrmDiagnosticsRequest) returns (CrmDiagnosticsReply);
+}
+message CrmDiagnosticsRequest {}
+message CrmDiagnosticsReply {
+  bool ready = 1;
+  bool postgres_reachable = 2;
+  bool redis_reachable = 3;
+  string checked_at_utc = 4;
+}

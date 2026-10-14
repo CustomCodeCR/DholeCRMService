@@ -1,0 +1,66 @@
+name: CRM Deploy Staging
+on:
+  push:
+    branches: [develop]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: read
+
+concurrency:
+  group: dhole-crm-staging
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: Repeat mandatory checks on promoted branch
+        env:
+          NuGetPackageSourceCredentials_github: Username=github-actions;Password=${{ secrets.GITHUB_TOKEN }};ValidAuthenticationTypes=Basic
+        run: |
+          python3 scripts/check-config.py
+          dotnet restore DholeCRMService.slnx --configfile NuGet.Config
+          dotnet build DholeCRMService.slnx -c Release --no-restore --warnaserror
+          dotnet test DholeCRMService.slnx -c Release --no-build --logger trx
+    services:
+      postgres:
+        image: postgres:17
+        env: { POSTGRES_USER: crm_test, POSTGRES_PASSWORD: crm_ci_only, POSTGRES_DB: dhole_crm }
+        ports: ["5432:5432"]
+        options: --health-cmd "pg_isready -U crm_test" --health-interval 5s --health-timeout 5s --health-retries 12
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: --health-cmd "redis-cli ping" --health-interval 5s --health-timeout 5s --health-retries 12
+    env:
+      CRM_TEST_POSTGRES: Host=127.0.0.1;Database=dhole_crm;Username=crm_test;Password=crm_ci_only
+      CRM_TEST_REDIS: 127.0.0.1:6379
+
+  deploy:
+    needs: verify
+    if: vars.CRM_STAGING_DEPLOY_ENABLED == 'true'
+    runs-on: [self-hosted, linux, x64, dhole]
+    environment: crm-staging
+    steps:
+      - uses: actions/checkout@v4
+      - name: Checkout orchestration from DholeSystem
+        uses: actions/checkout@v4
+        with:
+          repository: CustomCodeCR/DholeSystem
+          ref: develop
+          path: _dhole-system
+      - name: Staging preflight and deploy only CRM services
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DHOLE_ENV_FILE: /opt/dhole/.env.staging
+          DHOLE_NETWORK: dhole-staging
+          DHOLE_IMAGE_TAG: staging
+          CRM_SCHEMA_MIGRATION_APPROVED: ${{ vars.CRM_SCHEMA_MIGRATION_APPROVED }}
+          COMPOSE_PROJECT: dhole-staging
+        run: bash scripts/deploy-crm.sh staging
