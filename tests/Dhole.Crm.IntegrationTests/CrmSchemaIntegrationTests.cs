@@ -23,7 +23,7 @@ public sealed class CrmSchemaIntegrationTests
             "crm_addresses", "crm_contact_preferences", "crm_marketing_consents",
             "crm_account_business_activities"
         })
-            Assert.IsTrue(tables.Contains(name), "Missing table " + name);
+            CollectionAssert.Contains(tables, name, "Missing table " + name);
         var applied = await db.Database.GetAppliedMigrationsAsync();
         CollectionAssert.Contains(applied.ToList(), "20261014193000_InitialCrmData");
     }
