@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net10.0</TargetFramework><ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable><IsTestProject>true</IsTestProject></PropertyGroup>
+  <ItemGroup><PackageReference Include="MSTest" Version="4.0.2" /></ItemGroup>
+  <ItemGroup>
+    <Using Include="Microsoft.VisualStudio.TestTools.UnitTesting" />
+    <ProjectReference Include="../../src/Dhole.Crm.Application/Dhole.Crm.Application.csproj" />
+    <ProjectReference Include="../../src/Dhole.Crm.Workers/Dhole.Crm.Workers.csproj" />
+    <ProjectReference Include="../../src/Dhole.Crm.Contracts/Dhole.Crm.Contracts.csproj" />
+  </ItemGroup>
+</Project>
