@@ -2,6 +2,7 @@ using Dhole.Crm.Application.Health;
 using Dhole.Crm.Infrastructure.Persistence;
 using Dhole.Crm.Infrastructure.References;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Dhole.Crm.Infrastructure.Health;
 using Microsoft.Extensions.DependencyInjection;
 
