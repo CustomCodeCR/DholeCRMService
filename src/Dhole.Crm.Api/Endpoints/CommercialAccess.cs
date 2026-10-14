@@ -12,7 +12,9 @@ internal static class CommercialAccess
         a.OwnerUserId == CrmAccess.UserId(h) || CrmAccess.Scope(h, "crm.activity.read-all");
     public static bool AnalysisOwns(HttpContext h, CommercialAnalysis a) =>
         a.OwnerUserId == CrmAccess.UserId(h) ||
-        CrmAccess.Scope(h,"crm.opportunity.read-all") || CrmAccess.Scope(h,"crm.account.read-all");
+        (a.OpportunityId is not null && CrmAccess.Scope(h,"crm.opportunity.read-all")) ||
+        (a.AccountId is not null && CrmAccess.Scope(h,"crm.account.read-all")) ||
+        (a.LeadId is not null && CrmAccess.Scope(h,"crm.lead.read-all"));
 
     public static async Task<bool> SubjectCanRead(CrmDbContext db, HttpContext h,
         Guid? accountId, Guid? leadId, Guid? opportunityId, CancellationToken ct)
