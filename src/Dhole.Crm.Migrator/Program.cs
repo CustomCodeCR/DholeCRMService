@@ -21,7 +21,7 @@ if (!string.Equals(Environment.GetEnvironmentVariable("CRM_SCHEMA_MIGRATION_APPR
     throw new InvalidOperationException("CRM migration not explicitly approved.");
 var options = new DbContextOptionsBuilder<CrmDbContext>().UseNpgsql(pg.ConnectionString).Options;
 await using var db = new CrmDbContext(options);
-var known = (await db.Database.GetMigrationsAsync()).ToArray();
+var known = db.Database.GetMigrations().ToArray();
 if (known.Length == 0 || known.Any(x => x != "20261014193000_InitialCrmData"))
     throw new InvalidOperationException("The migrator has an unexpected migration set.");
 await db.Database.MigrateAsync();
