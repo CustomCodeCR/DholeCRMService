@@ -204,7 +204,7 @@ internal static class CommercialPricingEndpoints
         if(prior is not null)
             return prior.RequestPayloadHash==payloadHash?Results.Ok(prior):
                 CrmDataEndpoints.Conflict("Idempotency-Key reused with different payload");
-        var result=await pricing.CreateRequest(create,bearer,rawKey,
+        var result=await pricing.CreateRequest(create,bearer,"crm-"+id.ToString("N")+"-"+rawKey,
             h.Request.Headers["X-Correlation-Id"].ToString() is {Length:>0} corr?
                 corr:h.TraceIdentifier,ct);
         if(!result.Success)return FailureIfAny(result);
