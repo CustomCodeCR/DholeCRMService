@@ -1,4 +1,6 @@
 using Dhole.Crm.Contracts.Grpc;
+using Dhole.Crm.Contracts.V1;
+using Grpc.Core;
 using Grpc.Net.Client;
 
 if (args.Length != 3)
@@ -29,5 +31,26 @@ if (!state.Ready || !state.PostgresReachable || !state.RedisReachable)
     Console.Error.WriteLine("gRPC readiness failed.");
     return 1;
 }
+// New business gRPC contracts must fail CLOSED when an internal identity is absent.
+var accountClient=new CrmAccountReadService.CrmAccountReadServiceClient(channel);
+try
+{
+    await accountClient.GetAccountByIdAsync(new GetAccountByIdRequest {
+        AccountId=Guid.NewGuid().ToString(),RequestId=Guid.NewGuid().ToString()
+    },deadline:DateTime.UtcNow.AddSeconds(10),cancellationToken:timeout.Token);
+    Console.Error.WriteLine("Unauthenticated account gRPC call unexpectedly succeeded.");
+    return 1;
+}
+catch(RpcException ex) when(ex.StatusCode==StatusCode.Unauthenticated) {}
+var opportunityClient=new CrmOpportunityReadService.CrmOpportunityReadServiceClient(channel);
+try
+{
+    await opportunityClient.GetOpportunityByIdAsync(new GetOpportunityByIdRequest {
+        OpportunityId=Guid.NewGuid().ToString(),RequestId=Guid.NewGuid().ToString()
+    },deadline:DateTime.UtcNow.AddSeconds(10),cancellationToken:timeout.Token);
+    Console.Error.WriteLine("Unauthenticated opportunity gRPC call unexpectedly succeeded.");
+    return 1;
+}
+catch(RpcException ex) when(ex.StatusCode==StatusCode.Unauthenticated) {}
 Console.WriteLine("Real HTTP, worker and gRPC readiness smoke tests passed.");
 return 0;
