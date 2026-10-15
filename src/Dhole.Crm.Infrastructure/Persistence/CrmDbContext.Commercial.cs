@@ -26,6 +26,7 @@ public sealed partial class CrmDbContext
               .HasFilter("idempotency_key_hash IS NOT NULL");
             e.Property(x=>x.StatusSnapshot).HasMaxLength(50);
             e.Property(x=>x.IdempotencyKeyHash).HasMaxLength(64);
+            e.Property(x=>x.RequestPayloadHash).HasMaxLength(64);
         });
     }
 

@@ -21,6 +21,7 @@ public sealed class OpportunityPricingRequest : CrmRecord
     public Guid? PricingQuoteId { get; set; }
     public string StatusSnapshot { get; set; } = "";
     public string? IdempotencyKeyHash { get; set; }
+    public string? RequestPayloadHash { get; set; }
     public DateTime LinkedAt { get; set; } = DateTime.UtcNow;
     public DateTime LastSyncAt { get; set; } = DateTime.UtcNow;
 }

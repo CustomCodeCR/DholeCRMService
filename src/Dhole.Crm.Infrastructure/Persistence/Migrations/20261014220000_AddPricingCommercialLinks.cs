@@ -24,6 +24,7 @@ CREATE TABLE crm.crm_opportunity_pricing_requests (
   pricing_quote_id uuid,
   status_snapshot varchar(50) NOT NULL,
   idempotency_key_hash varchar(64),
+  request_payload_hash varchar(64),
   linked_at timestamptz NOT NULL,
   last_sync_at timestamptz NOT NULL
 );
