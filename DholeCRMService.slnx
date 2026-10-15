@@ -1,0 +1,16 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Dhole.Crm.Api/Dhole.Crm.Api.csproj" />
+    <Project Path="src/Dhole.Crm.Application/Dhole.Crm.Application.csproj" />
+    <Project Path="src/Dhole.Crm.Contracts/Dhole.Crm.Contracts.csproj" />
+    <Project Path="src/Dhole.Crm.Domain/Dhole.Crm.Domain.csproj" />
+    <Project Path="src/Dhole.Crm.Infrastructure/Dhole.Crm.Infrastructure.csproj" />
+    <Project Path="src/Dhole.Crm.Migrator/Dhole.Crm.Migrator.csproj" />
+    <Project Path="src/Dhole.Crm.Workers/Dhole.Crm.Workers.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Dhole.Crm.UnitTests/Dhole.Crm.UnitTests.csproj" />
+    <Project Path="tests/Dhole.Crm.IntegrationTests/Dhole.Crm.IntegrationTests.csproj" />
+    <Project Path="tests/Dhole.Crm.Smoke/Dhole.Crm.Smoke.csproj" />
+  </Folder>
+</Solution>
