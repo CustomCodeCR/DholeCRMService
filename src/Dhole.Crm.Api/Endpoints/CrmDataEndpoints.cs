@@ -19,6 +19,7 @@ public static class CrmDataEndpoints
         group.MapCommercialOpportunities();
         group.MapCommercialActivities();
         group.MapCommercialAnalyses();
+        group.MapCommercialPricing();
         return app;
     }
 
