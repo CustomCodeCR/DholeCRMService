@@ -16,6 +16,7 @@ public static class ServiceRegistration
         services.AddDbContext<CrmDbContext>((sp, options) =>
             options.UseNpgsql(sp.GetRequiredService<Microsoft.Extensions.Configuration.IConfiguration>().GetConnectionString("Postgres")));
         services.AddHttpClient<IAuthReferenceService, AuthReferenceService>();
+        services.AddHttpClient<IPricingCommercialClient, PricingCommercialClient>();
         services.AddSingleton<IConfigReferenceService, ConfigReferenceService>();
         return services;
     }
