@@ -5,6 +5,30 @@ namespace Dhole.Crm.Infrastructure.Persistence;
 
 public sealed partial class CrmDbContext
 {
+    private static void ConfigurePricingModel(ModelBuilder b)
+    {
+        ConfigureRecord<OpportunityQuote>(b,"crm_opportunity_quotes");
+        ConfigureRecord<OpportunityPricingRequest>(b,"crm_opportunity_pricing_requests");
+        b.Entity<OpportunityQuote>(e =>
+        {
+            e.HasOne<Opportunity>().WithMany().HasForeignKey(x=>x.OpportunityId).OnDelete(DeleteBehavior.Restrict);
+            e.HasIndex(x=>new { x.OpportunityId,x.PricingQuoteId }).IsUnique();
+            e.HasIndex(x=>x.PricingRequestId);
+            e.Property(x=>x.QuoteNumberSnapshot).HasMaxLength(100);
+            e.Property(x=>x.CommercialStatusSnapshot).HasMaxLength(50);
+        });
+        b.Entity<OpportunityPricingRequest>(e =>
+        {
+            e.HasOne<Opportunity>().WithMany().HasForeignKey(x=>x.OpportunityId).OnDelete(DeleteBehavior.Restrict);
+            e.HasIndex(x=>new { x.OpportunityId,x.PricingRequestId }).IsUnique();
+            e.HasIndex(x=>x.PricingRequestId).IsUnique();
+            e.HasIndex(x=>new { x.OpportunityId,x.IdempotencyKeyHash }).IsUnique()
+              .HasFilter("idempotency_key_hash IS NOT NULL");
+            e.Property(x=>x.StatusSnapshot).HasMaxLength(50);
+            e.Property(x=>x.IdempotencyKeyHash).HasMaxLength(64);
+        });
+    }
+
     private static void ConfigureCommercialModel(ModelBuilder b)
     {
         ConfigureRecord<SalesPipeline>(b, "crm_sales_pipelines");

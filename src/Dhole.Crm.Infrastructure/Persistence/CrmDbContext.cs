@@ -29,6 +29,8 @@ public sealed partial class CrmDbContext(DbContextOptions<CrmDbContext> options)
     public DbSet<CommercialAnalysisRoute> CommercialAnalysisRoutes => Set<CommercialAnalysisRoute>();
     public DbSet<CommercialAnalysisService> CommercialAnalysisServices => Set<CommercialAnalysisService>();
     public DbSet<CustomerTradeProfile> CustomerTradeProfiles => Set<CustomerTradeProfile>();
+    public DbSet<OpportunityQuote> OpportunityQuotes => Set<OpportunityQuote>();
+    public DbSet<OpportunityPricingRequest> OpportunityPricingRequests => Set<OpportunityPricingRequest>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -111,6 +113,7 @@ public sealed partial class CrmDbContext(DbContextOptions<CrmDbContext> options)
             e.HasIndex(x => new { x.AccountId, x.ActivityCode }).IsUnique();
         });
         ConfigureCommercialModel(b);
+        ConfigurePricingModel(b);
         foreach (var t in b.Model.GetEntityTypes())
         {
             foreach (var prop in t.GetProperties())
