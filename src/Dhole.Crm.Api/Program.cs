@@ -27,6 +27,8 @@ app.UseAuthentication();
 app.UseAuthorization();
 app.MapCrmDataEndpoints();
 app.MapGrpcService<CrmDiagnosticsService>();
+app.MapGrpcService<CrmAccountReadGrpcService>();
+app.MapGrpcService<CrmOpportunityReadGrpcService>();
 app.Run();
 
 public partial class Program { }
