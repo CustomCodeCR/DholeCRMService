@@ -8,12 +8,20 @@ public sealed partial class CrmDbContext
     public DbSet<CrmExternalMapping> ExternalMappings => Set<CrmExternalMapping>();
     public DbSet<CrmSyncJob> SyncJobs => Set<CrmSyncJob>();
     public DbSet<CrmSyncConflict> SyncConflicts => Set<CrmSyncConflict>();
+    public DbSet<CrmHaciendaSnapshot> HaciendaSnapshots => Set<CrmHaciendaSnapshot>();
 
     private static void ConfigureIntegrations(ModelBuilder b)
     {
         ConfigureRecord<CrmExternalMapping>(b, "crm_external_mappings");
         ConfigureRecord<CrmSyncJob>(b, "crm_sync_jobs");
         ConfigureRecord<CrmSyncConflict>(b, "crm_sync_conflicts");
+        ConfigureRecord<CrmHaciendaSnapshot>(b, "crm_hacienda_snapshots");
+        b.Entity<CrmHaciendaSnapshot>(e => {
+            e.Property(x => x.ResolvedLegalName).HasMaxLength(220);
+            e.Property(x => x.Source).HasMaxLength(24);
+            e.HasOne<Account>().WithMany().HasForeignKey(x => x.AccountId).OnDelete(DeleteBehavior.Restrict);
+            e.HasIndex(x => new { x.AccountId, x.VerifiedAt });
+        });
         b.Entity<CrmExternalMapping>(e =>
         {
             e.Property(x => x.ExternalSystem).HasMaxLength(32);
