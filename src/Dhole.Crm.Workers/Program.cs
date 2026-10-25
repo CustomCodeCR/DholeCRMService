@@ -1,6 +1,7 @@
 using Dhole.Crm.Infrastructure.DependencyInjection;
 using Dhole.Crm.Workers.Health;
 using Dhole.Crm.Workers.Followups;
+using Dhole.Crm.Workers.Integrations;
 using CustomCodeFramework.Redis.Streams.DependencyInjection;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -12,6 +13,7 @@ builder.Services.AddHostedService<CrmReminderDispatcherWorker>();
 builder.Services.AddHostedService<CrmPricingInboxWorker>();
 builder.Services.AddHostedService<CrmContractRenewalWorker>();
 builder.Services.AddHostedService<CrmCreditReviewWorker>();
+builder.Services.AddHostedService<CrmDynamicsImportWorker>();
 builder.Services.AddSingleton<WorkerHeartbeatState>();
 builder.Services.AddHostedService<DependencyHeartbeatWorker>();
 
