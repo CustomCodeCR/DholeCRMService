@@ -98,7 +98,7 @@ public sealed class CrmDynamicsPhase8Tests
                 request.RequestUri?.ToString());
             Assert.IsTrue(request.Headers.Contains("X-Dhole-Api-Key"));
             var body = await request.Content!.ReadAsStringAsync(ct);
-            Assert.IsTrue(body.Contains("\"connectionCode\":\"approved\""));
+            StringAssert.Contains(body, "\"connectionCode\":\"approved\"");
             return new HttpResponseMessage(HttpStatusCode.OK)
             {
                 Content = new StringContent(
