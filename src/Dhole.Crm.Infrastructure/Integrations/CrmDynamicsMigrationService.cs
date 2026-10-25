@@ -170,7 +170,9 @@ public sealed class CrmDynamicsMigrationService(
                         ExecutiveUserId = candidate.ExecutiveId,
                         CustomerTypeCode = candidate.CustomerType, CategoryType = candidate.CategoryType,
                         CategoryCode = candidate.CategoryCode,
-                        VerificationStatus = "Pending", CreatedByUserId = job.CreatedByUserId
+                        VerificationStatus = Guid.TryParse(configuration["Crm:Hacienda:CostaRicaCountryId"], out var crId) &&
+                            candidate.CountryId != crId ? "NotApplicable" : "Pending",
+                        CreatedByUserId = job.CreatedByUserId
                     };
                     db.Accounts.Add(account);
                     db.ExternalMappings.Add(new CrmExternalMapping
