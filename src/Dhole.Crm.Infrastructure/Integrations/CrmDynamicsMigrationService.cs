@@ -175,6 +175,12 @@ public sealed class CrmDynamicsMigrationService(
                         CreatedByUserId = job.CreatedByUserId
                     };
                     db.Accounts.Add(account);
+                    db.AccountAssignments.Add(new AccountAssignment
+                    {
+                        AccountId = account.Id, ExecutiveUserId = candidate.ExecutiveId,
+                        EffectiveFrom = DateTime.UtcNow, AssignedBy = job.CreatedByUserId,
+                        Reason = "Initial Dynamics import", CreatedByUserId = job.CreatedByUserId
+                    });
                     db.ExternalMappings.Add(new CrmExternalMapping
                     {
                         ExternalSystem = "Dynamics", EntityType = "Account",
