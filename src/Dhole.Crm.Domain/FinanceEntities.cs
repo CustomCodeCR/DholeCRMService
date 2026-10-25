@@ -50,6 +50,7 @@ public sealed class CreditTermsHistory : CrmRecord
 }
 public sealed class CreditContractRenewal : CrmRecord
 {
+    public Guid? OperationId { get; set; }
     public Guid ContractId { get; set; }
     public Guid ChangedBy { get; set; }
     public DateTime PreviousRenewalDate { get; set; }

@@ -45,6 +45,7 @@ public sealed partial class CrmDbContext
         b.Entity<CreditContractRenewal>(e=>{
             e.HasOne<CreditContract>().WithMany().HasForeignKey(x=>x.ContractId).OnDelete(DeleteBehavior.Restrict);
             e.Property(x=>x.Reason).HasMaxLength(1000);
+            e.HasIndex(x=>x.OperationId).IsUnique().HasFilter("operation_id IS NOT NULL");
             e.HasIndex(x=>new{x.ContractId,x.CreatedAt});
         });
     }

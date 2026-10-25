@@ -6,6 +6,7 @@ using Dhole.Crm.Infrastructure.DependencyInjection;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddCrmInfrastructure();
+builder.Services.AddHttpClient();
 builder.Services.AddCustomCodeAuth(builder.Configuration);
 builder.Services.AddAuthorization();
 builder.Services.AddGrpc();
