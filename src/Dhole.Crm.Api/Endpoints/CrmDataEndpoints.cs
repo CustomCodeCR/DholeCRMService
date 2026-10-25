@@ -23,6 +23,7 @@ public static class CrmDataEndpoints
         group.MapFollowups();
         group.MapCredit();
         group.MapCreditContracts();
+        group.MapDynamicsIntegration();
         return app;
     }
 
