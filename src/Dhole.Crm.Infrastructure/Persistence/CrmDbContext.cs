@@ -129,6 +129,7 @@ public sealed partial class CrmDbContext(DbContextOptions<CrmDbContext> options)
         ConfigureFollowups(b);
         ConfigurePricingModel(b);
         ConfigureFinance(b);
+        ConfigureIntegrations(b);
         foreach (var t in b.Model.GetEntityTypes())
         {
             foreach (var prop in t.GetProperties())
