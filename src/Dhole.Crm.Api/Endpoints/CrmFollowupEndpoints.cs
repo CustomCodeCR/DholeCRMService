@@ -26,6 +26,8 @@ internal static class CrmFollowupEndpoints
         group.MapPost("/followups/{id:guid}/cancel",Cancel);
         group.MapGet("/followups/{id:guid}/history",History);
         group.MapGet("/reminders",ListReminders);
+        group.MapGet("/messaging/outbox",ListOutbox);
+        group.MapPost("/reminders/{id:guid}/replay",ReplayUndelivered);
         return group;
     }
     private static bool Manage(HttpContext h)=>CrmAccess.Scope(h,"crm.followup.manage");
@@ -189,6 +191,36 @@ internal static class CrmFollowupEndpoints
         if(!HasAccess(x,h))return CrmAccess.Denied();
         return Results.Ok(await db.FollowupHistories.AsNoTracking().Where(x=>x.FollowupId==id)
             .OrderBy(x=>x.CreatedAt).ToListAsync(ct));
+    }
+    private static async Task<IResult> ListOutbox(CrmDbContext db,HttpContext h,
+        string? status,int? page,CancellationToken ct)
+    {
+        if(!CrmAccess.Scope(h,"crm.reminder.replay"))return CrmAccess.Denied();
+        var q=db.OutboxMessages.AsNoTracking().AsQueryable();
+        if(!string.IsNullOrWhiteSpace(status))q=q.Where(x=>x.Status==status);
+        return Results.Ok(await q.OrderByDescending(x=>x.CreatedAt)
+            .Skip((Math.Max(1,page??1)-1)*50).Take(50)
+            .Select(x=>new {x.Id,x.ReminderId,x.EventName,x.Status,
+                x.AttemptCount,x.NextAttemptAt,x.PublishedAt}).ToListAsync(ct));
+    }
+    private static async Task<IResult> ReplayUndelivered(Guid id,CrmDbContext db,
+        HttpContext h,CancellationToken ct)
+    {
+        if(!CrmAccess.Scope(h,"crm.reminder.replay"))return CrmAccess.Denied();
+        await using var tx=await db.Database.BeginTransactionAsync(ct);
+        var rem=await db.Reminders.FindAsync([id],ct);
+        var item=await db.OutboxMessages.FirstOrDefaultAsync(x=>x.ReminderId==id,ct);
+        if(rem is null||item is null)return Results.NotFound();
+        if(item.Status!="DeadLetter"||rem.Status!="Failed"||item.PublishedAt is not null)
+            return CrmDataEndpoints.Conflict("Only unpublished dead-letter CRM reminders can be replayed");
+        item.Status="Pending";item.AttemptCount=0;item.NextAttemptAt=DateTime.UtcNow;
+        item.LastError=null;item.LeaseUntil=null;
+        rem.Status="Pending";rem.RowVersion++;rem.UpdatedAt=DateTime.UtcNow;
+        rem.UpdatedByUserId=CrmAccess.UserId(h);
+        await db.SaveChangesAsync(ct);
+        await tx.CommitAsync(ct);
+        return Results.Accepted("/api/crm/reminders?status=Pending",
+            new {reminderId=id,status="Pending"});
     }
     private static async Task<IResult> ListReminders(CrmDbContext db,HttpContext h,string? status,int? page,CancellationToken ct)
     {
