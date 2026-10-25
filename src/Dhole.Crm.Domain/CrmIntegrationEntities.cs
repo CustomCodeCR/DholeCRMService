@@ -30,6 +30,7 @@ public sealed class CrmSyncJob : CrmRecord
     public int ErrorCount { get; set; }
     public string? LastErrorCode { get; set; }
     public string? ConfigurationHash { get; set; }
+    public string? RequestKeyHash { get; set; }
     public Guid? LastOperatorUserId { get; set; }
 }
 
