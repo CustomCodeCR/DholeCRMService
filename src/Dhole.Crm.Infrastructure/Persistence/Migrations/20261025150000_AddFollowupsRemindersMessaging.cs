@@ -117,6 +117,8 @@ CREATE TABLE crm.crm_outbox_messages (
 );
 CREATE UNIQUE INDEX uq_crm_outbox_reminder ON crm.crm_outbox_messages(reminder_id);
 CREATE INDEX ix_crm_outbox_ready ON crm.crm_outbox_messages(status,next_attempt_at);
+ALTER TABLE crm.crm_opportunity_quotes ADD COLUMN IF NOT EXISTS pending_refresh_at timestamptz;
+ALTER TABLE crm.crm_opportunity_pricing_requests ADD COLUMN IF NOT EXISTS pending_refresh_at timestamptz;
 CREATE TABLE crm.crm_inbox_messages (
   event_id uuid PRIMARY KEY,
   event_name varchar(160) NOT NULL,
