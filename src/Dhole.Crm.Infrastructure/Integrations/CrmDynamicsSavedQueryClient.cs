@@ -59,6 +59,12 @@ public sealed class CrmDynamicsSavedQueryClient(HttpClient http, IConfiguration 
         var next = root.TryGetProperty("nextCursor", out var continuation) &&
                    continuation.ValueKind == JsonValueKind.String ? continuation.GetString() : null;
         if (next is { Length: > 4096 }) throw new InvalidOperationException("dynamics_cursor_invalid");
+        // A connector that repeats the incoming cursor (or returns an empty page with
+        // another cursor) must not silently loop in the durable import worker.
+        // Fail before the transactional checkpoint changes so operations can inspect it.
+        if (next is not null && (string.Equals(next, cursor, StringComparison.Ordinal) ||
+                                 results.Length == 0))
+            throw new InvalidOperationException("dynamics_pagination_not_advancing");
         var metadataVersion = root.TryGetProperty("metadataVersion", out var version) &&
                               version.TryGetInt32(out var number) ? number : 0;
         return new Page(results, next, metadataVersion);
