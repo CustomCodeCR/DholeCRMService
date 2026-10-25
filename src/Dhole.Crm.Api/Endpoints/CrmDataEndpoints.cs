@@ -20,6 +20,7 @@ public static class CrmDataEndpoints
         group.MapCommercialActivities();
         group.MapCommercialAnalyses();
         group.MapCommercialPricing();
+        group.MapFollowups();
         return app;
     }
 

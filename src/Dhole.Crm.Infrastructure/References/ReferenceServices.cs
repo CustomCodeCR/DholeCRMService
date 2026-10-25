@@ -9,7 +9,7 @@ public interface IAuthReferenceService
 {
     Task<AuthUserReference?> GetActiveAsync(Guid userId, CancellationToken ct);
 }
-public sealed record AuthUserReference(Guid Id, bool Active, string[] Scopes);
+public sealed record AuthUserReference(Guid Id, bool Active, string[] Scopes, string? Email = null, string? DisplayName = null);
 public sealed class AuthReferenceService(HttpClient http, IConfiguration configuration) : IAuthReferenceService
 {
     public async Task<AuthUserReference?> GetActiveAsync(Guid userId, CancellationToken ct)

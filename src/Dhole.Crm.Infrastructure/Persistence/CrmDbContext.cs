@@ -31,6 +31,12 @@ public sealed partial class CrmDbContext(DbContextOptions<CrmDbContext> options)
     public DbSet<CustomerTradeProfile> CustomerTradeProfiles => Set<CustomerTradeProfile>();
     public DbSet<OpportunityQuote> OpportunityQuotes => Set<OpportunityQuote>();
     public DbSet<OpportunityPricingRequest> OpportunityPricingRequests => Set<OpportunityPricingRequest>();
+    public DbSet<AccountFollowupPolicy> AccountFollowupPolicies => Set<AccountFollowupPolicy>();
+    public DbSet<Followup> Followups => Set<Followup>();
+    public DbSet<FollowupHistory> FollowupHistories => Set<FollowupHistory>();
+    public DbSet<CrmReminder> Reminders => Set<CrmReminder>();
+    public DbSet<CrmOutboxMessage> OutboxMessages => Set<CrmOutboxMessage>();
+    public DbSet<CrmInboxMessage> InboxMessages => Set<CrmInboxMessage>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -113,6 +119,7 @@ public sealed partial class CrmDbContext(DbContextOptions<CrmDbContext> options)
             e.HasIndex(x => new { x.AccountId, x.ActivityCode }).IsUnique();
         });
         ConfigureCommercialModel(b);
+        ConfigureFollowups(b);
         ConfigurePricingModel(b);
         foreach (var t in b.Model.GetEntityTypes())
         {
