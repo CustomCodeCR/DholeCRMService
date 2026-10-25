@@ -134,7 +134,7 @@ internal static class CommercialPricingEndpoints
         if(local.PricingRequestId is { } requestId && q.RequestId!=requestId)
             return CrmDataEndpoints.Conflict("Quote request ownership changed in Pricing");
         local.CommercialStatusSnapshot=q.Status;local.QuoteNumberSnapshot=q.QuoteNumber;
-        local.ShipmentModeSnapshot=q.ShipmentMode;local.LastSyncAt=DateTime.UtcNow;
+        local.ShipmentModeSnapshot=q.ShipmentMode;local.LastSyncAt=DateTime.UtcNow;local.PendingRefreshAt=null;
         local.UpdatedAt=DateTime.UtcNow;local.UpdatedByUserId=CrmAccess.UserId(h);local.RowVersion++;
         var saved=await CrmDataEndpoints.Commit(db,ct);
         return saved is Microsoft.AspNetCore.Http.HttpResults.Ok?Results.Ok(local):saved;
@@ -263,12 +263,12 @@ internal static class CommercialPricingEndpoints
             {
                 local.QuoteNumberSnapshot=q.QuoteNumber;
                 local.CommercialStatusSnapshot=q.Status;local.ShipmentModeSnapshot=q.ShipmentMode;
-                local.LastSyncAt=DateTime.UtcNow;local.RowVersion++;
+                local.LastSyncAt=DateTime.UtcNow;local.PendingRefreshAt=null;local.RowVersion++;
                 local.UpdatedAt=DateTime.UtcNow;local.UpdatedByUserId=CrmAccess.UserId(h);
             }
         }
         record.StatusSnapshot=rr.Status;record.PricingQuoteId=rr.RateId;
-        record.LastSyncAt=DateTime.UtcNow;record.RowVersion++;
+        record.LastSyncAt=DateTime.UtcNow;record.PendingRefreshAt=null;record.RowVersion++;
         record.UpdatedAt=DateTime.UtcNow;record.UpdatedByUserId=CrmAccess.UserId(h);
         var saved=await CrmDataEndpoints.Commit(db,ct);
         return saved is Microsoft.AspNetCore.Http.HttpResults.Ok?Results.Ok(record):saved;
