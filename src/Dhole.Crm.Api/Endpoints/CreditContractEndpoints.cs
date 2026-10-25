@@ -190,6 +190,7 @@ internal static class CreditContractEndpoints
             using var body=await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync(timeout.Token),cancellationToken:timeout.Token);
             var file=body.RootElement;
             if(!file.TryGetProperty("id",out var idValue)||idValue.GetGuid()!=r.FileId||
+               !file.TryGetProperty("status",out var status)||status.GetString()!="Uploaded"||
                !file.TryGetProperty("references",out var refs)||refs.ValueKind!=JsonValueKind.Array)
                 return Results.Problem(statusCode:502,title:"Invalid Storage response");
             var linked=refs.EnumerateArray().Any(x=>
