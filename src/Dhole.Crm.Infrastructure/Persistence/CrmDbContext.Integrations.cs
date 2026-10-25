@@ -34,6 +34,8 @@ public sealed partial class CrmDbContext
             e.Property(x => x.LastErrorCode).HasMaxLength(80);
             e.Property(x => x.ConfigurationHash).HasMaxLength(64);
             e.HasIndex(x => new { x.Status, x.CreatedAt });
+            e.Property(x => x.RequestKeyHash).HasMaxLength(64);
+            e.HasIndex(x => x.RequestKeyHash).IsUnique().HasFilter("request_key_hash IS NOT NULL");
         });
         b.Entity<CrmSyncConflict>(e =>
         {
