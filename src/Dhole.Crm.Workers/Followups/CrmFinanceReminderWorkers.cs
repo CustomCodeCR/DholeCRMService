@@ -12,18 +12,21 @@ public static class CrmFinanceReminderEngine
     private static async Task Enqueue(CrmDbContext db,string kind,Guid id,Guid owner,long version,
         string notificationType,int days,DateTime now,Guid creator,CancellationToken ct)
     {
-        var key=$"finance:{kind}:{id:N}:{version}:{notificationType}:{days}";
-        if(db.Reminders.Local.Any(x=>x.DedupeKey==key)||
-            await db.Reminders.AnyAsync(x=>x.DedupeKey==key,ct))return;
-        var reminder=new CrmReminder {
-            EntityType=kind,EntityId=id,RecipientUserId=owner,Channel="System",
-            NotificationType=notificationType,DedupeKey=key,
-            TargetVersion=version,FireAt=now,CreatedByUserId=creator
-        };
-        db.Reminders.Add(reminder);
-        db.OutboxMessages.Add(new CrmOutboxMessage {
-            Id=reminder.Id,ReminderId=reminder.Id,NextAttemptAt=now
-        });
+        foreach(var channel in new[]{"System","Email"})
+        {
+            var key=$"finance:{kind}:{id:N}:{version}:{notificationType}:{days}:{channel}";
+            if(db.Reminders.Local.Any(x=>x.DedupeKey==key)||
+                await db.Reminders.AnyAsync(x=>x.DedupeKey==key,ct))continue;
+            var reminder=new CrmReminder {
+                EntityType=kind,EntityId=id,RecipientUserId=owner,Channel=channel,
+                NotificationType=notificationType,DedupeKey=key,
+                TargetVersion=version,FireAt=now,CreatedByUserId=creator
+            };
+            db.Reminders.Add(reminder);
+            db.OutboxMessages.Add(new CrmOutboxMessage {
+                Id=reminder.Id,ReminderId=reminder.Id,NextAttemptAt=now
+            });
+        }
     }
     public static async Task Contracts(CrmDbContext db,DateTime now,int[] thresholds,CancellationToken ct)
     {

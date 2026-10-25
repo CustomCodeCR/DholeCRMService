@@ -73,11 +73,11 @@ public sealed class CrmFinanceIntegrationTests
         {
             await CrmFinanceReminderEngine.Contracts(db,now,[60,30,15,7],CancellationToken.None);
             await CrmFinanceReminderEngine.Credits(db,now,[30,7,0],CancellationToken.None);
-            Assert.AreEqual(1,await db.Reminders.CountAsync(x=>x.EntityId==contractId));
-            Assert.AreEqual(1,await db.Reminders.CountAsync(x=>x.EntityId==creditId));
+            Assert.AreEqual(2,await db.Reminders.CountAsync(x=>x.EntityId==contractId));
+            Assert.AreEqual(2,await db.Reminders.CountAsync(x=>x.EntityId==creditId));
             var ids=await db.Reminders.Where(x=>x.EntityId==contractId||x.EntityId==creditId)
                 .Select(x=>x.Id).ToListAsync();
-            Assert.AreEqual(2,await db.OutboxMessages.CountAsync(x=>ids.Contains(x.ReminderId)));
+            Assert.AreEqual(4,await db.OutboxMessages.CountAsync(x=>ids.Contains(x.ReminderId)));
             Assert.IsTrue(await db.CreditProfiles.AnyAsync(x=>x.Id==creditId&&x.Status=="Approved"));
             Assert.IsTrue(await db.CreditContracts.AnyAsync(x=>x.Id==contractId&&x.Status=="Active"));
         }
