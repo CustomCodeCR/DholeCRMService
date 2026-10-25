@@ -27,7 +27,8 @@ CREATE TABLE IF NOT EXISTS crm.crm_sync_jobs (
  dry_run boolean NOT NULL, cursor text, started_at timestamptz, finished_at timestamptz,
  processed_count integer NOT NULL DEFAULT 0, created_count integer NOT NULL DEFAULT 0,
  unchanged_count integer NOT NULL DEFAULT 0, conflict_count integer NOT NULL DEFAULT 0,
- error_count integer NOT NULL DEFAULT 0, last_error_code varchar(80),
+ error_count integer NOT NULL DEFAULT 0, attempt_count integer NOT NULL DEFAULT 0,
+ next_attempt_at timestamptz, last_error_code varchar(80),
  configuration_hash varchar(64), request_key_hash varchar(64), last_operator_user_id uuid,
  CONSTRAINT ck_crm_sync_status CHECK (status IN ('Pending','Running','Completed','Failed','Paused')),
  CONSTRAINT ck_crm_sync_counts CHECK (processed_count >= 0 AND created_count >= 0
