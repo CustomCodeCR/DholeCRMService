@@ -23,7 +23,7 @@ public sealed class CrmFinanceIntegrationTests
             "SELECT table_name AS \"Value\" FROM information_schema.tables WHERE table_schema='crm' AND table_name LIKE 'crm_credit_%'")
             .ToListAsync();
         foreach(var table in new[]{"crm_credit_profiles","crm_credit_coverages","crm_credit_contracts",
-            "crm_credit_terms_history","crm_credit_contract_renewals"})
+            "crm_credit_terms_history","crm_credit_contract_renewals","crm_credit_contract_amendments"})
             CollectionAssert.Contains(tables,table);
     }
     [TestMethod]

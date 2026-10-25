@@ -63,3 +63,13 @@ public sealed class CreditContractRenewal : CrmRecord
     public DateTime? NewExpiryDate { get; set; }
     public string Reason { get; set; } = "";
 }
+
+public sealed class CreditContractAmendment : CrmRecord
+{
+    public Guid ContractId { get; set; }
+    public Guid ChangedBy { get; set; }
+    public string OldPaymentTerms { get; set; } = "";
+    public string NewPaymentTerms { get; set; } = "";
+    public string Reason { get; set; } = "";
+    public DateTime ChangedAt { get; set; } = DateTime.UtcNow;
+}

@@ -43,6 +43,7 @@ public sealed partial class CrmDbContext(DbContextOptions<CrmDbContext> options)
     public DbSet<CreditContract> CreditContracts => Set<CreditContract>();
     public DbSet<CreditTermsHistory> CreditTermsHistory => Set<CreditTermsHistory>();
     public DbSet<CreditContractRenewal> CreditContractRenewals => Set<CreditContractRenewal>();
+    public DbSet<CreditContractAmendment> CreditContractAmendments => Set<CreditContractAmendment>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {

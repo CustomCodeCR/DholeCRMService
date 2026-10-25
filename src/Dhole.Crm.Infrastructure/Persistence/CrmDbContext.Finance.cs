@@ -10,6 +10,7 @@ public sealed partial class CrmDbContext
         ConfigureRecord<CreditContract>(b,"crm_credit_contracts");
         ConfigureRecord<CreditTermsHistory>(b,"crm_credit_terms_history");
         ConfigureRecord<CreditContractRenewal>(b,"crm_credit_contract_renewals");
+        ConfigureRecord<CreditContractAmendment>(b,"crm_credit_contract_amendments");
         b.Entity<CreditProfile>(e=>{
             e.HasOne<Account>().WithMany().HasForeignKey(x=>x.AccountId).OnDelete(DeleteBehavior.Restrict);
             e.Property(x=>x.CreditLimit).HasPrecision(18,2);
@@ -43,6 +44,13 @@ public sealed partial class CrmDbContext
             e.HasOne<CreditProfile>().WithMany().HasForeignKey(x=>x.CreditProfileId).OnDelete(DeleteBehavior.Restrict);
             e.Property(x=>x.ApprovalReason).HasMaxLength(1000);
             e.HasIndex(x=>new{x.CreditProfileId,x.ChangedAt});
+        });
+        b.Entity<CreditContractAmendment>(e=>{
+            e.HasOne<CreditContract>().WithMany().HasForeignKey(x=>x.ContractId).OnDelete(DeleteBehavior.Restrict);
+            e.Property(x=>x.OldPaymentTerms).HasMaxLength(4000);
+            e.Property(x=>x.NewPaymentTerms).HasMaxLength(4000);
+            e.Property(x=>x.Reason).HasMaxLength(1000);
+            e.HasIndex(x=>new{x.ContractId,x.ChangedAt});
         });
         b.Entity<CreditContractRenewal>(e=>{
             e.HasOne<CreditContract>().WithMany().HasForeignKey(x=>x.ContractId).OnDelete(DeleteBehavior.Restrict);

@@ -14,6 +14,7 @@ public sealed record RenewCreditContractRequest(long ExpectedVersion,Guid Operat
     DateTime RenewalDate,DateTime? ExpiryDate,string Reason);
 public sealed record UpdateContractStatusRequest(long ExpectedVersion,string Reason);
 public sealed record AttachSignedContractRequest(long ExpectedVersion,Guid FileId);
+public sealed record AmendContractTermsRequest(long ExpectedVersion,string PaymentTerms,string Reason);
 
 internal static class CreditContractEndpoints
 {
@@ -27,6 +28,8 @@ internal static class CreditContractEndpoints
         g.MapPost("/credit-contracts/{id:guid}/activate",Activate);
         g.MapPost("/credit-contracts/{id:guid}/cancel",Cancel);
         g.MapPost("/credit-contracts/{id:guid}/signed-document",AttachDocument);
+        g.MapPost("/credit-contracts/{id:guid}/payment-terms",AmendTerms);
+        g.MapGet("/credit-contracts/{id:guid}/amendments",Amendments);
         return g;
     }
     private static bool Read(HttpContext h)=>FinanceAccess.Has(h,"crm.contract.read");
@@ -162,6 +165,38 @@ internal static class CreditContractEndpoints
         c.RenewalDate=r.RenewalDate;c.ExpiryDate=r.ExpiryDate;c.RowVersion++;
         c.UpdatedAt=DateTime.UtcNow;c.UpdatedByUserId=actor;
         db.CreditContractRenewals.Add(history);
+        var saved=await FinanceAccess.Save(db,ct);
+        return saved is Microsoft.AspNetCore.Http.HttpResults.Ok?Results.Ok(c):saved;
+    }
+    private static async Task<IResult> Amendments(Guid id,CrmDbContext db,HttpContext h,CancellationToken ct)
+    {
+        if(!Read(h))return CrmAccess.Denied();
+        var c=await db.CreditContracts.AsNoTracking().FirstOrDefaultAsync(x=>x.Id==id,ct);
+        if(c==null)return Results.NotFound();
+        if(!await Can(c,db,h,ct))return CrmAccess.Denied();
+        return Results.Ok(await db.CreditContractAmendments.AsNoTracking()
+            .Where(x=>x.ContractId==id).OrderBy(x=>x.ChangedAt).Take(200).ToArrayAsync(ct));
+    }
+    private static async Task<IResult> AmendTerms(Guid id,AmendContractTermsRequest r,
+        CrmDbContext db,HttpContext h,CancellationToken ct)
+    {
+        if(!Manage(h))return CrmAccess.Denied();
+        if(string.IsNullOrWhiteSpace(r.PaymentTerms)||r.PaymentTerms.Length>4000||
+            string.IsNullOrWhiteSpace(r.Reason)||r.Reason.Length>1000)
+            return FinanceAccess.Bad("Payment terms and reason required");
+        var c=await db.CreditContracts.FirstOrDefaultAsync(x=>x.Id==id,ct);
+        if(c==null)return Results.NotFound();
+        if(!await Can(c,db,h,ct))return CrmAccess.Denied();
+        if(c.RowVersion!=r.ExpectedVersion||c.Status is "Expired" or "Cancelled")
+            return FinanceAccess.Conflict("Contract already modified or closed");
+        if(c.PaymentTerms==r.PaymentTerms.Trim())return Results.Ok(c);
+        var actor=FinanceAccess.Actor(h);
+        db.CreditContractAmendments.Add(new CreditContractAmendment {
+            ContractId=id,ChangedBy=actor,CreatedByUserId=actor,
+            OldPaymentTerms=c.PaymentTerms,NewPaymentTerms=r.PaymentTerms.Trim(),
+            Reason=r.Reason.Trim()});
+        c.PaymentTerms=r.PaymentTerms.Trim();c.RowVersion++;
+        c.UpdatedAt=DateTime.UtcNow;c.UpdatedByUserId=actor;
         var saved=await FinanceAccess.Save(db,ct);
         return saved is Microsoft.AspNetCore.Http.HttpResults.Ok?Results.Ok(c):saved;
     }

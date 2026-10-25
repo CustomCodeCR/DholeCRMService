@@ -72,6 +72,15 @@ CREATE TABLE crm.crm_credit_contract_renewals (
 );
 CREATE UNIQUE INDEX uq_contract_renewal_operation ON crm.crm_credit_contract_renewals(operation_id) WHERE operation_id IS NOT NULL;
 CREATE INDEX ix_contract_renewal_history ON crm.crm_credit_contract_renewals(contract_id,created_at);
+CREATE TABLE crm.crm_credit_contract_amendments (
+ id uuid PRIMARY KEY, created_by_user_id uuid NOT NULL, updated_by_user_id uuid,
+ created_at timestamptz NOT NULL, updated_at timestamptz NOT NULL, row_version bigint NOT NULL DEFAULT 1,
+ contract_id uuid NOT NULL REFERENCES crm.crm_credit_contracts(id) ON DELETE RESTRICT,
+ changed_by uuid NOT NULL, old_payment_terms varchar(4000) NOT NULL,
+ new_payment_terms varchar(4000) NOT NULL, reason varchar(1000) NOT NULL,
+ changed_at timestamptz NOT NULL
+);
+CREATE INDEX ix_contract_terms_amendments ON crm.crm_credit_contract_amendments(contract_id,changed_at);
 ALTER TABLE crm.crm_reminders DROP CONSTRAINT ck_crm_reminder_entity;
 ALTER TABLE crm.crm_reminders ADD CONSTRAINT ck_crm_reminder_entity
  CHECK (entity_type IN ('Followup','Activity','CreditProfile','CreditContract'));

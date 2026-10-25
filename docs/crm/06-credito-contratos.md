@@ -2,7 +2,7 @@
 
 Fuente funcional: CODEX_DHOLECRM_IMPLEMENTACION_COMPLETA.md, capítulo 3.6 y fase 6.
 
-* **PostgreSQL**: la migración aditiva `20261025170000_AddCreditProfilesContractsRenewals` crea cinco tablas incluyendo el historial de renovaciones. No migración destructiva; el rollback seguro es regresar imágenes y preservar tablas y bitácoras.
+* **PostgreSQL**: la migración aditiva `20261025170000_AddCreditProfilesContractsRenewals` crea seis tablas incluyendo el historial de renovaciones. No migración destructiva; el rollback seguro es regresar imágenes y preservar tablas y bitácoras.
 * **Scoping**: toda lectura financiera exige `crm.credit.read`; cambiar propuestas y coberturas exige `crm.credit.manage`; aprobar/rechazar exige el scope independiente `crm.credit.approve`. Los contratos exigen `crm.contract.read/manage`. La cuenta debe estar asignada al actor o disponer de `crm.account.read-all`. Ningún scope se concede automáticamente.
 * **Solicitud de crédito**: `POST /api/crm/accounts/{id}/credit-profiles` crea únicamente `PendingApproval`. `POST /api/crm/credit-profiles/{id}/approve|reject` transiciona con rowVersion y motivo. La aprobación reemplaza en transacción al perfil aprobado anterior. `POST /api/crm/credit-profiles/{id}/revise` clona una nueva propuesta sin tocar el crédito aprobado. `GET .../history|coverages` conserva trazabilidad. Sólo propuestas pendientes admiten cambios de cobertura.
 * **Porcentaje**: `2.5000` representa **2,5 % mensual**, no 0,025. Límite = numeric(18,2); tasa = numeric(7,4). Validar moneda del catálogo real `currencies` en Config, con code persistido y value mostrado en futura UI. Ningún saldo disponible se infiere de Pricing.
