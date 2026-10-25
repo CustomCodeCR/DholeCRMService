@@ -134,9 +134,12 @@ public sealed class CrmDynamicsPhase8Tests
             HttpRequestMessage request, CancellationToken ct)
         {
             Calls++;
-            var rows = emptyPage ? "[]" : "[{}]";
-            var body = "{\\"items\\":" + rows +
-                ",\\"nextCursor\\":\\"same-cursor\\",\\"metadataVersion\\":7}";
+            var body = JsonSerializer.Serialize(new
+            {
+                items = emptyPage ? Array.Empty<object>() : new object[] { new { } },
+                nextCursor = "same-cursor",
+                metadataVersion = 7
+            });
             return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
             {
                 Content = new StringContent(body, Encoding.UTF8, "application/json")
