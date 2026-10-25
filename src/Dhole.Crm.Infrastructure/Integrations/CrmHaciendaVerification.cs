@@ -110,6 +110,14 @@ public sealed class CrmHaciendaVerificationService(
         {
             var result = await hacienda.VerifyAsync(account, ct);
             var now = DateTime.UtcNow;
+            db.HaciendaSnapshots.Add(new CrmHaciendaSnapshot
+            {
+                AccountId = account.Id,
+                ResolvedLegalName = result.LegalName,
+                VerifiedAt = now,
+                Source = "HACIENDA",
+                CreatedByUserId = account.CreatedByUserId
+            });
             // Preserve user-edited DisplayName/LegalName. Activities are a source-tagged snapshot.
             foreach (var activity in result.Activities.GroupBy(x => x.Code).Select(x => x.First()))
             {
