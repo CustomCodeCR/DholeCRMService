@@ -68,6 +68,7 @@ public sealed class CrmDynamicsMigrationService(
         string? cursor = null;
         bool truncated = false;
         var seen = new HashSet<Guid>();
+        var seenTax = new HashSet<string>(StringComparer.Ordinal);
         for (var pageNumber = 0; pageNumber < Math.Clamp(maxPages, 1, 10); pageNumber++)
         {
             var page = await connector.ReadAsync(cursor, ct);
@@ -81,6 +82,8 @@ public sealed class CrmDynamicsMigrationService(
                 if (item is not null)
                 {
                     if (!seen.Add(item.ExternalId)) reason = "duplicate_external_record";
+                    else if (!seenTax.Add(item.CountryId + ":" + item.TaxIdTypeCode + ":" + Tax(item.TaxId)))
+                        reason = "duplicate_fiscal_identity_in_batch";
                     else
                     {
                         reason = await ValidateAsync(item, ct);
@@ -133,6 +136,7 @@ public sealed class CrmDynamicsMigrationService(
         job.Status = "Running";
         job.StartedAt ??= DateTime.UtcNow;
         var seen = new HashSet<Guid>();
+        var seenTax = new HashSet<string>(StringComparer.Ordinal);
         foreach (var row in page.Items)
         {
             job.ProcessedCount++;
@@ -141,6 +145,8 @@ public sealed class CrmDynamicsMigrationService(
             if (candidate is not null)
             {
                 if (!seen.Add(candidate.ExternalId)) error = "duplicate_external_record";
+                else if (!seenTax.Add(candidate.CountryId + ":" + candidate.TaxIdTypeCode + ":" + Tax(candidate.TaxId)))
+                    error = "duplicate_fiscal_identity_in_batch";
                 else if (error is null) error = await ValidateAsync(candidate, ct);
             }
             if (candidate is not null && error is null)
