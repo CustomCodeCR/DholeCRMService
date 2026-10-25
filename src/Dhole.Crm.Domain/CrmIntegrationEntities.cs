@@ -28,6 +28,8 @@ public sealed class CrmSyncJob : CrmRecord
     public int UnchangedCount { get; set; }
     public int ConflictCount { get; set; }
     public int ErrorCount { get; set; }
+    public int AttemptCount { get; set; }
+    public DateTime? NextAttemptAt { get; set; }
     public string? LastErrorCode { get; set; }
     public string? ConfigurationHash { get; set; }
     public string? RequestKeyHash { get; set; }
