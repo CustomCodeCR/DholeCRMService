@@ -127,6 +127,39 @@ public sealed class CrmDynamicsPhase8Tests
         Assert.AreEqual(1, handler.Calls, "No unsafe HTTP request may be sent.");
     }
 
+    private sealed class StalledCursorHandler(bool emptyPage) : HttpMessageHandler
+    {
+        public int Calls { get; private set; }
+        protected override Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request, CancellationToken ct)
+        {
+            Calls++;
+            var rows = emptyPage ? "[]" : "[{}]";
+            var body = "{\\"items\\":" + rows +
+                ",\\"nextCursor\\":\\"same-cursor\\",\\"metadataVersion\\":7}";
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(body, Encoding.UTF8, "application/json")
+            });
+        }
+    }
+
+    [TestMethod]
+    public async Task Dynamics_connector_rejects_repeated_and_empty_page_cursors()
+    {
+        foreach (var emptyPage in new[] { false, true })
+        {
+            var handler = new StalledCursorHandler(emptyPage);
+            using var http = new HttpClient(handler);
+            var connector = new CrmDynamicsSavedQueryClient(http, Config());
+            var error = await Assert.ThrowsExactlyAsync<InvalidOperationException>(
+                async () => await connector.ReadAsync(
+                    emptyPage ? "previous-cursor" : "same-cursor", CancellationToken.None));
+            Assert.AreEqual("dynamics_pagination_not_advancing", error.Message);
+            Assert.AreEqual(1, handler.Calls);
+        }
+    }
+
     [TestMethod]
     public async Task Hacienda_never_queries_a_foreign_account_and_does_not_infer_eligibility()
     {
