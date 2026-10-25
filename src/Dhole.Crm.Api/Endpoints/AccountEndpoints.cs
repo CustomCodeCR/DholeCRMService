@@ -88,7 +88,7 @@ internal static class AccountEndpoints
             SourceCode = request.SourceCode?.Trim(), RelationshipTypeCode = request.RelationshipTypeCode?.Trim(),
             CategoryType = request.CategoryType, CategoryCode = request.CategoryCode,
             VerificationStatus = hacienda.CostaRicaCountryId is Guid cr &&
-                request.CountryId != cr ? "NotApplicable" : "Pending"
+                (request.CountryId != cr || tax is null) ? "NotApplicable" : "Pending"
         };
         db.Accounts.Add(account);
         db.AccountAssignments.Add(new AccountAssignment { AccountId = account.Id,
