@@ -112,7 +112,8 @@ internal sealed class CrmPricingInboxWorker(IServiceScopeFactory scopes,IConfigu
         eventName ??= fields.GetValueOrDefault("message_type")
             ?? fields.GetValueOrDefault("type");
         if(!string.IsNullOrWhiteSpace(eventName))name=eventName;
-        var raw=fields.GetValueOrDefault("payload")??
+        var raw=fields.GetValueOrDefault("payload_json")??
+            fields.GetValueOrDefault("payload")??
             fields.GetValueOrDefault("payloadJson")??
             fields.GetValueOrDefault("data");
         if(string.IsNullOrWhiteSpace(raw))return false;
@@ -124,7 +125,8 @@ internal sealed class CrmPricingInboxWorker(IServiceScopeFactory scopes,IConfigu
                 name=type;
             if(name is not ("pricing.rate-header.created" or "pricing.rate-header.updated" or
                 "pricing.rate-header.deleted"))return false;
-            var eventText=fields.GetValueOrDefault("event_id")??Find(root,"eventId");
+            var eventText=fields.GetValueOrDefault("header:event_id")??
+                fields.GetValueOrDefault("event_id")??Find(root,"eventId");
             if(eventText is null && fields.TryGetValue("headers",out var headerJson))
             {
                 using var headers=JsonDocument.Parse(headerJson);
