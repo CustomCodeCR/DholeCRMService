@@ -8,6 +8,9 @@ using Microsoft.EntityFrameworkCore;
 namespace Dhole.Crm.Api.Endpoints;
 
 /// <summary>Administrative import only. Every operation passes the existing CRM Auth filter.</summary>
+public sealed record CrmConflictResolutionRequest(long ExpectedVersion,
+    string Resolution, Guid? ExistingAccountId, string Reason);
+
 internal static class CrmDynamicsIntegrationEndpoints
 {
     public static RouteGroupBuilder MapDynamicsIntegration(this RouteGroupBuilder g)
@@ -15,6 +18,7 @@ internal static class CrmDynamicsIntegrationEndpoints
         g.MapGet("/integrations/jobs", Jobs);
         g.MapGet("/integrations/jobs/{id:guid}", Job);
         g.MapGet("/integrations/jobs/{id:guid}/conflicts", Conflicts);
+        g.MapPost("/integrations/conflicts/{id:guid}/resolve", Resolve);
         g.MapPost("/integrations/dynamics/dry-run", Preview);
         g.MapPost("/integrations/dynamics/run", Enqueue);
         g.MapPost("/integrations/jobs/{id:guid}/retry", Retry);
@@ -65,6 +69,60 @@ internal static class CrmDynamicsIntegrationEndpoints
                     x.ReasonCode, x.Resolution, x.CreatedAt
                 }).ToListAsync(ct)
         });
+    }
+
+    private static async Task<IResult> Resolve(Guid id, CrmConflictResolutionRequest request,
+        CrmDbContext db, HttpContext h, CancellationToken ct)
+    {
+        if (!CanManage(h)) return CrmAccess.Denied();
+        if (string.IsNullOrWhiteSpace(request.Reason) || request.Reason.Trim().Length is < 8 or > 1000 ||
+            request.Resolution is not ("LinkExisting" or "Reviewed"))
+            return Results.Problem(statusCode: 400, title: "Explicit reconciliation reason and action required");
+        await using var tx = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable, ct);
+        var conflict = await db.SyncConflicts.FirstOrDefaultAsync(x => x.Id == id, ct);
+        if (conflict is null) return Results.NotFound();
+        if (conflict.Resolution != "Pending" || conflict.RowVersion != request.ExpectedVersion)
+            return Results.Conflict(new { code = "conflict_already_resolved_or_stale" });
+        if (request.Resolution == "LinkExisting")
+        {
+            // Only a duplicate identity found by the importer can be linked, never a guessed name.
+            if (conflict.EntityType != "Account" ||
+                conflict.ReasonCode != "existing_crm_identity_requires_linking" ||
+                conflict.ExistingEntityId != request.ExistingAccountId ||
+                !Guid.TryParse(conflict.ExternalId, out var externalGuid) ||
+                externalGuid == Guid.Empty || request.ExistingAccountId is not Guid localId)
+                return Results.Problem(statusCode: 400, title: "Only verified fiscal duplicates can be manually linked");
+            if (!await db.Accounts.AsNoTracking().AnyAsync(x => x.Id == localId && x.ArchivedAt == null, ct))
+                return Results.NotFound();
+            if (await db.ExternalMappings.AnyAsync(x =>
+                x.ExternalSystem == "Dynamics" && x.EntityType == "Account" &&
+                (x.EntityId == localId || x.ExternalId == externalGuid.ToString("D")), ct))
+                return Results.Conflict(new { code = "external_or_local_mapping_already_exists" });
+            db.ExternalMappings.Add(new CrmExternalMapping
+            {
+                ExternalSystem = "Dynamics", EntityType = "Account",
+                EntityId = localId, ExternalId = externalGuid.ToString("D"),
+                SyncState = "LinkedManually",
+                CreatedByUserId = CrmAccess.UserId(h)
+            });
+        }
+        // Reviewed acknowledges historical conflict. It NEVER bypasses the next import.
+        conflict.Resolution = request.Resolution == "LinkExisting" ? "Linked" : "Reviewed";
+        conflict.ResolvedByUserId = CrmAccess.UserId(h);
+        conflict.ResolvedAt = DateTime.UtcNow;
+        conflict.UpdatedByUserId = CrmAccess.UserId(h);
+        conflict.UpdatedAt = DateTime.UtcNow;
+        conflict.RowVersion++;
+        try
+        {
+            await db.SaveChangesAsync(ct);
+            await tx.CommitAsync(ct);
+            return Results.Ok(new { conflict.Id, conflict.Resolution, conflict.ResolvedAt });
+        }
+        catch (DbUpdateException)
+        {
+            return Results.Conflict(new { code = "reconciliation_mapping_conflict" });
+        }
     }
 
     private static async Task<IResult> Preview(CrmDynamicsMigrationService service, HttpContext h,
