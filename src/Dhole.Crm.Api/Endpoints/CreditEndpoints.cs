@@ -179,7 +179,7 @@ internal static class CreditEndpoints
         if(!await Can(p,db,h,ct))return CrmAccess.Denied();
         if(p.Status!="PendingApproval"||p.RowVersion!=req.ExpectedVersion)
             return FinanceAccess.Conflict("Only pending proposals can modify coverages");
-        var code=req.ServiceCode.ToUpperInvariant();
+        var code=req.ServiceCode!.ToUpperInvariant();
         if(await db.CreditCoverages.AnyAsync(x=>x.CreditProfileId==id&&x.ServiceCode==code&&x.IsActive,ct))
             return FinanceAccess.Conflict("An active included/excluded condition already exists for service");
         var actor=FinanceAccess.Actor(h);var before=FinanceAccess.Snapshot(p);
