@@ -86,9 +86,16 @@ public sealed class CrmDynamicsAccountMapper(IConfiguration configuration)
             "TaxId", "TaxIdTypeCode", "ExecutiveId", "CustomerType", "CategoryType",
             "CategoryCode", "ExternalVersion" };
         // Never hash keys or secret values; field names and policies only.
+        var policies = new[] { "CountryMap", "ExecutiveMap", "TaxTypeMap", "CodeMap" }
+            .SelectMany(section => configuration.GetSection("Crm:Dynamics:" + section)
+                .AsEnumerable()
+                .Where(pair => pair.Value is not null)
+                .Select(pair => pair.Key + "=" + pair.Value))
+            .OrderBy(value => value, StringComparer.Ordinal);
         var spec = string.Join("|", names.Select(n => n + "=" + Field(n))) +
                    "|" + configuration["Crm:Dynamics:SavedQuery"] +
-                   "|" + configuration["Crm:Dynamics:ConnectionCode"];
+                   "|" + configuration["Crm:Dynamics:ConnectionCode"] +
+                   "|" + string.Join("|", policies);
         return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(spec)));
     }
 
