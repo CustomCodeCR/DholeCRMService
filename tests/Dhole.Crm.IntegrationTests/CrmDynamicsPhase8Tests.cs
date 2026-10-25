@@ -127,6 +127,39 @@ public sealed class CrmDynamicsPhase8Tests
     }
 
     [TestMethod]
+    public async Task Hacienda_never_queries_a_foreign_account_and_does_not_infer_eligibility()
+    {
+        var costaRica = Guid.NewGuid();
+        var foreign = Guid.NewGuid();
+        var values = new Dictionary<string, string?>
+        {
+            ["Features:CrmHaciendaValidationEnabled"] = "true",
+            ["Crm:Hacienda:CostaRicaCountryId"] = costaRica.ToString("D"),
+            ["Crm:Hacienda:EligibleTaxTypes"] = "CEDULA",
+            ["Crm:Hacienda:ApiUrl"] = "https://api.hacienda.go.cr/fe/ae",
+            ["Crm:Hacienda:IdentificationParameter"] = "identificacion",
+            ["Crm:Hacienda:NameField"] = "nombre"
+        };
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(values).Build();
+        var handler = new FakeHandler();
+        using var http = new HttpClient(handler);
+        var verifier = new CrmHaciendaVerificationClient(http, configuration);
+        var account = new Account
+        {
+            CountryId = foreign, TaxIdTypeCode = "CEDULA", TaxId = "3101000000",
+            LegalName = "Manually entered", DisplayName = "Manual"
+        };
+        Assert.IsFalse(verifier.Eligible(account));
+        await Assert.ThrowsExactlyAsync<InvalidOperationException>(
+            async () => await verifier.VerifyAsync(account, CancellationToken.None));
+        Assert.AreEqual(0, handler.Calls);
+        account.CountryId = costaRica;
+        Assert.IsTrue(verifier.Eligible(account));
+        account.TaxIdTypeCode = "FOREIGN";
+        Assert.IsFalse(verifier.Eligible(account));
+    }
+
+    [TestMethod]
     public async Task Real_postgresql_migration_enforces_external_correlations_and_idempotency()
     {
         var cs = Environment.GetEnvironmentVariable("CRM_TEST_POSTGRES");
