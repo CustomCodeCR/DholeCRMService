@@ -106,48 +106,57 @@ public sealed class CrmHaciendaVerificationService(
             await db.SaveChangesAsync(ct);
             return;
         }
+        CrmHaciendaVerificationClient.Verification result;
         try
         {
-            var result = await hacienda.VerifyAsync(account, ct);
-            var now = DateTime.UtcNow;
-            db.HaciendaSnapshots.Add(new CrmHaciendaSnapshot
-            {
-                AccountId = account.Id,
-                ResolvedLegalName = result.LegalName,
-                VerifiedAt = now,
-                Source = "HACIENDA",
-                CreatedByUserId = account.CreatedByUserId
-            });
-            // Preserve user-edited DisplayName/LegalName. Activities are a source-tagged snapshot.
-            foreach (var activity in result.Activities.GroupBy(x => x.Code).Select(x => x.First()))
-            {
-                var existing = await db.AccountBusinessActivities.FirstOrDefaultAsync(x =>
-                    x.AccountId == account.Id && x.ActivityCode == activity.Code, ct);
-                if (existing is null)
-                    db.AccountBusinessActivities.Add(new AccountBusinessActivity
-                    {
-                        AccountId = account.Id, ActivityCode = activity.Code,
-                        ActivityDescription = activity.Description, Source = "HACIENDA",
-                        HaciendaSnapshotAt = now, CreatedByUserId = account.CreatedByUserId
-                    });
-                else if (existing.Source == "HACIENDA")
-                {
-                    existing.ActivityDescription = activity.Description;
-                    existing.HaciendaSnapshotAt = now;
-                    existing.RowVersion++;
-                }
-            }
-            account.VerificationStatus = "Verified";
-            account.HaciendaVerifiedAt = now;
+            result = await hacienda.VerifyAsync(account, ct);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
         catch (Exception)
         {
-            // Manual registration remains available. Never return "Verified" on provider failure.
+            // A failed external call does not prevent registration or change a manual name.
             account.VerificationStatus = "Failed";
+            account.UpdatedAt = DateTime.UtcNow;
+            account.RowVersion++;
+            await db.SaveChangesAsync(ct);
+            return;
         }
-        account.UpdatedAt = DateTime.UtcNow;
+
+        // Database changes after a successful verification are persisted atomically.
+        // Database failures propagate: never commit a partial snapshot as "Failed".
+        await using var transaction = await db.Database.BeginTransactionAsync(ct);
+        var now = DateTime.UtcNow;
+        db.HaciendaSnapshots.Add(new CrmHaciendaSnapshot
+        {
+            AccountId = account.Id,
+            ResolvedLegalName = result.LegalName,
+            VerifiedAt = now,
+            Source = "HACIENDA",
+            CreatedByUserId = account.CreatedByUserId
+        });
+        foreach (var activity in result.Activities.GroupBy(x => x.Code).Select(x => x.First()))
+        {
+            var existing = await db.AccountBusinessActivities.FirstOrDefaultAsync(x =>
+                x.AccountId == account.Id && x.ActivityCode == activity.Code, ct);
+            if (existing is null)
+                db.AccountBusinessActivities.Add(new AccountBusinessActivity
+                {
+                    AccountId = account.Id, ActivityCode = activity.Code,
+                    ActivityDescription = activity.Description, Source = "HACIENDA",
+                    HaciendaSnapshotAt = now, CreatedByUserId = account.CreatedByUserId
+                });
+            else if (existing.Source == "HACIENDA")
+            {
+                existing.ActivityDescription = activity.Description;
+                existing.HaciendaSnapshotAt = now;
+                existing.RowVersion++;
+            }
+        }
+        account.VerificationStatus = "Verified";
+        account.HaciendaVerifiedAt = now;
+        account.UpdatedAt = now;
         account.RowVersion++;
         await db.SaveChangesAsync(ct);
+        await transaction.CommitAsync(ct);
     }
 }
