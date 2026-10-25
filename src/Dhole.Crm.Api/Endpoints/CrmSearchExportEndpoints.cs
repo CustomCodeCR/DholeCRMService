@@ -57,16 +57,30 @@ public static class CrmSearchExportEndpoints
         if (!CrmAccess.Scope(http, "crm.opportunity.read-all"))
             opportunities = opportunities.Where(x => x.ExecutiveUserId == actor);
 
-        IQueryable<CrmSearchEntry> union =
-            accounts.Select(x => new CrmSearchEntry(x.Id, "account", x.DisplayName))
-                .Concat(leads.Select(x => new CrmSearchEntry(x.Id, "lead", x.Name)))
-                .Concat(opportunities.Select(x => new CrmSearchEntry(x.Id, "opportunity", x.Title)));
-
+        // Separate SQL queries avoid EF client-projection set operation translation
+        // while keeping deterministic cross-kind pagination (account, lead, opportunity).
         var number = Math.Clamp(page ?? 1, 1, 10000);
         var size = Math.Clamp(pageSize ?? 25, 1, 100);
-        var total = await union.CountAsync(ct);
-        var items = await union.OrderBy(x => x.Kind).ThenBy(x => x.Title).ThenBy(x => x.Id)
-            .Skip((number - 1) * size).Take(size).ToListAsync(ct);
+        var offset = (number - 1) * size;
+        var total = 0;
+        var items = new List<CrmSearchEntry>(size);
+        var sources = new IQueryable<CrmSearchEntry>[]
+        {
+            accounts.Select(x => new CrmSearchEntry(x.Id, "account", x.DisplayName)),
+            leads.Select(x => new CrmSearchEntry(x.Id, "lead", x.Name)),
+            opportunities.Select(x => new CrmSearchEntry(x.Id, "opportunity", x.Title))
+        };
+        foreach (var source in sources)
+        {
+            var count = await source.CountAsync(ct);
+            total += count;
+            if (offset < count && items.Count < size)
+            {
+                items.AddRange(await source.OrderBy(x => x.Title).ThenBy(x => x.Id)
+                    .Skip(offset).Take(size - items.Count).ToListAsync(ct));
+            }
+            offset = Math.Max(0, offset - count);
+        }
         return Results.Ok(new { items, total, page = number, pageSize = size });
     }
 
