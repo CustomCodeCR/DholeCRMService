@@ -93,6 +93,7 @@ public sealed class CrmFollowupReminderIntegrationTests
         var id=Guid.NewGuid();
         db.InboxMessages.Add(new CrmInboxMessage {EventId=id,EventName="pricing.rate-header.updated"});
         await db.SaveChangesAsync();
+        db.ChangeTracker.Clear(); // Simulate delivery after worker restart in a fresh tracking session.
         db.InboxMessages.Add(new CrmInboxMessage {EventId=id,EventName="pricing.rate-header.updated"});
         var rejected=false;
         try{await db.SaveChangesAsync();}
