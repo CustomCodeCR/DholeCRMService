@@ -28,11 +28,12 @@ CREATE TABLE IF NOT EXISTS crm.crm_sync_jobs (
  processed_count integer NOT NULL DEFAULT 0, created_count integer NOT NULL DEFAULT 0,
  unchanged_count integer NOT NULL DEFAULT 0, conflict_count integer NOT NULL DEFAULT 0,
  error_count integer NOT NULL DEFAULT 0, last_error_code varchar(80),
- configuration_hash varchar(64), last_operator_user_id uuid,
+ configuration_hash varchar(64), request_key_hash varchar(64), last_operator_user_id uuid,
  CONSTRAINT ck_crm_sync_status CHECK (status IN ('Pending','Running','Completed','Failed','Paused')),
  CONSTRAINT ck_crm_sync_counts CHECK (processed_count >= 0 AND created_count >= 0
   AND unchanged_count >= 0 AND conflict_count >= 0 AND error_count >= 0)
 );
+CREATE UNIQUE INDEX IF NOT EXISTS uq_crm_sync_job_key ON crm.crm_sync_jobs(request_key_hash) WHERE request_key_hash IS NOT NULL;
 CREATE INDEX IF NOT EXISTS ix_crm_sync_jobs_status ON crm.crm_sync_jobs(status,created_at);
 CREATE TABLE IF NOT EXISTS crm.crm_sync_conflicts (
  id uuid PRIMARY KEY, created_by_user_id uuid NOT NULL, updated_by_user_id uuid,
