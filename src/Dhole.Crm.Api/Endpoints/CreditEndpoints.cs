@@ -141,6 +141,11 @@ internal static class CreditEndpoints
             x.Status="Superseded";x.UpdatedAt=now;x.UpdatedByUserId=actor;x.RowVersion++;
             FinanceAccess.Audit(db,x,actor,before,"Superseded by approved revision");
         }
+        // Flush superseded profiles inside this transaction before approving the
+        // replacement: the PostgreSQL partial unique index is enforced immediately.
+        if(db.ChangeTracker.Entries<CreditProfile>().Any(x=>x.Entity!=p &&
+            x.State==EntityState.Modified))
+            await db.SaveChangesAsync(ct);
         var prior=FinanceAccess.Snapshot(p);
         p.Status="Approved";p.ApprovedByUserId=actor;p.ApprovedAt=now;
         p.UpdatedAt=now;p.UpdatedByUserId=actor;p.RowVersion++;
