@@ -8,7 +8,7 @@ namespace Dhole.Crm.Api.Endpoints;
 /// Bounded, server-authorized CRM search and report export. Never returns fiscal IDs,
 /// contacts, financial terms or arbitrary entity serialization.
 /// </summary>
-internal static class CrmSearchExportEndpoints
+public static class CrmSearchExportEndpoints
 {
     public static RouteGroupBuilder MapSearchExport(this RouteGroupBuilder group)
     {
@@ -25,7 +25,7 @@ internal static class CrmSearchExportEndpoints
         return null;
     }
 
-    private static async Task<IResult> Search(
+    public static async Task<IResult> Search(
         CrmDbContext db, HttpContext http, string? q, int? page, int? pageSize,
         CancellationToken ct)
     {
@@ -70,7 +70,7 @@ internal static class CrmSearchExportEndpoints
         return Results.Ok(new { items, total, page = number, pageSize = size });
     }
 
-    private static async Task<IResult> ExportAccounts(
+    public static async Task<IResult> ExportAccounts(
         CrmDbContext db, HttpContext http, ILoggerFactory loggerFactory,
         string? q, int? page, CancellationToken ct)
     {
