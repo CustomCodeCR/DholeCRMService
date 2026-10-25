@@ -66,7 +66,7 @@ internal static class CrmDynamicsIntegrationEndpoints
             items = await query.OrderBy(x => x.CreatedAt).ThenBy(x => x.Id)
                 .Skip((pageNumber - 1) * 50).Take(50).Select(x => new {
                     x.Id, x.EntityType, x.ExternalId, x.ExistingEntityId,
-                    x.ReasonCode, x.Resolution, x.CreatedAt
+                    x.ReasonCode, x.Resolution, x.CreatedAt, x.RowVersion
                 }).ToListAsync(ct)
         });
     }
