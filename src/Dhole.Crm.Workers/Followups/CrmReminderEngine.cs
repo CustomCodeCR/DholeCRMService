@@ -10,8 +10,8 @@ namespace Dhole.Crm.Workers.Followups;
 internal static class CrmReminderEngine
 {
     internal static async Task<bool> Acquire(CrmDbContext db,long key,CancellationToken ct) =>
-        await db.Database.SqlQueryRaw<bool>(
-            "SELECT pg_try_advisory_xact_lock("+key+") AS \"Value\"").SingleAsync(ct);
+        await db.Database.SqlQuery<bool>(
+            $"SELECT pg_try_advisory_xact_lock({key}) AS \"Value\"").SingleAsync(ct);
 
     internal static async Task GenerateAsync(CrmDbContext db,DateTime now,
         CancellationToken ct)
