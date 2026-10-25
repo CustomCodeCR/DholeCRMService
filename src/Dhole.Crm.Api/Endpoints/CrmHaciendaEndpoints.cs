@@ -11,6 +11,7 @@ internal static class CrmHaciendaEndpoints
     public static RouteGroupBuilder MapHaciendaVerification(this RouteGroupBuilder g)
     {
         g.MapGet("/accounts/{id:guid}/hacienda", Status);
+        g.MapGet("/accounts/{id:guid}/hacienda/history", History);
         g.MapPost("/accounts/{id:guid}/hacienda/retry", Retry);
         return g;
     }
@@ -25,6 +26,22 @@ internal static class CrmHaciendaEndpoints
         if (!CrmAccess.AccountAccess(h, account.ExecutiveUserId)) return CrmAccess.Denied();
         return Results.Ok(new { account.Id, account.VerificationStatus,
             account.HaciendaVerifiedAt, account.RowVersion });
+    }
+
+    private static async Task<IResult> History(Guid id, CrmDbContext db,
+        HttpContext h, CancellationToken ct)
+    {
+        if (!CrmDataEndpoints.HasRead(h, "account")) return CrmAccess.Denied();
+        var account = await db.Accounts.AsNoTracking()
+            .FirstOrDefaultAsync(x => x.Id == id && x.ArchivedAt == null, ct);
+        if (account is null) return Results.NotFound();
+        if (!CrmAccess.AccountAccess(h, account.ExecutiveUserId)) return CrmAccess.Denied();
+        var history = await db.HaciendaSnapshots.AsNoTracking()
+            .Where(x => x.AccountId == id)
+            .OrderByDescending(x => x.VerifiedAt).Take(20)
+            .Select(x => new { x.Id, x.ResolvedLegalName, x.VerifiedAt, x.Source })
+            .ToListAsync(ct);
+        return Results.Ok(history);
     }
 
     private static async Task<IResult> Retry(Guid id, HaciendaRetryRequest request,
