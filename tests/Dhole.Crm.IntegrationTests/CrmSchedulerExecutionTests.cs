@@ -42,7 +42,7 @@ public sealed class CrmSchedulerExecutionTests
             await CrmReminderEngine.PlanRemindersAsync(db,now,CancellationToken.None);
             var followup=await db.Followups.SingleAsync(x=>x.PolicyId==policy.Id);
             var reminders=await db.Reminders.Where(x=>x.EntityId==followup.Id).ToListAsync();
-            Assert.AreEqual(2,reminders.Count);
+            Assert.HasCount(2,reminders);
             Assert.IsTrue(reminders.All(x=>x.TargetVersion==followup.RowVersion));
             Assert.AreEqual(2,await db.OutboxMessages.CountAsync(x=>reminders.Select(r=>r.Id).Contains(x.ReminderId)));
         }
