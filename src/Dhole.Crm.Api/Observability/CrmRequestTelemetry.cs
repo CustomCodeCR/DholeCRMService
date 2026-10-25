@@ -32,9 +32,17 @@ public sealed class CrmRequestTelemetry(RequestDelegate next)
         context.Response.Headers["Referrer-Policy"] = "no-referrer";
 
         var start = Stopwatch.GetTimestamp();
+        var outcomeStatus = StatusCodes.Status200OK;
         try
         {
             await next(context);
+            outcomeStatus = context.Response.StatusCode;
+        }
+        catch
+        {
+            // Observe unhandled exceptions as failures without modifying error handling.
+            outcomeStatus = StatusCodes.Status500InternalServerError;
+            throw;
         }
         finally
         {
@@ -45,7 +53,7 @@ public sealed class CrmRequestTelemetry(RequestDelegate next)
             {
                 new("method", context.Request.Method),
                 new("route", route),
-                new("status_code", context.Response.StatusCode)
+                new("status_code", outcomeStatus)
             };
             Requests.Add(1, tags);
             Latency.Record(Stopwatch.GetElapsedTime(start).TotalMilliseconds, tags);
