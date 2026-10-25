@@ -115,7 +115,7 @@ public sealed class CrmDynamicsPhase8Tests
         using var http = new HttpClient(handler);
         var reader = new CrmDynamicsSavedQueryClient(http, Config());
         var result = await reader.ReadAsync(null, CancellationToken.None);
-        Assert.AreEqual(1, result.Items.Count);
+        Assert.HasCount(1, result.Items);
         Assert.IsNull(result.NextCursor);
         Assert.AreEqual(6, result.MetadataVersion);
         Assert.AreEqual(1, handler.Calls);
