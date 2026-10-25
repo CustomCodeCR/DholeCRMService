@@ -10,6 +10,8 @@ builder.Services.AddCustomCodeRedisStreams(builder.Configuration);
 builder.Services.AddHostedService<CrmFollowupSchedulerWorker>();
 builder.Services.AddHostedService<CrmReminderDispatcherWorker>();
 builder.Services.AddHostedService<CrmPricingInboxWorker>();
+builder.Services.AddHostedService<CrmContractRenewalWorker>();
+builder.Services.AddHostedService<CrmCreditReviewWorker>();
 builder.Services.AddSingleton<WorkerHeartbeatState>();
 builder.Services.AddHostedService<DependencyHeartbeatWorker>();
 

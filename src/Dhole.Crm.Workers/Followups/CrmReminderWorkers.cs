@@ -71,14 +71,18 @@ internal sealed class CrmReminderDispatcherWorker(IServiceScopeFactory scopes,IC
             if(reminder is null){msg.Status="DeadLetter";msg.LastError="Missing CRM reminder";continue;}
             if(reminder.Status=="Cancelled"){msg.Status="Cancelled";continue;}
             // Re-check source on every retry, preventing stale reminders after manual edits.
-            bool active=reminder.EntityType=="Followup"
-                ? await db.Followups.AsNoTracking().AnyAsync(x=>x.Id==reminder.EntityId&&
-                    x.RowVersion==reminder.TargetVersion && (x.Status=="Pending"||x.Status=="Overdue"),ct)
-                : await db.Activities.AsNoTracking().AnyAsync(x=>x.Id==reminder.EntityId&&
-                    x.RowVersion==reminder.TargetVersion&&x.Status=="Scheduled"&&x.ArchivedAt==null,ct);
-            if(!active && reminder.NotificationType=="crm.activity.overdue.v1")
-                active=await db.Activities.AsNoTracking().AnyAsync(x=>x.Id==reminder.EntityId&&
-                    x.RowVersion==reminder.TargetVersion&&x.Status=="Scheduled"&&x.ArchivedAt==null,ct);
+            bool active=reminder.EntityType switch
+            {
+                "Followup"=>await db.Followups.AsNoTracking().AnyAsync(x=>x.Id==reminder.EntityId&&
+                    x.RowVersion==reminder.TargetVersion&&(x.Status=="Pending"||x.Status=="Overdue"),ct),
+                "Activity"=>await db.Activities.AsNoTracking().AnyAsync(x=>x.Id==reminder.EntityId&&
+                    x.RowVersion==reminder.TargetVersion&&x.Status=="Scheduled"&&x.ArchivedAt==null,ct),
+                "CreditProfile"=>await db.CreditProfiles.AsNoTracking().AnyAsync(x=>x.Id==reminder.EntityId&&
+                    x.RowVersion==reminder.TargetVersion&&x.Status=="Approved"&&x.ReviewAt!=null,ct),
+                "CreditContract"=>await db.CreditContracts.AsNoTracking().AnyAsync(x=>x.Id==reminder.EntityId&&
+                    x.RowVersion==reminder.TargetVersion&&x.Status=="Active",ct),
+                _=>false
+            };
             if(!active){reminder.Status="Cancelled";msg.Status="Cancelled";continue;}
             try
             {
@@ -90,6 +94,8 @@ internal sealed class CrmReminderDispatcherWorker(IServiceScopeFactory scopes,IC
                 {
                     "crm.visit.reminder.v1"=>"Próxima visita o reunión comercial",
                     "crm.activity.overdue.v1"=>"Actividad comercial vencida",
+                    "crm.credit.review.v1"=>"Revisión de crédito comercial pendiente",
+                    "crm.contract.renewal.v1"=>"Renovación de contrato comercial próxima",
                     _=>"Seguimiento comercial pendiente"
                 };
                 var body=reminder.NotificationType=="crm.activity.overdue.v1"?
