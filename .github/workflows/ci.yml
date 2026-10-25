@@ -41,6 +41,12 @@ jobs:
           dotnet-version: '10.0.x'
       - name: Verify no tracked production environment or embedded secrets
         run: python3 scripts/check-config.py
+      - name: Phase 9 rollback and staging-load tooling syntax
+        run: |
+          set -euo pipefail
+          bash -n scripts/deploy-crm.sh scripts/rollback-crm.sh
+          python3 -m py_compile scripts/load-test-crm.py
+          # Never start a load test inside CI without staging operator approval.
       - name: Restore exact .NET 10 solution
         run: dotnet restore DholeCRMService.slnx --configfile NuGet.Config
       - name: Build API, Workers and gRPC-generated contracts
