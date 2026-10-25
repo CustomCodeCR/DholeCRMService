@@ -47,6 +47,15 @@ CREATE TABLE IF NOT EXISTS crm.crm_sync_conflicts (
 );
 CREATE UNIQUE INDEX IF NOT EXISTS uq_crm_sync_conflict ON
  crm.crm_sync_conflicts(sync_job_id,entity_type,external_id,reason_code);
+CREATE TABLE IF NOT EXISTS crm.crm_hacienda_snapshots (
+ id uuid PRIMARY KEY, created_by_user_id uuid NOT NULL, updated_by_user_id uuid,
+ created_at timestamptz NOT NULL, updated_at timestamptz NOT NULL, row_version bigint NOT NULL,
+ account_id uuid NOT NULL REFERENCES crm.crm_accounts(id) ON DELETE RESTRICT,
+ resolved_legal_name varchar(220) NOT NULL, verified_at timestamptz NOT NULL,
+ source varchar(24) NOT NULL DEFAULT 'HACIENDA'
+);
+CREATE INDEX IF NOT EXISTS ix_crm_hacienda_snapshots_account
+ ON crm.crm_hacienda_snapshots(account_id,verified_at DESC);
 """);
     protected override void Down(MigrationBuilder b) =>
         throw new NotSupportedException("External mappings and reconciliation logs are historical and cannot be dropped automatically.");
