@@ -14,6 +14,7 @@ builder.Services.AddHostedService<CrmPricingInboxWorker>();
 builder.Services.AddHostedService<CrmContractRenewalWorker>();
 builder.Services.AddHostedService<CrmCreditReviewWorker>();
 builder.Services.AddHostedService<CrmDynamicsImportWorker>();
+builder.Services.AddHostedService<CrmHaciendaVerificationWorker>();
 builder.Services.AddSingleton<WorkerHeartbeatState>();
 builder.Services.AddHostedService<DependencyHeartbeatWorker>();
 
