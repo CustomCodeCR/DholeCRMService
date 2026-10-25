@@ -108,7 +108,10 @@ public sealed class CrmDynamicsAccountMapper(IConfiguration configuration)
         if (string.IsNullOrWhiteSpace(display) || display.Length > 220 ||
             string.IsNullOrWhiteSpace(legal) || legal.Length > 220)
             return (null, "invalid_names");
-        if (!Guid.TryParse(Value(row, "CountryId"), out var country) || country == Guid.Empty)
+        var remoteCountry = Value(row, "CountryId");
+        var localCountry = string.IsNullOrWhiteSpace(remoteCountry) ? null :
+            configuration["Crm:Dynamics:CountryMap:" + remoteCountry];
+        if (!Guid.TryParse(localCountry, out var country) || country == Guid.Empty)
             return (null, "country_not_mapped");
         // Dataverse seller identity is explicitly mapped to an Auth UUID; never trust a raw owner ID.
         var externalExecutive = Value(row, "ExecutiveId");
@@ -124,7 +127,9 @@ public sealed class CrmDynamicsAccountMapper(IConfiguration configuration)
             !(categoryType == "CUSTOMER" ? "ABCD" : "AB").Contains(categoryCode, StringComparison.Ordinal))
             return (null, "categories_not_mapped");
         var tax = Value(row, "TaxId");
-        var taxType = Value(row, "TaxIdTypeCode");
+        var sourceTaxType = Value(row, "TaxIdTypeCode");
+        var taxType = string.IsNullOrWhiteSpace(sourceTaxType) ? null :
+            configuration["Crm:Dynamics:TaxTypeMap:" + sourceTaxType];
         if (!string.IsNullOrWhiteSpace(tax) && string.IsNullOrWhiteSpace(taxType))
             return (null, "tax_type_not_mapped");
         if (tax is { Length: > 80 } || taxType is { Length: > 80 })
