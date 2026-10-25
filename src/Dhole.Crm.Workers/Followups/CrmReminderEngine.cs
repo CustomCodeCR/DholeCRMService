@@ -7,13 +7,13 @@ namespace Dhole.Crm.Workers.Followups;
 
 // A single short-lived PostgreSQL transaction acts as the cluster-wide scheduler lease.
 // Every generated occurrence and reminder has a unique durable identity.
-internal static class CrmReminderEngine
+public static class CrmReminderEngine
 {
-    internal static async Task<bool> Acquire(CrmDbContext db,long key,CancellationToken ct) =>
+    public static async Task<bool> Acquire(CrmDbContext db,long key,CancellationToken ct) =>
         await db.Database.SqlQuery<bool>(
             $"SELECT pg_try_advisory_xact_lock({key}) AS \"Value\"").SingleAsync(ct);
 
-    internal static async Task GenerateAsync(CrmDbContext db,DateTime now,
+    public static async Task GenerateAsync(CrmDbContext db,DateTime now,
         CancellationToken ct)
     {
         await using var tx=await db.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted,ct);
@@ -46,7 +46,7 @@ internal static class CrmReminderEngine
         await tx.CommitAsync(ct);
     }
 
-    internal static DateTime NextOccurrence(DateTime previous,int frequencyDays,
+    public static DateTime NextOccurrence(DateTime previous,int frequencyDays,
         string timezone,DateTime now)
     {
         var zone=TimeZoneInfo.FindSystemTimeZoneById(timezone);
@@ -61,7 +61,7 @@ internal static class CrmReminderEngine
         }
     }
 
-    internal static async Task PlanRemindersAsync(CrmDbContext db,DateTime now,CancellationToken ct)
+    public static async Task PlanRemindersAsync(CrmDbContext db,DateTime now,CancellationToken ct)
     {
         await using var tx=await db.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted,ct);
         if(!await Acquire(db,5012506,ct))return;
@@ -134,7 +134,7 @@ internal static class CrmReminderEngine
         }
     }
 
-    internal static async Task MarkOverdueActivitiesAsync(CrmDbContext db,DateTime now,CancellationToken ct)
+    public static async Task MarkOverdueActivitiesAsync(CrmDbContext db,DateTime now,CancellationToken ct)
     {
         await using var tx=await db.Database.BeginTransactionAsync(ct);
         if(!await Acquire(db,5012507,ct))return;
