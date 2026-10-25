@@ -47,3 +47,11 @@ public sealed class CrmSyncConflict : CrmRecord
     public DateTime? ResolvedAt { get; set; }
     public Guid? ResolvedByUserId { get; set; }
 }
+
+public sealed class CrmHaciendaSnapshot : CrmRecord
+{
+    public Guid AccountId { get; set; }
+    public string ResolvedLegalName { get; set; } = "";
+    public DateTime VerifiedAt { get; set; } = DateTime.UtcNow;
+    public string Source { get; set; } = "HACIENDA";
+}
