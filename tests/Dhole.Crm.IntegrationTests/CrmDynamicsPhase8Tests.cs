@@ -4,6 +4,7 @@ using System.Text.Json;
 using Dhole.Crm.Domain;
 using Dhole.Crm.Infrastructure.Integrations;
 using Dhole.Crm.Infrastructure.Persistence;
+using Dhole.Crm.Infrastructure.References;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 
@@ -157,6 +158,87 @@ public sealed class CrmDynamicsPhase8Tests
         Assert.IsTrue(verifier.Eligible(account));
         account.TaxIdTypeCode = "FOREIGN";
         Assert.IsFalse(verifier.Eligible(account));
+    }
+
+    private sealed class TestAuth : IAuthReferenceService
+    {
+        public Task<AuthUserReference?> GetActiveAsync(Guid id, CancellationToken ct) =>
+            Task.FromResult<AuthUserReference?>(new AuthUserReference(id, true, []));
+    }
+    private sealed class TestConfig : IConfigReferenceService
+    {
+        public Task<bool> IsActiveCountryAsync(Guid id, CancellationToken ct) =>
+            Task.FromResult(true);
+        public Task<bool> IsActiveCodeAsync(string slug, string code, CancellationToken ct) =>
+            Task.FromResult(true);
+    }
+    private sealed class AccountPageHandler(string accountJson) : HttpMessageHandler
+    {
+        public int Calls { get; private set; }
+        protected override async Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request, CancellationToken ct)
+        {
+            Calls++;
+            var raw = await request.Content!.ReadAsStringAsync(ct);
+            using var payload = JsonDocument.Parse(raw);
+            var cursor = payload.RootElement.GetProperty("cursor");
+            var second = cursor.ValueKind == JsonValueKind.String;
+            var body = second
+                ? "{\"entity\":\"account\",\"items\":[],\"nextCursor\":null,\"metadataVersion\":7}"
+                : "{\"entity\":\"account\",\"items\":[" + accountJson + "],\"nextCursor\":\"page-two\",\"metadataVersion\":7}";
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(body, Encoding.UTF8, "application/json")
+            };
+        }
+    }
+
+    [TestMethod]
+    public async Task Import_checkpoint_and_identity_are_atomic_against_real_postgresql()
+    {
+        var cs = Environment.GetEnvironmentVariable("CRM_TEST_POSTGRES");
+        if (string.IsNullOrWhiteSpace(cs)) Assert.Inconclusive("Real PostgreSQL required");
+        await using var db = new CrmDbContext(
+            new DbContextOptionsBuilder<CrmDbContext>().UseNpgsql(cs).Options);
+        await db.Database.MigrateAsync();
+        using var row = Row();
+        var externalId = Guid.Parse(row.RootElement.GetProperty("accountid").GetString()!);
+        var config = Config(new Dictionary<string, string?>
+        { ["Features:CrmDynamicsSyncEnabled"] = "true" });
+        var handler = new AccountPageHandler(row.RootElement.GetRawText());
+        using var client = new HttpClient(handler);
+        var migration = new CrmDynamicsMigrationService(
+            db, new CrmDynamicsSavedQueryClient(client, config),
+            new CrmDynamicsAccountMapper(config), new TestConfig(), new TestAuth(), config);
+        var actor = Guid.NewGuid();
+        var job = new CrmSyncJob
+        {
+            CreatedByUserId = actor, LastOperatorUserId = actor,
+            RequestKeyHash = Guid.NewGuid().ToString("N"),
+            ConfigurationHash = new CrmDynamicsAccountMapper(config).ConfigurationFingerprint()
+        };
+        db.SyncJobs.Add(job);
+        await db.SaveChangesAsync();
+        Assert.IsTrue(await migration.ProcessNextPageAsync(job.Id, CancellationToken.None));
+        db.ChangeTracker.Clear();
+        var first = await db.SyncJobs.SingleAsync(x => x.Id == job.Id);
+        Assert.AreEqual("Running", first.Status);
+        Assert.AreEqual("page-two", first.Cursor);
+        Assert.AreEqual(1, first.CreatedCount);
+        var mapping = await db.ExternalMappings.SingleAsync(x =>
+            x.ExternalSystem == "Dynamics" && x.ExternalId == externalId.ToString("D"));
+        var imported = await db.Accounts.SingleAsync(x => x.Id == mapping.EntityId);
+        Assert.AreEqual("Cuenta de prueba", imported.DisplayName);
+        Assert.AreEqual(1, await db.AccountAssignments.CountAsync(x => x.AccountId == imported.Id));
+        Assert.IsFalse(await migration.ProcessNextPageAsync(job.Id, CancellationToken.None));
+        db.ChangeTracker.Clear();
+        var completed = await db.SyncJobs.SingleAsync(x => x.Id == job.Id);
+        Assert.AreEqual("Completed", completed.Status);
+        Assert.AreEqual(1, completed.CreatedCount);
+        Assert.IsNull(completed.Cursor);
+        Assert.IsFalse(await migration.ProcessNextPageAsync(job.Id, CancellationToken.None));
+        Assert.AreEqual(2, handler.Calls);
+        Assert.AreEqual(1, await db.ExternalMappings.CountAsync(x => x.EntityId == imported.Id));
     }
 
     [TestMethod]
