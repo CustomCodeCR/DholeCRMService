@@ -22,6 +22,8 @@ public static class ServiceRegistration
         services.AddHttpClient<CrmDynamicsSavedQueryClient>();
         services.AddScoped<CrmDynamicsAccountMapper>();
         services.AddScoped<CrmDynamicsMigrationService>();
+        services.AddHttpClient<CrmHaciendaVerificationClient>();
+        services.AddScoped<CrmHaciendaVerificationService>();
         return services;
     }
 }
