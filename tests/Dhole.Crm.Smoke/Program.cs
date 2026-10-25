@@ -22,6 +22,19 @@ foreach (var (url, endpoint) in new[] { (args[0], "/health/live"), (args[0], "/h
     }
 }
 
+// Even with CRM feature flags off, the HTTP layer must reject anonymous access.
+// The denied response must not be cached by intermediaries or browsers.
+using (var denied = await http.GetAsync(
+    args[0].TrimEnd('/') + "/api/crm/search?q=smoke", timeout.Token))
+{
+    if (denied.StatusCode != System.Net.HttpStatusCode.Unauthorized ||
+        denied.Headers.CacheControl?.NoStore != true)
+    {
+        Console.Error.WriteLine("CRM anonymous-access or no-store smoke failed.");
+        return 1;
+    }
+}
+
 using var channel = GrpcChannel.ForAddress(args[1]);
 var grpc = new CrmDiagnostics.CrmDiagnosticsClient(channel);
 var state = await grpc.CheckAsync(new CrmDiagnosticsRequest(),
