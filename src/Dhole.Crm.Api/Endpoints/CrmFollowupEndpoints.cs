@@ -37,8 +37,10 @@ internal static class CrmFollowupEndpoints
         await db.Accounts.AsNoTracking().AnyAsync(a=>a.Id==id && a.ArchivedAt==null &&
             (a.ExecutiveUserId==CrmAccess.UserId(h)||CrmAccess.Scope(h,"crm.account.read-all")),ct);
     private static bool HasAccess(Followup x,HttpContext h) =>
-        x.AssignedUserId==CrmAccess.UserId(h) || CrmAccess.Scope(h,"crm.account.read-all") ||
-        CrmAccess.Scope(h,"crm.opportunity.read-all");
+        x.AssignedUserId==CrmAccess.UserId(h) ||
+        (x.AccountId.HasValue && CrmAccess.Scope(h,"crm.account.read-all")) ||
+        (x.LeadId.HasValue && CrmAccess.Scope(h,"crm.lead.read-all")) ||
+        (x.OpportunityId.HasValue && CrmAccess.Scope(h,"crm.opportunity.read-all"));
     private static async Task<IResult> GetPolicy(Guid accountId,CrmDbContext db,HttpContext h,CancellationToken ct)
     {
         if(!Manage(h)||!await AccountVisible(accountId,db,h,ct))return CrmAccess.Denied();
@@ -82,8 +84,14 @@ internal static class CrmFollowupEndpoints
     {
         if(!Manage(h)&&!Tasks(h))return CrmAccess.Denied();
         var query=db.Followups.AsNoTracking().AsQueryable();
-        if(!CrmAccess.Scope(h,"crm.account.read-all")&&!CrmAccess.Scope(h,"crm.opportunity.read-all"))
-            query=query.Where(x=>x.AssignedUserId==CrmAccess.UserId(h));
+        var actor=CrmAccess.UserId(h);
+        var accounts=CrmAccess.Scope(h,"crm.account.read-all");
+        var leads=CrmAccess.Scope(h,"crm.lead.read-all");
+        var opportunities=CrmAccess.Scope(h,"crm.opportunity.read-all");
+        query=query.Where(x=>x.AssignedUserId==actor ||
+            (accounts && x.AccountId!=null) ||
+            (leads && x.LeadId!=null) ||
+            (opportunities && x.OpportunityId!=null));
         if(accountId.HasValue)query=query.Where(x=>x.AccountId==accountId);
         if(!string.IsNullOrWhiteSpace(status))query=query.Where(x=>x.Status==status);
         var n=Math.Max(1,page??1);var s=Math.Clamp(pageSize??25,1,100);var total=await query.CountAsync(ct);
