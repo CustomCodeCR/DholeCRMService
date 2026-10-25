@@ -77,8 +77,6 @@ internal static class CrmReminderEngine
             if(p is { Enabled:false } || p?.PausedUntil>now)continue;
             var lead=p?.ReminderLeadMinutes??60;
             var channel=p?.ChannelStrategy??"BOTH";
-            AddReminders(db,"Followup",f.Id,f.AssignedUserId,f.RowVersion,f.DueAt,
-                now,lead,channel,"crm.followup.reminder.v1",f.CreatedByUserId);
             if(f.DueAt<now && f.Status=="Pending")
             {
                 f.Status="Overdue";f.RowVersion++;f.UpdatedAt=now;
@@ -87,6 +85,8 @@ internal static class CrmReminderEngine
                     Reason="Past due; execution was not assumed",CreatedByUserId=f.CreatedByUserId
                 });
             }
+            await AddReminders(db,"Followup",f.Id,f.AssignedUserId,f.RowVersion,f.DueAt,
+                now,lead,channel,"crm.followup.reminder.v1",f.CreatedByUserId,ct);
         }
         var visits=await db.Activities.AsNoTracking()
             .Where(x=>x.ArchivedAt==null && x.Status=="Scheduled" &&
@@ -99,16 +99,16 @@ internal static class CrmReminderEngine
                 ? await db.AccountFollowupPolicies.AsNoTracking().FirstOrDefaultAsync(x=>x.AccountId==account,ct)
                 : null;
             if(p is {Enabled:false} || p?.PausedUntil>now)continue;
-            AddReminders(db,"Activity",v.Id,v.OwnerUserId,v.RowVersion,v.ScheduledStartAt!.Value,
+            await AddReminders(db,"Activity",v.Id,v.OwnerUserId,v.RowVersion,v.ScheduledStartAt!.Value,
                 now,p?.ReminderLeadMinutes??60,p?.ChannelStrategy??"BOTH",
-                "crm.visit.reminder.v1",v.CreatedByUserId);
+                "crm.visit.reminder.v1",v.CreatedByUserId,ct);
         }
         await db.SaveChangesAsync(ct);
         await tx.CommitAsync(ct);
     }
-    private static void AddReminders(CrmDbContext db,string entityType,Guid entityId,
+    private static async Task AddReminders(CrmDbContext db,string entityType,Guid entityId,
         Guid userId,long version,DateTime due,DateTime now,int leadMinutes,
-        string strategy,string type,Guid createdBy)
+        string strategy,string type,Guid createdBy,CancellationToken ct)
     {
         // No customer-directed notifications: these reminders are addressed to the owner only.
         foreach(var channel in strategy switch
@@ -120,7 +120,8 @@ internal static class CrmReminderEngine
         {
             var key=$"{entityType}:{entityId:N}:{version}:{channel}";
             // Re-read dedupe across restarts; PostgreSQL unique index is the final arbiter.
-            if(db.Reminders.Local.Any(x=>x.DedupeKey==key))continue;
+            if(db.Reminders.Local.Any(x=>x.DedupeKey==key) ||
+               await db.Reminders.AsNoTracking().AnyAsync(x=>x.DedupeKey==key,ct))continue;
             // Existence tested by caller's transaction before adding.
             var reminder=new CrmReminder {
                 EntityType=entityType,EntityId=entityId,RecipientUserId=userId,Channel=channel,
