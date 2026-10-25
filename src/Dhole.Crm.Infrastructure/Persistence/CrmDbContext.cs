@@ -38,6 +38,12 @@ public sealed partial class CrmDbContext(DbContextOptions<CrmDbContext> options)
     public DbSet<CrmOutboxMessage> OutboxMessages => Set<CrmOutboxMessage>();
     public DbSet<CrmInboxMessage> InboxMessages => Set<CrmInboxMessage>();
 
+    public DbSet<CreditProfile> CreditProfiles => Set<CreditProfile>();
+    public DbSet<CreditCoverage> CreditCoverages => Set<CreditCoverage>();
+    public DbSet<CreditContract> CreditContracts => Set<CreditContract>();
+    public DbSet<CreditTermsHistory> CreditTermsHistory => Set<CreditTermsHistory>();
+    public DbSet<CreditContractRenewal> CreditContractRenewals => Set<CreditContractRenewal>();
+
     protected override void OnModelCreating(ModelBuilder b)
     {
         b.HasDefaultSchema("crm");
@@ -121,6 +127,7 @@ public sealed partial class CrmDbContext(DbContextOptions<CrmDbContext> options)
         ConfigureCommercialModel(b);
         ConfigureFollowups(b);
         ConfigurePricingModel(b);
+        ConfigureFinance(b);
         foreach (var t in b.Model.GetEntityTypes())
         {
             foreach (var prop in t.GetProperties())
