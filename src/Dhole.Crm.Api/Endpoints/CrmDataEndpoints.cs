@@ -24,6 +24,7 @@ public static class CrmDataEndpoints
         group.MapCredit();
         group.MapCreditContracts();
         group.MapDynamicsIntegration();
+        group.MapHaciendaVerification();
         return app;
     }
 
