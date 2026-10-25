@@ -56,7 +56,8 @@ internal static class AccountEndpoints
         return CrmAccess.AccountAccess(http, account.ExecutiveUserId) ? Results.Ok(account) : CrmAccess.Denied();
     }
     private static async Task<IResult> Create(CreateAccountRequest request, CrmDbContext db,
-        HttpContext http, IAuthReferenceService auth, IConfigReferenceService config, CancellationToken ct)
+        HttpContext http, IAuthReferenceService auth, IConfigReferenceService config,
+        Dhole.Crm.Infrastructure.Integrations.CrmHaciendaVerificationClient hacienda, CancellationToken ct)
     {
         if (!CrmAccess.Scope(http, "crm.account.create")) return CrmAccess.Denied();
         var id = CrmAccess.UserId(http);
@@ -86,7 +87,8 @@ internal static class AccountEndpoints
             NormalizedTaxId = tax, CustomerTypeCode = request.CustomerTypeCode,
             SourceCode = request.SourceCode?.Trim(), RelationshipTypeCode = request.RelationshipTypeCode?.Trim(),
             CategoryType = request.CategoryType, CategoryCode = request.CategoryCode,
-            VerificationStatus = "Pending"
+            VerificationStatus = hacienda.CostaRicaCountryId is Guid cr &&
+                request.CountryId != cr ? "NotApplicable" : "Pending"
         };
         db.Accounts.Add(account);
         db.AccountAssignments.Add(new AccountAssignment { AccountId = account.Id,
