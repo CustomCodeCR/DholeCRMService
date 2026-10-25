@@ -1,0 +1,14 @@
+campo_logico,campo_logico_dataverse,tipo_dataverse,validacion,transformacion,dueno,politica,estado
+Account.ExternalId,,GUID,GUID valido,Identidad remota inequívoca,Dynamics,solo importar y correlacionar,PENDIENTE_METADATA
+Account.DisplayName,,string,max 220 caracteres,No sobrescribir ediciones CRM,CRM,inicial/importación,PENDIENTE_METADATA
+Account.LegalName,,string,max 220 caracteres,No sobrescribir ediciones CRM,CRM,inicial/importación,PENDIENTE_METADATA
+Account.CountryId,,lookup/option,Existe en Config,Crm:Dynamics:CountryMap,Config,referencia logica,PENDIENTE_METADATA
+Account.TaxId,,string,max 80 caracteres,Normalización fiscal preserva ceros,CRM,inicial/importación,PENDIENTE_METADATA
+Account.TaxIdTypeCode,,option,Tipo válido país,Crm:Dynamics:TaxTypeMap,Config,referencia logica,PENDIENTE_METADATA
+Account.ExecutiveId,,lookup,Usuario activo de Auth,Crm:Dynamics:ExecutiveMap,Auth,referencia logica,PENDIENTE_METADATA
+Account.CustomerType,,option,CASH/CREDIT,Crm:Dynamics:CodeMap:CustomerType,Config,inicial/importación,PENDIENTE_METADATA
+Account.CategoryType,,option,CUSTOMER/NVOCC,Crm:Dynamics:CodeMap:CategoryType,Config,inicial/importación,PENDIENTE_METADATA
+Account.CategoryCode,,option,Cliente A/B/C/D o NVOCC A/B,Crm:Dynamics:CodeMap:CategoryCode,Config,inicial/importación,PENDIENTE_METADATA
+Account.ExternalVersion,,string/etag,max 160 caracteres,Conservar version remota,CRM,conciliación,PENDIENTE_METADATA
+Contact.ExternalId,,GUID,Pendiente discovery,No importar sin correspondencia segura,CRM,pendiente,PENDIENTE_METADATA
+Marketing.EmailConsent,,option,Consentimiento explícito y evidencia,no inferir OPTED_IN,CRM,pendiente,PENDIENTE_METADATA
