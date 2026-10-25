@@ -234,8 +234,9 @@ internal static class CrmFollowupEndpoints
     {
         if(!Manage(h)&&!Tasks(h))return CrmAccess.Denied();
         var query=db.Reminders.AsNoTracking().AsQueryable();
-        if(!CrmAccess.Scope(h,"crm.account.read-all")&&!CrmAccess.Scope(h,"crm.opportunity.read-all"))
-            query=query.Where(x=>x.RecipientUserId==CrmAccess.UserId(h));
+        // Recipient-only reminder visibility. Read-all scopes from another entity type
+        // must never expose a seller's private reminder metadata.
+        query=query.Where(x=>x.RecipientUserId==CrmAccess.UserId(h));
         if(!string.IsNullOrWhiteSpace(status))query=query.Where(x=>x.Status==status);
         return Results.Ok(await query.OrderByDescending(x=>x.FireAt)
             .Skip((Math.Max(1,page??1)-1)*50).Take(50).ToListAsync(ct));
