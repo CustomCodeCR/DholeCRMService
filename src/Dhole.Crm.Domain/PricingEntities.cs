@@ -11,6 +11,7 @@ public sealed class OpportunityQuote : CrmRecord
     public string ShipmentModeSnapshot { get; set; } = "";
     public DateTime LinkedAt { get; set; } = DateTime.UtcNow;
     public DateTime LastSyncAt { get; set; } = DateTime.UtcNow;
+    public DateTime? PendingRefreshAt { get; set; }
 }
 /// <summary>Stable correlation from CRM opportunity to an actual Pricing request.</summary>
 public sealed class OpportunityPricingRequest : CrmRecord
@@ -24,4 +25,5 @@ public sealed class OpportunityPricingRequest : CrmRecord
     public string? RequestPayloadHash { get; set; }
     public DateTime LinkedAt { get; set; } = DateTime.UtcNow;
     public DateTime LastSyncAt { get; set; } = DateTime.UtcNow;
+    public DateTime? PendingRefreshAt { get; set; }
 }
