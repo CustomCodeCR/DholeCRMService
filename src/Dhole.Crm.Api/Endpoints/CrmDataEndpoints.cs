@@ -11,7 +11,9 @@ public static class CrmDataEndpoints
     public static IEndpointRouteBuilder MapCrmDataEndpoints(this IEndpointRouteBuilder app)
     {
         var group = app.MapGroup("/api/crm").WithTags("CRM Data").RequireAuthorization()
-            .AddEndpointFilter(CrmAccess.Verify);
+            .AddEndpointFilter(CrmAccess.Verify)
+            .RequireRateLimiting("crm-api");
+        group.MapSearchExport();
         group.MapAccounts();
         group.MapLeads();
         group.MapContacts();
