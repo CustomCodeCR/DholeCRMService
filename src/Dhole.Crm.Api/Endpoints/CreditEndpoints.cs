@@ -32,7 +32,8 @@ internal static class CreditEndpoints
     private static bool Manage(HttpContext h)=>FinanceAccess.Has(h,"crm.credit.manage");
     private static bool Approver(HttpContext h)=>FinanceAccess.Has(h,"crm.credit.approve");
     private static bool Valid(CreditTermsRequest r)=>
-        r.CreditDays is >=0 and <=3650 && r.CreditLimit>=0 &&
+        r.CreditDays is >=0 and <=3650 &&
+        r.CreditLimit is >=0m and <=9999999999999999.99m &&
         decimal.Round(r.CreditLimit,2)==r.CreditLimit &&
         r.MonthlyFinancingPct is >=0 and <=100 &&
         decimal.Round(r.MonthlyFinancingPct,4)==r.MonthlyFinancingPct &&
