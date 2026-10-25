@@ -19,6 +19,9 @@ public static class ServiceRegistration
         services.AddHttpClient<IAuthReferenceService, AuthReferenceService>();
         services.AddHttpClient<IPricingCommercialClient, PricingCommercialClient>();
         services.AddSingleton<IConfigReferenceService, ConfigReferenceService>();
+        services.AddHttpClient<CrmDynamicsSavedQueryClient>();
+        services.AddScoped<CrmDynamicsAccountMapper>();
+        services.AddScoped<CrmDynamicsMigrationService>();
         return services;
     }
 }
