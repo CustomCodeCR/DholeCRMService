@@ -125,6 +125,16 @@ public sealed class CrmDynamicsMigrationService(
         if (current.ConfigurationHash != mapper.ConfigurationFingerprint())
             throw new InvalidOperationException("dynamics_mapping_changed_restart_required");
         var page = await connector.ReadAsync(current.Cursor, ct);
+        // Resolve Auth/Config references before opening a SQL transaction.
+        // A 100-row page must never hold PostgreSQL locks during 100 remote calls.
+        var prepared = new List<(CrmDynamicsAccountCandidate? Candidate, string? Error)>();
+        foreach (var raw in page.Items)
+        {
+            var (candidate, error) = mapper.Parse(raw);
+            if (candidate is not null && error is null)
+                error = await ValidateAsync(candidate, ct);
+            prepared.Add((candidate, error));
+        }
         await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct);
         // One import writer across worker replicas. PostgreSQL advisory XACT lock is released with the transaction.
         var locked = await db.Database.SqlQueryRaw<bool>(
@@ -137,17 +147,17 @@ public sealed class CrmDynamicsMigrationService(
         job.StartedAt ??= DateTime.UtcNow;
         var seen = new HashSet<Guid>();
         var seenTax = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var row in page.Items)
+        foreach (var (candidate, initialError) in prepared)
         {
             job.ProcessedCount++;
-            var (candidate, error) = mapper.Parse(row);
+            var error = initialError;
             Guid? existing = null;
             if (candidate is not null)
             {
                 if (!seen.Add(candidate.ExternalId)) error = "duplicate_external_record";
                 else if (!seenTax.Add(candidate.CountryId + ":" + candidate.TaxIdTypeCode + ":" + Tax(candidate.TaxId)))
                     error = "duplicate_fiscal_identity_in_batch";
-                else if (error is null) error = await ValidateAsync(candidate, ct);
+                // Auth and Config were verified before the SQL transaction.
             }
             if (candidate is not null && error is null)
             {
