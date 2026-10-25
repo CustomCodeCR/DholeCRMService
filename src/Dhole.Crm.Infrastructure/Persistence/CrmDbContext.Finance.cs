@@ -20,6 +20,7 @@ public sealed partial class CrmDbContext
             e.HasIndex(x=>x.AccountId).IsUnique().HasFilter("status='Approved'");
             e.HasIndex(x=>x.AccountId).IsUnique().HasFilter("status='PendingApproval'");
             e.HasIndex(x=>new{x.Status,x.ReviewAt});
+            e.HasIndex(x=>new{x.AccountId,x.CreationKeyHash}).IsUnique().HasFilter("creation_key_hash IS NOT NULL");
         });
         b.Entity<CreditCoverage>(e=>{
             e.HasOne<CreditProfile>().WithMany().HasForeignKey(x=>x.CreditProfileId).OnDelete(DeleteBehavior.Restrict);
@@ -36,6 +37,7 @@ public sealed partial class CrmDbContext
             e.Property(x=>x.Status).HasMaxLength(20);
             e.HasIndex(x=>x.ContractNumber).IsUnique().HasFilter("contract_number IS NOT NULL");
             e.HasIndex(x=>new{x.Status,x.RenewalDate});
+            e.HasIndex(x=>new{x.AccountId,x.CreationKeyHash}).IsUnique().HasFilter("creation_key_hash IS NOT NULL");
         });
         b.Entity<CreditTermsHistory>(e=>{
             e.HasOne<CreditProfile>().WithMany().HasForeignKey(x=>x.CreditProfileId).OnDelete(DeleteBehavior.Restrict);

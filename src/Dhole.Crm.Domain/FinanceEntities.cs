@@ -4,6 +4,8 @@ namespace Dhole.Crm.Domain;
 public sealed class CreditProfile : CrmRecord
 {
     public Guid AccountId { get; set; }
+    public string? CreationKeyHash { get; set; }
+    public string? CreationPayloadHash { get; set; }
     public bool CreditEnabled { get; set; }
     public int CreditDays { get; set; }
     public decimal CreditLimit { get; set; }
@@ -29,6 +31,8 @@ public sealed class CreditContract : CrmRecord
 {
     public Guid AccountId { get; set; }
     public Guid? CreditProfileId { get; set; }
+    public string? CreationKeyHash { get; set; }
+    public string? CreationPayloadHash { get; set; }
     public string? ContractNumber { get; set; }
     public DateTime StartDate { get; set; }
     public DateTime RenewalDate { get; set; }

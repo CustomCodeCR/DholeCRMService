@@ -11,6 +11,7 @@ CREATE TABLE crm.crm_credit_profiles (
  id uuid PRIMARY KEY, created_by_user_id uuid NOT NULL, updated_by_user_id uuid,
  created_at timestamptz NOT NULL, updated_at timestamptz NOT NULL, row_version bigint NOT NULL DEFAULT 1,
  account_id uuid NOT NULL REFERENCES crm.crm_accounts(id) ON DELETE RESTRICT,
+ creation_key_hash varchar(64), creation_payload_hash varchar(64),
  credit_enabled boolean NOT NULL DEFAULT false, credit_days int NOT NULL,
  credit_limit numeric(18,2) NOT NULL, currency_code varchar(12) NOT NULL,
  monthly_financing_pct numeric(7,4) NOT NULL, payment_conditions varchar(4000) NOT NULL,
@@ -24,6 +25,7 @@ CREATE TABLE crm.crm_credit_profiles (
 );
 CREATE UNIQUE INDEX uq_credit_approved ON crm.crm_credit_profiles(account_id) WHERE status='Approved';
 CREATE UNIQUE INDEX uq_credit_pending ON crm.crm_credit_profiles(account_id) WHERE status='PendingApproval';
+CREATE UNIQUE INDEX uq_credit_create_key ON crm.crm_credit_profiles(account_id,creation_key_hash) WHERE creation_key_hash IS NOT NULL;
 CREATE INDEX ix_credit_review ON crm.crm_credit_profiles(status,review_at);
 CREATE TABLE crm.crm_credit_coverages (
  id uuid PRIMARY KEY, created_by_user_id uuid NOT NULL, updated_by_user_id uuid,
@@ -38,6 +40,7 @@ CREATE TABLE crm.crm_credit_contracts (
  id uuid PRIMARY KEY, created_by_user_id uuid NOT NULL, updated_by_user_id uuid,
  created_at timestamptz NOT NULL, updated_at timestamptz NOT NULL, row_version bigint NOT NULL DEFAULT 1,
  account_id uuid NOT NULL REFERENCES crm.crm_accounts(id) ON DELETE RESTRICT,
+ creation_key_hash varchar(64), creation_payload_hash varchar(64),
  credit_profile_id uuid REFERENCES crm.crm_credit_profiles(id) ON DELETE RESTRICT,
  contract_number varchar(100), start_date timestamptz NOT NULL,
  renewal_date timestamptz NOT NULL, expiry_date timestamptz,
@@ -47,6 +50,7 @@ CREATE TABLE crm.crm_credit_contracts (
  CONSTRAINT ck_contract_status CHECK (status IN ('Draft','Active','Expired','Cancelled'))
 );
 CREATE UNIQUE INDEX uq_contract_number ON crm.crm_credit_contracts(contract_number) WHERE contract_number IS NOT NULL;
+CREATE UNIQUE INDEX uq_contract_create_key ON crm.crm_credit_contracts(account_id,creation_key_hash) WHERE creation_key_hash IS NOT NULL;
 CREATE INDEX ix_contract_renewal ON crm.crm_credit_contracts(status,renewal_date);
 CREATE TABLE crm.crm_credit_terms_history (
  id uuid PRIMARY KEY, created_by_user_id uuid NOT NULL, updated_by_user_id uuid,

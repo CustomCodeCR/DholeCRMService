@@ -65,12 +65,20 @@ internal static class CreditContractEndpoints
         if(!Valid(r.StartDate,r.RenewalDate,r.ExpiryDate)||r.PaymentTerms is null||
             r.PaymentTerms.Length>4000 || r.ContractNumber?.Length>100)
             return FinanceAccess.Bad("Invalid dates, terms or contract identifier");
+        var key=FinanceAccess.RequestKey(h);
+        if(key==null)return FinanceAccess.Bad("Idempotency-Key required (8–128 ASCII alphanumeric, hyphen or underscore)");
+        var payload=FinanceAccess.PayloadHash(r);
+        var replay=await db.CreditContracts.AsNoTracking().FirstOrDefaultAsync(x=>x.AccountId==accountId&&
+            x.CreationKeyHash==key,ct);
+        if(replay!=null)return replay.CreationPayloadHash==payload?Results.Ok(replay):
+            FinanceAccess.Conflict("Idempotency key reused for another contract");
         if(r.CreditProfileId.HasValue&&
             !await db.CreditProfiles.AnyAsync(x=>x.Id==r.CreditProfileId&&x.AccountId==accountId&&x.Status=="Approved",ct))
             return FinanceAccess.Conflict("Only an approved credit profile from this account can be contracted");
         var actor=FinanceAccess.Actor(h);
         var contract=new CreditContract {
             AccountId=accountId,CreditProfileId=r.CreditProfileId,
+            CreationKeyHash=key,CreationPayloadHash=payload,
             ContractNumber=string.IsNullOrWhiteSpace(r.ContractNumber)?null:r.ContractNumber.Trim(),
             StartDate=r.StartDate,RenewalDate=r.RenewalDate,ExpiryDate=r.ExpiryDate,
             PaymentTerms=r.PaymentTerms.Trim(),AutoRenew=r.AutoRenew,
