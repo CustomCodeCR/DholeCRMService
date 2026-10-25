@@ -4,6 +4,7 @@ using Dhole.Crm.Infrastructure.References;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Dhole.Crm.Infrastructure.Health;
+using Dhole.Crm.Infrastructure.Integrations;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Dhole.Crm.Infrastructure.DependencyInjection;
