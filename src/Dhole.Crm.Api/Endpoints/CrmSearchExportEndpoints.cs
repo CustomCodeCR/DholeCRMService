@@ -57,29 +57,37 @@ public static class CrmSearchExportEndpoints
         if (!CrmAccess.Scope(http, "crm.opportunity.read-all"))
             opportunities = opportunities.Where(x => x.ExecutiveUserId == actor);
 
-        // Separate SQL queries avoid EF client-projection set operation translation
-        // while keeping deterministic cross-kind pagination (account, lead, opportunity).
+        // SQL ordering precedes DTO projection: EF Core does not translate
+        // ordering over constructor-based projections or a cross-table Concat.
+        // This keeps stable global pagination without materializing all records.
         var number = Math.Clamp(page ?? 1, 1, 10000);
         var size = Math.Clamp(pageSize ?? 25, 1, 100);
         var offset = (number - 1) * size;
-        var total = 0;
         var items = new List<CrmSearchEntry>(size);
-        var sources = new IQueryable<CrmSearchEntry>[]
+        var accountCount = await accounts.CountAsync(ct);
+        var leadCount = await leads.CountAsync(ct);
+        var opportunityCount = await opportunities.CountAsync(ct);
+        var total = accountCount + leadCount + opportunityCount;
+
+        if (offset < accountCount)
         {
-            accounts.Select(x => new CrmSearchEntry(x.Id, "account", x.DisplayName)),
-            leads.Select(x => new CrmSearchEntry(x.Id, "lead", x.Name)),
-            opportunities.Select(x => new CrmSearchEntry(x.Id, "opportunity", x.Title))
-        };
-        foreach (var source in sources)
+            items.AddRange(await accounts.OrderBy(x => x.DisplayName).ThenBy(x => x.Id)
+                .Skip(offset).Take(size).Select(x =>
+                    new CrmSearchEntry(x.Id, "account", x.DisplayName)).ToListAsync(ct));
+        }
+        offset = Math.Max(0, offset - accountCount);
+        if (offset < leadCount && items.Count < size)
         {
-            var count = await source.CountAsync(ct);
-            total += count;
-            if (offset < count && items.Count < size)
-            {
-                items.AddRange(await source.OrderBy(x => x.Title).ThenBy(x => x.Id)
-                    .Skip(offset).Take(size - items.Count).ToListAsync(ct));
-            }
-            offset = Math.Max(0, offset - count);
+            items.AddRange(await leads.OrderBy(x => x.Name).ThenBy(x => x.Id)
+                .Skip(offset).Take(size - items.Count).Select(x =>
+                    new CrmSearchEntry(x.Id, "lead", x.Name)).ToListAsync(ct));
+        }
+        offset = Math.Max(0, offset - leadCount);
+        if (offset < opportunityCount && items.Count < size)
+        {
+            items.AddRange(await opportunities.OrderBy(x => x.Title).ThenBy(x => x.Id)
+                .Skip(offset).Take(size - items.Count).Select(x =>
+                    new CrmSearchEntry(x.Id, "opportunity", x.Title)).ToListAsync(ct));
         }
         return Results.Ok(new { items, total, page = number, pageSize = size });
     }
