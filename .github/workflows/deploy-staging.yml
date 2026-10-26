@@ -44,7 +44,6 @@ jobs:
 
   deploy:
     needs: verify
-    if: vars.CRM_STAGING_DEPLOY_ENABLED == 'true'
     runs-on: [self-hosted, linux, x64, dhole]
     environment: crm-staging
     steps:
