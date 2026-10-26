@@ -1,0 +1,39 @@
+name: dhole-crm-local
+services:
+  postgres:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: crm_local
+      POSTGRES_PASSWORD: crm_local_test_only
+      POSTGRES_DB: dhole_crm
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U crm_local -d dhole_crm"]
+      interval: 3s
+      retries: 20
+    volumes: [crm_pg_local:/var/lib/postgresql/data]
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD","redis-cli","ping"]
+      interval: 3s
+      retries: 20
+  crm-api:
+    image: dhole/crm-api:local
+    ports: ["127.0.0.1:18083:8080", "127.0.0.1:18084:8081"]
+    environment:
+      ConnectionStrings__Postgres: "Host=postgres;Database=dhole_crm;Username=crm_local;Password=crm_local_test_only"
+      Redis__ConnectionString: "redis:6379"
+    depends_on:
+      postgres: {condition: service_healthy}
+      redis: {condition: service_healthy}
+  crm-workers:
+    image: dhole/crm-workers:local
+    ports: ["127.0.0.1:18085:8082"]
+    environment:
+      ConnectionStrings__Postgres: "Host=postgres;Database=dhole_crm;Username=crm_local;Password=crm_local_test_only"
+      Redis__ConnectionString: "redis:6379"
+    depends_on:
+      postgres: {condition: service_healthy}
+      redis: {condition: service_healthy}
+volumes:
+  crm_pg_local:
