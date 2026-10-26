@@ -1,0 +1,71 @@
+syntax = "proto3";
+
+option csharp_namespace = "Dhole.Config.Contracts.Grpc";
+
+package dhole.config;
+
+service ConfigCatalogGrpc {
+  rpc GetCatalogItemById (GetCatalogItemByIdGrpcRequest) returns (CatalogItemGrpcResponse);
+  rpc GetCatalogItemBySlug (GetCatalogItemBySlugGrpcRequest) returns (CatalogItemGrpcResponse);
+  rpc GetCatalogItemByCode (GetCatalogItemByCodeGrpcRequest) returns (CatalogItemGrpcResponse);
+  rpc ResolveCatalogItem (ResolveCatalogItemGrpcRequest) returns (CatalogItemGrpcResponse);
+  rpc ValidateCatalogItem (ValidateCatalogItemGrpcRequest) returns (ValidateCatalogItemGrpcResponse);
+  rpc GetActiveCatalogItemsByGroup (GetActiveCatalogItemsByGroupGrpcRequest) returns (CatalogItemListGrpcResponse);
+}
+
+message GetCatalogItemByIdGrpcRequest {
+  string catalog_item_id = 1;
+}
+
+message GetCatalogItemBySlugGrpcRequest {
+  string catalog_group_slug = 1;
+  string catalog_item_slug = 2;
+}
+
+message GetCatalogItemByCodeGrpcRequest {
+  string catalog_group_slug = 1;
+  string catalog_item_code = 2;
+}
+
+message ResolveCatalogItemGrpcRequest {
+  string catalog_group_slug = 1;
+  string value = 2;
+}
+
+message ValidateCatalogItemGrpcRequest {
+  string catalog_group_slug = 1;
+  string catalog_item_slug = 2;
+}
+
+message GetActiveCatalogItemsByGroupGrpcRequest {
+  string catalog_group_slug = 1;
+}
+
+message ValidateCatalogItemGrpcResponse {
+  bool is_valid = 1;
+  string catalog_group_slug = 2;
+  string catalog_item_slug = 3;
+  CatalogItemGrpcModel item = 4;
+}
+
+message CatalogItemGrpcResponse {
+  bool found = 1;
+  CatalogItemGrpcModel item = 2;
+}
+
+message CatalogItemListGrpcResponse {
+  repeated CatalogItemGrpcModel items = 1;
+}
+
+message CatalogItemGrpcModel {
+  string id = 1;
+  string catalog_group_id = 2;
+  string catalog_group_code = 3;
+  string catalog_group_slug = 4;
+  string code = 5;
+  string slug = 6;
+  string name = 7;
+  string value = 8;
+  string metadata_json = 9;
+  bool is_active = 10;
+}
