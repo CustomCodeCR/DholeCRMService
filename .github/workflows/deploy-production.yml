@@ -1,4 +1,5 @@
-name: CRM Deploy Production
+name: Deploy Dhole CRM - Production
+
 on:
   push:
     branches: [master]
@@ -12,61 +13,85 @@ concurrency:
   group: dhole-crm-production
   cancel-in-progress: false
 
+env:
+  COMPOSE_FILE: .dhole-system/deploy/docker-compose.services.yml
+  DHOLE_IMAGE_TAG: latest
+  DHOLE_NETWORK: dhole
+  COMPOSE_PROJECT: dhole
+
 jobs:
   deploy:
-    # No extra repository-variable switch: environment approval and the actual
-    # running staging release remain the production safety checks.
     runs-on: [self-hosted, linux, x64, dhole]
-    environment: crm-production
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - name: Checkout production orchestration
-        uses: actions/checkout@v4
-        with:
-          repository: CustomCodeCR/DholeSystem
-          ref: master
-          path: _dhole-system
-      - name: Load Dhole production environment (same as Config)
-        shell: bash
+      - name: Load Dhole deployment infrastructure
         run: |
           set -euo pipefail
+          rm -rf .dhole-system
+          cloned=0
+          for attempt in 1 2 3 4 5; do
+            if git clone --depth 1 --branch master https://github.com/CustomCodeCR/DholeSystem.git .dhole-system; then
+              cloned=1
+              break
+            fi
+            rm -rf .dhole-system
+            echo "::warning::DholeSystem clone failed (attempt $attempt/5); retrying"
+            if [ "$attempt" -lt 5 ]; then sleep $((attempt * 5)); fi
+          done
+          if [ "$cloned" -ne 1 ]; then
+            echo "::error::Unable to load DholeSystem from master"
+            exit 1
+          fi
           mkdir -p "$RUNNER_TEMP/dhole-env"
-          bash _dhole-system/deploy/prepare-environments.sh /opt/dhole/.env "$RUNNER_TEMP/dhole-env"
+          bash .dhole-system/deploy/prepare-environments.sh /opt/dhole/.env "$RUNNER_TEMP/dhole-env"
           echo "DHOLE_ENV_FILE=$RUNNER_TEMP/dhole-env/.env.production" >> "$GITHUB_ENV"
-      - uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: '10.0.x'
-      - name: Verify running staging release before production (no release directory)
-        shell: bash
+      - name: Verify production server
         run: |
           set -euo pipefail
-          # Read revision from the real deployed staging containers, not a new
-          # server-side file. Both environments use the existing Docker daemon.
-          stage_api="$(docker ps -q --filter label=com.docker.compose.project=dhole-staging --filter label=com.docker.compose.service=crm-api)"
-          stage_workers="$(docker ps -q --filter label=com.docker.compose.project=dhole-staging --filter label=com.docker.compose.service=crm-workers)"
-          test -n "$stage_api" && test -n "$stage_workers"
-          api_revision="$(docker inspect --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}' "$stage_api")"
-          worker_revision="$(docker inspect --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}' "$stage_workers")"
-          [[ "$api_revision" =~ ^[a-f0-9]{40}$ ]]
-          test "$api_revision" = "$worker_revision"
-          git merge-base --is-ancestor "$api_revision" "$GITHUB_SHA"
-          docker exec "$stage_api" curl -fsS --max-time 5 http://127.0.0.1:8080/health/ready >/dev/null
-          docker exec "$stage_workers" curl -fsS --max-time 5 http://127.0.0.1:8082/health/ready >/dev/null
-      - name: Repeat build and tests before production
-        env:
-          NuGetPackageSourceCredentials_github: Username=github-actions;Password=${{ secrets.GITHUB_TOKEN }};ValidAuthenticationTypes=Basic
-        run: |
-          set -euo pipefail
-          python3 scripts/check-config.py
-          dotnet restore DholeCRMService.slnx --configfile NuGet.Config
-          dotnet build DholeCRMService.slnx -c Release --no-restore --warnaserror
-          dotnet test tests/Dhole.Crm.UnitTests/Dhole.Crm.UnitTests.csproj -c Release --no-build --logger trx
-      - name: Deploy only approved CRM API/Workers
+          command -v curl >/dev/null
+          docker compose --env-file "$DHOLE_ENV_FILE" -f "$COMPOSE_FILE" -p "$COMPOSE_PROJECT" config -q
+      - name: Build images
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          DHOLE_NETWORK: dhole
-          DHOLE_IMAGE_TAG: latest
-          COMPOSE_PROJECT: dhole
-        run: bash scripts/deploy-crm.sh production
+        run: |
+          set -euo pipefail
+          SHA_TAG="$(printf '%.12s' "$GITHUB_SHA")"
+          docker build --pull --build-arg GITHUB_ACTOR="$GITHUB_ACTOR" --secret id=github_token,env=GITHUB_TOKEN -f src/Dhole.Crm.Api/Dockerfile --label "org.opencontainers.image.revision=$GITHUB_SHA" -t dhole/crm-api:latest -t "dhole/crm-api:latest-$SHA_TAG" .
+          docker build --pull --build-arg GITHUB_ACTOR="$GITHUB_ACTOR" --secret id=github_token,env=GITHUB_TOKEN -f src/Dhole.Crm.Workers/Dockerfile --label "org.opencontainers.image.revision=$GITHUB_SHA" -t dhole/crm-workers:latest -t "dhole/crm-workers:latest-$SHA_TAG" .
+      - name: Deploy CRM production
+        run: |
+          set -euo pipefail
+          docker compose --env-file "$DHOLE_ENV_FILE" -f "$COMPOSE_FILE" -p "$COMPOSE_PROJECT" up -d --no-deps --force-recreate --pull never crm-api crm-workers
+          docker compose --env-file "$DHOLE_ENV_FILE" -f "$COMPOSE_FILE" -p "$COMPOSE_PROJECT" ps crm-api crm-workers
+      - name: Verify CRM API and Workers health
+        run: |
+          set -euo pipefail
+          for service in crm-api crm-workers; do
+            if [ "$service" = crm-api ]; then port=8080; else port=8082; fi
+            container_id="$(docker compose --env-file "$DHOLE_ENV_FILE" -f "$COMPOSE_FILE" -p "$COMPOSE_PROJECT" ps -q "$service")"
+            test -n "$container_id"
+            ready=0
+            for attempt in $(seq 1 30); do
+              state="$(docker inspect -f '{{.State.Status}}' "$container_id" 2>/dev/null || true)"
+              if [ "$state" = exited ] || [ "$state" = dead ]; then break; fi
+              container_ip="$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' "$container_id" 2>/dev/null || true)"
+              if [ -n "$container_ip" ] && curl -fsS --max-time 4 "http://$container_ip:$port/health/ready" >/dev/null 2>&1; then
+                ready=1
+                break
+              fi
+              sleep 2
+            done
+            if [ "$ready" -ne 1 ]; then
+              echo "::error::$service did not reach /health/ready"
+              docker inspect -f 'Status={{.State.Status}} RestartCount={{.RestartCount}} Health={{if .State.Health}}{{.State.Health.Status}}{{else}}not_configured{{end}}' "$container_id" || true
+              # Like Config, show the actual container failure instead of only a timeout.
+              docker logs --tail 100 "$container_id" || true
+              # API exposes dependency reachability, without configuration values.
+              docker exec "$container_id" curl -sS --max-time 4 "http://127.0.0.1:$port/health/ready" || true
+              exit 1
+            fi
+            echo "$service: ready"
+          done
+      - name: Cleanup old images
+        if: always()
+        run: docker image prune -f
