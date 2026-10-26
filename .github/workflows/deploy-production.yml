@@ -14,9 +14,8 @@ concurrency:
 
 jobs:
   deploy:
-    # Fail closed: approval is a separately controlled repository variable AND
-    # the production GitHub environment must require reviewers.
-    if: vars.CRM_PRODUCTION_DEPLOY_APPROVED == 'true'
+    # No extra repository-variable switch: environment approval and the actual
+    # running staging release remain the production safety checks.
     runs-on: [self-hosted, linux, x64, dhole]
     environment: crm-production
     steps:
