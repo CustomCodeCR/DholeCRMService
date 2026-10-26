@@ -12,6 +12,7 @@ public static class CrmDataEndpoints
     {
         var group = app.MapGroup("/api/crm").WithTags("CRM Data").RequireAuthorization()
             .AddEndpointFilter(CrmAccess.Verify);
+        group.MapHaciendaTaxpayers();
         group.MapAccounts();
         group.MapLeads();
         group.MapContacts();
