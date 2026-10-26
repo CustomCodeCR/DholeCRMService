@@ -34,16 +34,38 @@ docker build --secret id=github_token,env=GITHUB_TOKEN -f src/Dhole.Crm.Workers/
 # Never start / restart unrelated microservices.
 docker compose --env-file "$DHOLE_ENV_FILE" "${compose[@]}" -p "$COMPOSE_PROJECT" \
   up -d --no-deps --force-recreate --pull never --no-build crm-api crm-workers
+# Config-style service check. CRM must additionally prove its real
+# PostgreSQL/Redis dependencies are ready, not merely that Docker started.
+api_id=""
+worker_id=""
 for attempt in $(seq 1 45); do
   api_id="$(docker compose --env-file "$DHOLE_ENV_FILE" "${compose[@]}" -p "$COMPOSE_PROJECT" ps -q crm-api)"
   worker_id="$(docker compose --env-file "$DHOLE_ENV_FILE" "${compose[@]}" -p "$COMPOSE_PROJECT" ps -q crm-workers)"
   if [[ -n "$api_id" && -n "$worker_id" ]] && \
-     docker exec "$api_id" curl -fsS http://127.0.0.1:8080/health/ready >/dev/null 2>&1 && \
-     docker exec "$worker_id" curl -fsS http://127.0.0.1:8082/health/ready >/dev/null 2>&1; then
+     docker exec "$api_id" curl -fsS --max-time 5 http://127.0.0.1:8080/health/ready >/dev/null 2>&1 && \
+     docker exec "$worker_id" curl -fsS --max-time 5 http://127.0.0.1:8082/health/ready >/dev/null 2>&1; then
+    echo "CRM API and worker readiness verified."
     break
   fi
   if [[ "$attempt" -eq 45 ]]; then
-    echo "CRM readiness failed; old image SHA available for operator rollback" >&2
+    echo "::error::CRM API or workers failed readiness after Docker Compose started them." >&2
+    for service in crm-api crm-workers; do
+      id="$(docker compose --env-file "$DHOLE_ENV_FILE" "${compose[@]}" -p "$COMPOSE_PROJECT" ps -q "$service")"
+      if [[ -z "$id" ]]; then
+        echo "::error::$service is not listed as a running container" >&2
+        continue
+      fi
+      docker inspect -f "$service: state={{.State.Status}}, restarts={{.RestartCount}}, docker_health={{if .State.Health}}{{.State.Health.Status}}{{else}}not_configured{{end}}" "$id" >&2 || true
+      if [[ "$service" == crm-api ]]; then
+        # The API readiness response contains only booleans for PostgreSQL/Redis.
+        echo "$service readiness (postgres/redis only):" >&2
+        docker exec "$id" curl -sS --max-time 5 http://127.0.0.1:8080/health/ready >&2 || true
+      else
+        echo "$service readiness:" >&2
+        docker exec "$id" curl -sS --max-time 5 http://127.0.0.1:8082/health/ready >&2 || true
+      fi
+      printf '\n' >&2
+    done
     exit 1
   fi
   sleep 2
