@@ -51,6 +51,8 @@ jobs:
           set -euo pipefail
           command -v curl >/dev/null
           docker compose --env-file "$DHOLE_ENV_FILE" -f "$COMPOSE_FILE" -f "$COMPOSE_OVERRIDE" -p "$COMPOSE_PROJECT" config -q
+      - name: Ensure dedicated CRM database on existing PostgreSQL
+        run: bash scripts/ensure-crm-database.sh
       - name: Build images
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
