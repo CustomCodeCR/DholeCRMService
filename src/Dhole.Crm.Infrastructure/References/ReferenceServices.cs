@@ -33,6 +33,7 @@ public sealed class AuthReferenceService(HttpClient http, IConfiguration configu
 public interface IConfigReferenceService
 {
     Task<bool> IsActiveCountryAsync(Guid countryId, CancellationToken ct);
+    Task<bool> IsCostaRicaCountryAsync(Guid countryId, CancellationToken ct);
     Task<bool> IsActiveCodeAsync(string catalogGroupSlug, string itemCode, CancellationToken ct);
 }
 public sealed class ConfigReferenceService(IConfiguration configuration) : IConfigReferenceService
@@ -52,6 +53,27 @@ public sealed class ConfigReferenceService(IConfiguration configuration) : IConf
             }, deadline: DateTime.UtcNow.AddSeconds(5), cancellationToken: ct);
         return result.Found && result.Item.IsActive &&
                string.Equals(result.Item.CatalogGroupSlug,catalogGroupSlug,StringComparison.OrdinalIgnoreCase);
+    }
+
+    public async Task<bool> IsCostaRicaCountryAsync(Guid countryId, CancellationToken ct)
+    {
+        var address = configuration["Grpc:Clients:Config:Address"];
+        if (string.IsNullOrWhiteSpace(address))
+            throw new InvalidOperationException("Config gRPC address is not configured.");
+        using var channel = GrpcChannel.ForAddress(address);
+        var client = new ConfigCatalogGrpc.ConfigCatalogGrpcClient(channel);
+        var result = await client.GetCatalogItemByIdAsync(new GetCatalogItemByIdGrpcRequest {
+            CatalogItemId = countryId.ToString()
+        }, deadline: DateTime.UtcNow.AddSeconds(5), cancellationToken: ct);
+        if (!result.Found || !result.Item.IsActive || result.Item.CatalogGroupSlug != "countries")
+            return false;
+        var country = result.Item;
+        return new [] { country.Code, country.Slug, country.Name, country.Value }
+            .Any(x => string.Equals(x, "CR", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(x, "CRI", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(x, "CRC", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(x, "Costa Rica", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(x, "costa-rica", StringComparison.OrdinalIgnoreCase));
     }
 
     public async Task<bool> IsActiveCountryAsync(Guid countryId, CancellationToken ct)
