@@ -107,8 +107,8 @@ internal static class HaciendaTaxpayerEndpoints
         finally { FetchGate.Release(); }
     }
 
-    private sealed record HaciendaActivity(string Code, string Description, string Type);
-    private sealed record HaciendaTaxpayer(string Identification, string Name,
+    internal sealed record HaciendaActivity(string Code, string Description, string Type);
+    internal sealed record HaciendaTaxpayer(string Identification, string Name,
         string? IdentificationType, string? Regime, DateTimeOffset VerifiedAt,
         IReadOnlyCollection<HaciendaActivity> Activities);
 }

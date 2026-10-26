@@ -2,6 +2,7 @@ using Dhole.Crm.Domain;
 using Dhole.Crm.Infrastructure.Persistence;
 using Dhole.Crm.Infrastructure.References;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 
 namespace Dhole.Crm.Api.Endpoints;
 
@@ -56,7 +57,7 @@ internal static class AccountEndpoints
         return CrmAccess.AccountAccess(http, account.ExecutiveUserId) ? Results.Ok(account) : CrmAccess.Denied();
     }
     private static async Task<IResult> Create(CreateAccountRequest request, CrmDbContext db,
-        HttpContext http, IAuthReferenceService auth, IConfigReferenceService config, CancellationToken ct)
+        HttpContext http, IAuthReferenceService auth, IConfigReferenceService config, IMemoryCache cache, CancellationToken ct)
     {
         if (!CrmAccess.Scope(http, "crm.account.create")) return CrmAccess.Denied();
         var id = CrmAccess.UserId(http);
@@ -78,6 +79,19 @@ internal static class AccountEndpoints
         if (tax is not null && await db.Accounts.AnyAsync(x => x.CountryId == request.CountryId &&
              x.TaxIdTypeCode == request.TaxIdTypeCode && x.NormalizedTaxId == tax && x.ArchivedAt == null, ct))
             return CrmDataEndpoints.Conflict("Account with the same fiscal identity already exists");
+        HaciendaTaxpayerEndpoints.HaciendaTaxpayer? verifiedTaxpayer = null;
+        if (tax is not null && request.CountryId.HasValue &&
+            cache.TryGetValue("crm:hacienda:ae:" + tax, out HaciendaTaxpayerEndpoints.HaciendaTaxpayer? cached))
+        {
+            // Only the server's verified snapshot is trusted; never trust client-supplied
+            // "verified" flags, timestamps or activities.
+            if (cached is not null &&
+                string.Equals(cached.Identification, tax, StringComparison.Ordinal))
+            {
+                if (await config.IsCostaRicaCountryAsync(request.CountryId.Value, ct))
+                    verifiedTaxpayer = cached;
+            }
+        }
         var account = new Account
         {
             CreatedByUserId = id, ExecutiveUserId = executiveId, DisplayName = request.DisplayName.Trim(),
@@ -86,9 +100,25 @@ internal static class AccountEndpoints
             NormalizedTaxId = tax, CustomerTypeCode = request.CustomerTypeCode,
             SourceCode = request.SourceCode?.Trim(), RelationshipTypeCode = request.RelationshipTypeCode?.Trim(),
             CategoryType = request.CategoryType, CategoryCode = request.CategoryCode,
-            VerificationStatus = "Pending"
+            VerificationStatus = verifiedTaxpayer is null ? "Pending" : "Verified",
+            HaciendaVerifiedAt = verifiedTaxpayer?.VerifiedAt.UtcDateTime
         };
         db.Accounts.Add(account);
+        if (verifiedTaxpayer is not null)
+        {
+            foreach (var activity in verifiedTaxpayer.Activities
+                .Where(x => !string.IsNullOrWhiteSpace(x.Code))
+                .GroupBy(x => x.Code.Trim(), StringComparer.Ordinal).Select(x => x.First()))
+            {
+                db.AccountBusinessActivities.Add(new AccountBusinessActivity {
+                    AccountId = account.Id, ActivityCode = activity.Code.Trim(),
+                    ActivityDescription = activity.Description,
+                    Source = "HACIENDA",
+                    HaciendaSnapshotAt = verifiedTaxpayer.VerifiedAt.UtcDateTime,
+                    CreatedByUserId = id
+                });
+            }
+        }
         db.AccountAssignments.Add(new AccountAssignment { AccountId = account.Id,
             ExecutiveUserId = executiveId, AssignedBy = id, CreatedByUserId = id });
         try
