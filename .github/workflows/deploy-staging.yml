@@ -1,4 +1,5 @@
-name: CRM Deploy Staging
+name: Deploy Dhole CRM - Staging
+
 on:
   push:
     branches: [develop]
@@ -12,59 +13,86 @@ concurrency:
   group: dhole-crm-staging
   cancel-in-progress: false
 
-jobs:
-  verify:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: '10.0.x'
-      - name: Repeat mandatory checks on promoted branch
-        env:
-          NuGetPackageSourceCredentials_github: Username=github-actions;Password=${{ secrets.GITHUB_TOKEN }};ValidAuthenticationTypes=Basic
-        run: |
-          python3 scripts/check-config.py
-          dotnet restore DholeCRMService.slnx --configfile NuGet.Config
-          dotnet build DholeCRMService.slnx -c Release --no-restore --warnaserror
-          dotnet test DholeCRMService.slnx -c Release --no-build --logger trx
-    services:
-      postgres:
-        image: postgres:17
-        env: { POSTGRES_USER: crm_test, POSTGRES_PASSWORD: crm_ci_only, POSTGRES_DB: dhole_crm }
-        ports: ["5432:5432"]
-        options: --health-cmd "pg_isready -U crm_test" --health-interval 5s --health-timeout 5s --health-retries 12
-      redis:
-        image: redis:7-alpine
-        ports: ["6379:6379"]
-        options: --health-cmd "redis-cli ping" --health-interval 5s --health-timeout 5s --health-retries 12
-    env:
-      CRM_TEST_POSTGRES: Host=127.0.0.1;Database=dhole_crm;Username=crm_test;Password=crm_ci_only
-      CRM_TEST_REDIS: 127.0.0.1:6379
+env:
+  COMPOSE_FILE: .dhole-system/deploy/docker-compose.services.yml
+  COMPOSE_OVERRIDE: .dhole-system/deploy/docker-compose.staging.yml
+  DHOLE_IMAGE_TAG: staging
+  DHOLE_NETWORK: dhole-staging
+  COMPOSE_PROJECT: dhole-staging
 
+jobs:
   deploy:
-    needs: verify
     runs-on: [self-hosted, linux, x64, dhole]
-    environment: crm-staging
     steps:
       - uses: actions/checkout@v4
-      - name: Checkout orchestration from DholeSystem
-        uses: actions/checkout@v4
-        with:
-          repository: CustomCodeCR/DholeSystem
-          ref: master
-          path: _dhole-system
-      - name: Load Dhole deployment environment (same as Config)
-        shell: bash
+      - name: Load Dhole deployment infrastructure
         run: |
           set -euo pipefail
+          rm -rf .dhole-system
+          cloned=0
+          for attempt in 1 2 3 4 5; do
+            if git clone --depth 1 --branch master https://github.com/CustomCodeCR/DholeSystem.git .dhole-system; then
+              cloned=1
+              break
+            fi
+            rm -rf .dhole-system
+            echo "::warning::DholeSystem clone failed (attempt $attempt/5); retrying"
+            if [ "$attempt" -lt 5 ]; then sleep $((attempt * 5)); fi
+          done
+          if [ "$cloned" -ne 1 ]; then
+            echo "::error::Unable to load DholeSystem from master"
+            exit 1
+          fi
           mkdir -p "$RUNNER_TEMP/dhole-env"
-          bash _dhole-system/deploy/prepare-environments.sh /opt/dhole/.env "$RUNNER_TEMP/dhole-env"
+          bash .dhole-system/deploy/prepare-environments.sh /opt/dhole/.env "$RUNNER_TEMP/dhole-env"
           echo "DHOLE_ENV_FILE=$RUNNER_TEMP/dhole-env/.env.staging" >> "$GITHUB_ENV"
-      - name: Staging preflight and deploy only CRM services
+      - name: Verify staging server
+        run: |
+          set -euo pipefail
+          command -v curl >/dev/null
+          docker compose --env-file "$DHOLE_ENV_FILE" -f "$COMPOSE_FILE" -f "$COMPOSE_OVERRIDE" -p "$COMPOSE_PROJECT" config -q
+      - name: Build images
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          DHOLE_NETWORK: dhole-staging
-          DHOLE_IMAGE_TAG: staging
-          COMPOSE_PROJECT: dhole-staging
-        run: bash scripts/deploy-crm.sh staging
+        run: |
+          set -euo pipefail
+          SHA_TAG="$(printf '%.12s' "$GITHUB_SHA")"
+          docker build --pull --build-arg GITHUB_ACTOR="$GITHUB_ACTOR" --secret id=github_token,env=GITHUB_TOKEN -f src/Dhole.Crm.Api/Dockerfile --label "org.opencontainers.image.revision=$GITHUB_SHA" -t dhole/crm-api:staging -t "dhole/crm-api:staging-$SHA_TAG" .
+          docker build --pull --build-arg GITHUB_ACTOR="$GITHUB_ACTOR" --secret id=github_token,env=GITHUB_TOKEN -f src/Dhole.Crm.Workers/Dockerfile --label "org.opencontainers.image.revision=$GITHUB_SHA" -t dhole/crm-workers:staging -t "dhole/crm-workers:staging-$SHA_TAG" .
+      - name: Deploy CRM staging
+        run: |
+          set -euo pipefail
+          docker compose --env-file "$DHOLE_ENV_FILE" -f "$COMPOSE_FILE" -f "$COMPOSE_OVERRIDE" -p "$COMPOSE_PROJECT" up -d --no-deps --force-recreate --pull never crm-api crm-workers
+          docker compose --env-file "$DHOLE_ENV_FILE" -f "$COMPOSE_FILE" -f "$COMPOSE_OVERRIDE" -p "$COMPOSE_PROJECT" ps crm-api crm-workers
+      - name: Verify CRM API and Workers health
+        run: |
+          set -euo pipefail
+          for service in crm-api crm-workers; do
+            if [ "$service" = crm-api ]; then port=8080; else port=8082; fi
+            container_id="$(docker compose --env-file "$DHOLE_ENV_FILE" -f "$COMPOSE_FILE" -f "$COMPOSE_OVERRIDE" -p "$COMPOSE_PROJECT" ps -q "$service")"
+            test -n "$container_id"
+            ready=0
+            for attempt in $(seq 1 30); do
+              state="$(docker inspect -f '{{.State.Status}}' "$container_id" 2>/dev/null || true)"
+              if [ "$state" = exited ] || [ "$state" = dead ]; then break; fi
+              container_ip="$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' "$container_id" 2>/dev/null || true)"
+              if [ -n "$container_ip" ] && curl -fsS --max-time 4 "http://$container_ip:$port/health/ready" >/dev/null 2>&1; then
+                ready=1
+                break
+              fi
+              sleep 2
+            done
+            if [ "$ready" -ne 1 ]; then
+              echo "::error::$service did not reach /health/ready"
+              docker inspect -f 'Status={{.State.Status}} RestartCount={{.RestartCount}} Health={{if .State.Health}}{{.State.Health.Status}}{{else}}not_configured{{end}}' "$container_id" || true
+              # Like Config, show the actual container failure instead of only a timeout.
+              docker logs --tail 100 "$container_id" || true
+              # API exposes dependency reachability, without configuration values.
+              docker exec "$container_id" curl -sS --max-time 4 "http://127.0.0.1:$port/health/ready" || true
+              exit 1
+            fi
+            echo "$service: ready"
+          done
+      - name: Cleanup old images
+        if: always()
+        run: docker image prune -f
