@@ -1,13 +1,16 @@
+using CustomCodeFramework.Auth.DependencyInjection;
 using Dhole.Crm.Api.Grpc;
+using Dhole.Crm.Api.Endpoints;
 using Dhole.Crm.Application.Health;
 using Dhole.Crm.Infrastructure.DependencyInjection;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddCrmInfrastructure();
+builder.Services.AddHttpClient();
+builder.Services.AddCustomCodeAuth(builder.Configuration);
+builder.Services.AddAuthorization();
 builder.Services.AddGrpc();
-// DholeSystem/docker-compose.services.yml owns Kestrel endpoints for staging/production.
-// Register local defaults only when no Kestrel:Endpoints section was supplied;
-// otherwise Kestrel binds each configured port twice (8081: address already in use).
+// Docker compose may explicitly configure Kestrel endpoints. Do not bind 8080/8081 twice.
 if (!builder.Configuration.GetSection("Kestrel:Endpoints").Exists())
 {
     builder.WebHost.ConfigureKestrel(options =>
@@ -25,7 +28,12 @@ app.MapGet("/health/ready", async (IDependencyVerifier verifier, CancellationTok
         postgres = state.PostgresReachable, redis = state.RedisReachable },
         statusCode: state.IsReady ? 200 : 503);
 });
+app.UseAuthentication();
+app.UseAuthorization();
+app.MapCrmDataEndpoints();
 app.MapGrpcService<CrmDiagnosticsService>();
+app.MapGrpcService<CrmAccountReadGrpcService>();
+app.MapGrpcService<CrmOpportunityReadGrpcService>();
 app.Run();
 
 public partial class Program { }
