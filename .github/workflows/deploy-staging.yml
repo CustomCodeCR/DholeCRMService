@@ -52,12 +52,18 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: CustomCodeCR/DholeSystem
-          ref: develop
+          ref: master
           path: _dhole-system
+      - name: Load Dhole deployment environment (same as Config)
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/dhole-env"
+          bash _dhole-system/deploy/prepare-environments.sh /opt/dhole/.env "$RUNNER_TEMP/dhole-env"
+          echo "DHOLE_ENV_FILE=$RUNNER_TEMP/dhole-env/.env.staging" >> "$GITHUB_ENV"
       - name: Staging preflight and deploy only CRM services
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          DHOLE_ENV_FILE: /opt/dhole/.env.staging
           DHOLE_NETWORK: dhole-staging
           DHOLE_IMAGE_TAG: staging
           COMPOSE_PROJECT: dhole-staging
