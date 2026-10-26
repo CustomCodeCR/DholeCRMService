@@ -24,19 +24,16 @@ docker compose --env-file "$DHOLE_ENV_FILE" "${compose[@]}" -p "$COMPOSE_PROJECT
 # Never source the protected env file or print rendered secrets.
 # DB must already be provisioned in staging/production. Failure remains a blocker.
 docker build --secret id=github_token,env=GITHUB_TOKEN -f src/Dhole.Crm.Api/Dockerfile \
-  -t "dhole/crm-api:${GITHUB_SHA}" .
+  --label "org.opencontainers.image.revision=${GITHUB_SHA}" \
+  -t "dhole/crm-api:${GITHUB_SHA}" -t "dhole/crm-api:${DHOLE_IMAGE_TAG}" .
 docker build --secret id=github_token,env=GITHUB_TOKEN -f src/Dhole.Crm.Workers/Dockerfile \
-  -t "dhole/crm-workers:${GITHUB_SHA}" .
-release_dir=/opt/dhole/releases/crm
-mkdir -p "$release_dir"
-previous=""
-if [[ -r "$release_dir/${mode}-success.sha" ]]; then previous="$(cat "$release_dir/${mode}-success.sha")"; fi
-# The staging Compose points at :staging; production Compose at :latest.
-docker tag "dhole/crm-api:${GITHUB_SHA}" "dhole/crm-api:${DHOLE_IMAGE_TAG}"
-docker tag "dhole/crm-workers:${GITHUB_SHA}" "dhole/crm-workers:${DHOLE_IMAGE_TAG}"
+  --label "org.opencontainers.image.revision=${GITHUB_SHA}" \
+  -t "dhole/crm-workers:${GITHUB_SHA}" -t "dhole/crm-workers:${DHOLE_IMAGE_TAG}" .
+# Like Config: Compose consumes the staging/latest image aliases built above.
+# Immutable SHA tags + image labels preserve provenance without any release directory.
 # Never start / restart unrelated microservices.
 docker compose --env-file "$DHOLE_ENV_FILE" "${compose[@]}" -p "$COMPOSE_PROJECT" \
-  up -d --no-deps --no-build crm-api crm-workers
+  up -d --no-deps --force-recreate --pull never --no-build crm-api crm-workers
 for attempt in $(seq 1 45); do
   api_id="$(docker compose --env-file "$DHOLE_ENV_FILE" "${compose[@]}" -p "$COMPOSE_PROJECT" ps -q crm-api)"
   worker_id="$(docker compose --env-file "$DHOLE_ENV_FILE" "${compose[@]}" -p "$COMPOSE_PROJECT" ps -q crm-workers)"
@@ -70,8 +67,5 @@ for upstream in auth-api config-api pricing-api api-gateway; do
       exit 1
     }
 done
-if [[ -n "$previous" && "$previous" != "$GITHUB_SHA" ]]; then
-  printf '%s\n' "$previous" > "$release_dir/${mode}-previous.sha"
-fi
-printf '%s\n' "$GITHUB_SHA" > "$release_dir/${mode}-success.sha"
+# Image tags and OCI revision labels are the deployment version record.
 echo "CRM ${mode} deployed and real readiness checks passed: ${GITHUB_SHA}"
