@@ -32,15 +32,22 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '10.0.x'
-      - name: Verify staging-passed commit is an ancestor of approved master
+      - name: Verify running staging release before production (no release directory)
         shell: bash
         run: |
           set -euo pipefail
-          marker=/opt/dhole/releases/crm/staging-success.sha
-          test -r "$marker"
-          staging_sha="$(cat "$marker")"
-          [[ "$staging_sha" =~ ^[a-f0-9]{40}$ ]]
-          git merge-base --is-ancestor "$staging_sha" "$GITHUB_SHA"
+          # Read revision from the real deployed staging containers, not a new
+          # server-side file. Both environments use the existing Docker daemon.
+          stage_api="$(docker ps -q --filter label=com.docker.compose.project=dhole-staging --filter label=com.docker.compose.service=crm-api)"
+          stage_workers="$(docker ps -q --filter label=com.docker.compose.project=dhole-staging --filter label=com.docker.compose.service=crm-workers)"
+          test -n "$stage_api" && test -n "$stage_workers"
+          api_revision="$(docker inspect --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}' "$stage_api")"
+          worker_revision="$(docker inspect --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}' "$stage_workers")"
+          [[ "$api_revision" =~ ^[a-f0-9]{40}$ ]]
+          test "$api_revision" = "$worker_revision"
+          git merge-base --is-ancestor "$api_revision" "$GITHUB_SHA"
+          docker exec "$stage_api" curl -fsS --max-time 5 http://127.0.0.1:8080/health/ready >/dev/null
+          docker exec "$stage_workers" curl -fsS --max-time 5 http://127.0.0.1:8082/health/ready >/dev/null
       - name: Repeat build and tests before production
         env:
           NuGetPackageSourceCredentials_github: Username=github-actions;Password=${{ secrets.GITHUB_TOKEN }};ValidAuthenticationTypes=Basic
