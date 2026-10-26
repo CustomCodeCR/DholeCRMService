@@ -1,0 +1,91 @@
+name: CRM CI - .NET 10 and contracts
+on:
+  pull_request:
+    branches: [develop, master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: read
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: crm_test
+          POSTGRES_PASSWORD: crm_ci_only
+          POSTGRES_DB: dhole_crm
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U crm_test -d dhole_crm"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping" --health-interval 5s
+          --health-timeout 5s --health-retries 12
+    env:
+      NuGetPackageSourceCredentials_github: Username=github-actions;Password=${{ secrets.GITHUB_TOKEN }};ValidAuthenticationTypes=Basic
+      CRM_TEST_POSTGRES: Host=127.0.0.1;Port=5432;Database=dhole_crm;Username=crm_test;Password=crm_ci_only
+      CRM_TEST_REDIS: 127.0.0.1:6379
+      ConnectionStrings__Postgres: Host=127.0.0.1;Port=5432;Database=dhole_crm;Username=crm_test;Password=crm_ci_only
+      Redis__ConnectionString: 127.0.0.1:6379
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: Verify no tracked production environment or embedded secrets
+        run: python3 scripts/check-config.py
+      - name: Restore exact .NET 10 solution
+        run: dotnet restore DholeCRMService.slnx --configfile NuGet.Config
+      - name: Build API, Workers and gRPC-generated contracts
+        run: dotnet build DholeCRMService.slnx -c Release --no-restore --warnaserror
+      - name: Real unit and PostgreSQL/Redis integration tests
+        run: dotnet test DholeCRMService.slnx -c Release --no-build --logger trx
+      - name: Dependency vulnerability assessment
+        shell: bash
+        run: |
+          set -euo pipefail
+          dotnet list DholeCRMService.slnx package --vulnerable --include-transitive | tee "$RUNNER_TEMP/crm-vulnerabilities.txt"
+          if grep -Eiq 'has the following vulnerable packages|critical|high severity' "$RUNNER_TEMP/crm-vulnerabilities.txt"; then
+            echo "::error::Vulnerable packages detected"; exit 1
+          fi
+      - name: Launch both compiled components and verify real HTTP and gRPC
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Exercise the real DholeSystem Compose endpoint configuration in CI.
+          # Only the API gets 8080/8081 Kestrel settings; workers still listen on 8082.
+          env Kestrel__Endpoints__Http__Url="http://+:8080" Kestrel__Endpoints__Http__Protocols="Http1" Kestrel__Endpoints__Grpc__Url="http://+:8081" Kestrel__Endpoints__Grpc__Protocols="Http2" dotnet run --no-build -c Release --project src/Dhole.Crm.Api > "$RUNNER_TEMP/crm-api.log" 2>&1 &
+          api_pid=$!
+          dotnet run --no-build -c Release --project src/Dhole.Crm.Workers > "$RUNNER_TEMP/crm-workers.log" 2>&1 &
+          worker_pid=$!
+          trap 'kill "$api_pid" "$worker_pid" 2>/dev/null || true' EXIT
+          ready=0
+          for i in $(seq 1 45); do
+            if curl -fsS http://127.0.0.1:8080/health/ready >/dev/null 2>&1 &&
+               curl -fsS http://127.0.0.1:8082/health/ready >/dev/null 2>&1; then ready=1; break; fi
+            sleep 2
+          done
+          test "$ready" -eq 1
+          dotnet run -c Release --project tests/Dhole.Crm.Smoke -- \
+            http://127.0.0.1:8080 http://127.0.0.1:8081 http://127.0.0.1:8082
+      - name: Build both deployable Docker images with mounted GitHub package token
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          docker build --secret id=github_token,env=GITHUB_TOKEN -f src/Dhole.Crm.Api/Dockerfile -t dhole/crm-api:ci .
+          docker build --secret id=github_token,env=GITHUB_TOKEN -f src/Dhole.Crm.Workers/Dockerfile -t dhole/crm-workers:ci .
+          docker image inspect dhole/crm-api:ci dhole/crm-workers:ci >/dev/null
+      - name: Validate CRM database bootstrap shell syntax
+        run: bash -n scripts/ensure-crm-database.sh
+      - name: Validate non-production Compose syntax and service definitions
+        run: |
+          docker compose -f deploy/docker-compose.local.yml config -q
+          test "$(docker compose -f deploy/docker-compose.local.yml config --services | grep -Ec '^crm-(api|workers)$')" -eq 2
