@@ -52,6 +52,15 @@ jobs:
           docker compose --env-file "$DHOLE_ENV_FILE" -f "$COMPOSE_FILE" -p "$COMPOSE_PROJECT" config -q
       - name: Ensure dedicated CRM database on existing PostgreSQL
         run: bash scripts/ensure-crm-database.sh
+      - name: Apply versioned EF Core CRM schema migrations
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          # Database provisioning uses the existing PostgreSQL and DHole env;
+          # tables are created only by EF Core MigrateAsync from the compiled assembly.
+          docker build --pull --build-arg GITHUB_ACTOR="$GITHUB_ACTOR" --secret id=github_token,env=GITHUB_TOKEN -f src/Dhole.Crm.Migrator/Dockerfile -t dhole/crm-migrator:latest .
+          docker run --rm --network "$DHOLE_NETWORK" --env-file "$DHOLE_ENV_FILE" dhole/crm-migrator:latest
       - name: Build images
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
