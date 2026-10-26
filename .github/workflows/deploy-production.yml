@@ -56,5 +56,6 @@ jobs:
           DHOLE_ENV_FILE: /opt/dhole/.env
           DHOLE_NETWORK: dhole
           DHOLE_IMAGE_TAG: latest
+          CRM_SCHEMA_MIGRATION_APPROVED: ${{ vars.CRM_SCHEMA_MIGRATION_APPROVED }}
           COMPOSE_PROJECT: dhole
         run: bash scripts/deploy-crm.sh production

@@ -5,6 +5,7 @@
     <Project Path="src/Dhole.Crm.Contracts/Dhole.Crm.Contracts.csproj" />
     <Project Path="src/Dhole.Crm.Domain/Dhole.Crm.Domain.csproj" />
     <Project Path="src/Dhole.Crm.Infrastructure/Dhole.Crm.Infrastructure.csproj" />
+    <Project Path="src/Dhole.Crm.Migrator/Dhole.Crm.Migrator.csproj" />
     <Project Path="src/Dhole.Crm.Workers/Dhole.Crm.Workers.csproj" />
   </Folder>
   <Folder Name="/tests/">

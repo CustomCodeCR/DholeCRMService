@@ -1,4 +1,8 @@
 using Dhole.Crm.Application.Health;
+using Dhole.Crm.Infrastructure.Persistence;
+using Dhole.Crm.Infrastructure.References;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Dhole.Crm.Infrastructure.Health;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -9,6 +13,10 @@ public static class ServiceRegistration
     public static IServiceCollection AddCrmInfrastructure(this IServiceCollection services)
     {
         services.AddSingleton<IDependencyVerifier, DependencyVerifier>();
+        services.AddDbContext<CrmDbContext>((sp, options) =>
+            options.UseNpgsql(sp.GetRequiredService<Microsoft.Extensions.Configuration.IConfiguration>().GetConnectionString("Postgres")));
+        services.AddHttpClient<IAuthReferenceService, AuthReferenceService>();
+        services.AddSingleton<IConfigReferenceService, ConfigReferenceService>();
         return services;
     }
 }
