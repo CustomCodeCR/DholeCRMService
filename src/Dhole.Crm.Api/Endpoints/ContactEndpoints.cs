@@ -27,6 +27,7 @@ internal static class ContactEndpoints
         group.MapGet("/accounts/{id:guid}/contacts", ListForAccount);
         group.MapPost("/accounts/{id:guid}/contacts", Create);
         group.MapPost("/accounts/{id:guid}/contacts/{contactId:guid}/link", Link);
+        group.MapGet("/contacts", ListContacts);
         group.MapGet("/contacts/{id:guid}", Get);
         group.MapPatch("/contacts/{id:guid}", Patch);
         group.MapPost("/contacts/{id:guid}/archive", Archive);
@@ -61,6 +62,42 @@ internal static class ContactEndpoints
             select new { contact, link.IsPrimary, link.RelationRole })
             .ToListAsync(ct));
     }
+    // Global contact directory is a read-only, paginated projection of relationships
+    // visible to the current executive. No cross-account contact leakage.
+    private static async Task<IResult> ListContacts(CrmDbContext db, HttpContext h,
+        string? q, int? page, int? pageSize, CancellationToken ct)
+    {
+        if (!CrmAccess.Scope(h, "crm.contact.read")) return CrmAccess.Denied();
+        var userId = CrmAccess.UserId(h);
+        var allAccounts = CrmAccess.Scope(h, "crm.account.read-all");
+        var rows =
+            from link in db.AccountContacts.AsNoTracking()
+            join account in db.Accounts.AsNoTracking() on link.AccountId equals account.Id
+            join contact in db.Contacts.AsNoTracking() on link.ContactId equals contact.Id
+            where link.ActiveTo == null && account.ArchivedAt == null && contact.ArchivedAt == null
+              && (allAccounts || account.ExecutiveUserId == userId)
+            select new { link, account, contact };
+        if (!string.IsNullOrWhiteSpace(q))
+        {
+            var term = q.Trim().ToLower();
+            rows = rows.Where(x => x.contact.Name.ToLower().Contains(term) ||
+                (x.contact.Email != null && x.contact.Email.ToLower().Contains(term)) ||
+                x.account.DisplayName.ToLower().Contains(term));
+        }
+        var total = await rows.CountAsync(ct);
+        var number = Math.Max(1, page ?? 1);
+        var size = Math.Clamp(pageSize ?? 25, 1, 100);
+        var items = await rows.OrderBy(x => x.contact.Name).ThenBy(x => x.account.DisplayName)
+            .ThenBy(x => x.contact.Id).Skip((number - 1) * size).Take(size)
+            .Select(x => new {
+                id = x.contact.Id, name = x.contact.Name, jobTitle = x.contact.JobTitle,
+                email = x.contact.Email, phone = x.contact.Phone, status = x.contact.Status,
+                accountId = x.account.Id, accountName = x.account.DisplayName,
+                relationRole = x.link.RelationRole, isPrimary = x.link.IsPrimary,
+            }).ToListAsync(ct);
+        return Results.Ok(new { items, total, page = number, pageSize = size });
+    }
+
     private static async Task<IResult> Get(Guid id, CrmDbContext db, HttpContext h, CancellationToken ct)
     {
         if (!CrmAccess.Scope(h, "crm.contact.read")) return CrmAccess.Denied();

@@ -33,7 +33,7 @@ internal static class AccountEndpoints
     }
 
     private static async Task<IResult> List(CrmDbContext db, HttpContext http,
-        string? q, int? page, int? pageSize, CancellationToken ct)
+        string? q, string? customerTypeCode, string? categoryCode, int? page, int? pageSize, CancellationToken ct)
     {
         if (!CrmDataEndpoints.HasRead(http, "account")) return CrmAccess.Denied();
         var query = db.Accounts.AsNoTracking().Where(x => x.ArchivedAt == null);
@@ -42,6 +42,10 @@ internal static class AccountEndpoints
         if (!string.IsNullOrWhiteSpace(q))
             query = query.Where(x => x.DisplayName.ToLower().Contains(q.Trim().ToLower()) ||
                                      x.LegalName.ToLower().Contains(q.Trim().ToLower()));
+        if (customerTypeCode is "cash" or "credit")
+            query = query.Where(x => x.CustomerTypeCode == customerTypeCode);
+        if (categoryCode is "A" or "B" or "C" or "D")
+            query = query.Where(x => x.CategoryCode == categoryCode);
         var total = await query.CountAsync(ct);
         var number = Math.Max(1, page ?? 1);
         var size = Math.Clamp(pageSize ?? 25, 1, 100);
