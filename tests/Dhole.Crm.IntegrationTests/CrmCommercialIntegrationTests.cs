@@ -40,7 +40,7 @@ public sealed class CrmCommercialIntegrationTests
     {
         await using var db = await Open();
         var table = await db.Database.SqlQueryRaw<string>(
-            "SELECT table_name::text FROM information_schema.tables WHERE table_schema='crm' AND table_name='crm_account_route_evidence'")
+            "SELECT table_name::text AS \"Value\" FROM information_schema.tables WHERE table_schema='crm' AND table_name='crm_account_route_evidence'")
             .SingleAsync();
         Assert.AreEqual("crm_account_route_evidence", table);
         var user = Guid.NewGuid();
