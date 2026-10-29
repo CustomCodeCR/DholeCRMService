@@ -66,6 +66,7 @@ internal static class AccountCommercialOverviewEndpoints
 
         object[] routes = [];
         object[] analyses = [];
+        object[] analysisRoutes = [];
         if (CrmAccess.Scope(http, "crm.analysis.read"))
         {
             routes = await db.CustomerTradeProfiles.AsNoTracking()
@@ -81,6 +82,15 @@ internal static class AccountCommercialOverviewEndpoints
                 .OrderByDescending(x => x.CreatedAt).Take(30)
                 .Select(x => new { x.Id, x.MarketCode, x.CustomsNationalizationRequired,
                     x.EstimatedMonthlyVolume, x.VolumeUnit, x.CreatedAt }).ToArrayAsync(ct);
+            var visibleAnalysisIds = db.CommercialAnalyses.AsNoTracking()
+                .Where(x => x.AccountId == id &&
+                    (allAnalyses || x.OwnerUserId == actor))
+                .Select(x => x.Id);
+            analysisRoutes = await db.CommercialAnalysisRoutes.AsNoTracking()
+                .Where(x => visibleAnalysisIds.Contains(x.AnalysisId))
+                .OrderByDescending(x => x.CreatedAt).Take(80)
+                .Select(x => new { x.Id, x.PolCode, x.PoeCode, x.PodCode,
+                    x.FrequencyPerMonth, x.Notes, x.AnalysisId }).ToArrayAsync(ct);
         }
 
         object[] opportunities = [];
@@ -111,7 +121,7 @@ internal static class AccountCommercialOverviewEndpoints
         }
 
         return Results.Ok(new {
-            activities, followups, routes, analyses, opportunities, quotes,
+            activities, followups, routes, analysisRoutes, analyses, opportunities, quotes,
             quotesAreLinkedOnly = true
         });
     }
