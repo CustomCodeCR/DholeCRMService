@@ -56,6 +56,20 @@ public sealed partial class CrmDbContext
             e.Property(x => x.MarketingEmail).HasMaxLength(254);
             e.Property(x => x.CommercialObservations).HasMaxLength(4000);
             e.Property(x => x.OperationalInstructions).HasMaxLength(4000);
+            e.Property(x => x.ActiveServices).HasMaxLength(2000);
+            e.Property(x => x.PresenceCountries).HasMaxLength(2000);
+            e.Property(x => x.CommercialStrategy).HasMaxLength(4000);
+            e.Property(x => x.ProjectsOfInterest).HasMaxLength(4000);
+            e.Property(x => x.PricingObservations).HasMaxLength(4000);
+            e.Property(x => x.TariffMonitoringNotes).HasMaxLength(4000);
+            e.Property(x => x.TariffSendingNotes).HasMaxLength(4000);
+            e.Property(x => x.CustomsInstructions).HasMaxLength(4000);
+            e.Property(x => x.CargoCollectionInstructions).HasMaxLength(4000);
+            e.Property(x => x.DocumentReviewInstructions).HasMaxLength(4000);
+            e.Property(x => x.AssignedOperations).HasMaxLength(500);
+            e.Property(x => x.CompetitorObservations).HasMaxLength(4000);
+            e.Property(x => x.TradeAgreementNotes).HasMaxLength(2000);
+            e.Property(x => x.WebCustomerReference).HasMaxLength(200);
         });
         ConfigureRecord<AccountRouteEvidence>(b, "crm_account_route_evidence");
         b.Entity<AccountRouteEvidence>(e =>

@@ -40,7 +40,7 @@ public sealed class CrmCommercialIntegrationTests
     {
         await using var db = await Open();
         var table = await db.Database.SqlQueryRaw<string>(
-            "SELECT table_name::text FROM information_schema.tables WHERE table_schema='crm' AND table_name='crm_account_route_evidence'")
+            "SELECT table_name::text AS \"Value\" FROM information_schema.tables WHERE table_schema='crm' AND table_name='crm_account_route_evidence'")
             .SingleAsync();
         Assert.AreEqual("crm_account_route_evidence", table);
         var user = Guid.NewGuid();
@@ -64,7 +64,7 @@ public sealed class CrmCommercialIntegrationTests
             PolCode = "CNSHA", PoeCode = "PAMNZ", PodCode = "CRCAL",
             ObservedAt = DateTime.UtcNow, CreatedByUserId = user
         });
-        await Assert.ThrowsExceptionAsync<DbUpdateException>(async () => await db.SaveChangesAsync());
+        await Assert.ThrowsExactlyAsync<DbUpdateException>(async () => await db.SaveChangesAsync());
     }
 
     [TestMethod]
@@ -80,11 +80,21 @@ public sealed class CrmCommercialIntegrationTests
             Sector = "Automotriz", BusinessActivity = "Importación",
             Products = "Repuestos", CompanyHistory = "Empresa comercial",
             CommercialObservations = "Visita mensual",
+            CommercialStrategy = "Crecimiento de importaciones",
+            ProjectsOfInterest = "Apertura de mercado",
+            CustomsInstructions = "Verificar permisos",
+            CargoCollectionInstructions = "Confirmar bodega",
+            WebCustomerReference = "CUST-WEB-88",
             OperationalInstructions = "Confirmar recepción", CreatedByUserId = user
         });
         await db.SaveChangesAsync();
         var found = await db.AccountBusinessProfiles.SingleAsync(x => x.AccountId == account.Id);
         Assert.AreEqual("Repuestos", found.Products);
+        Assert.AreEqual("Crecimiento de importaciones", found.CommercialStrategy);
+        Assert.AreEqual("Apertura de mercado", found.ProjectsOfInterest);
+        Assert.AreEqual("Verificar permisos", found.CustomsInstructions);
+        Assert.AreEqual("Confirmar bodega", found.CargoCollectionInstructions);
+        Assert.AreEqual("CUST-WEB-88", found.WebCustomerReference);
         Assert.AreEqual("Confirmar recepción", found.OperationalInstructions);
         Assert.AreEqual("Business", (await db.Accounts.SingleAsync(x => x.Id == account.Id)).DisplayName);
     }
