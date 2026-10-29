@@ -1,6 +1,7 @@
 using Dhole.Crm.Domain;
 using Dhole.Crm.Infrastructure.Persistence;
 using Dhole.Crm.Infrastructure.References;
+using System.Net;
 using Microsoft.EntityFrameworkCore;
 
 namespace Dhole.Crm.Api.Endpoints;
@@ -20,6 +21,7 @@ internal static class AccountRouteEvidenceEndpoints
     {
         g.MapGet("/accounts/{id:guid}/route-history", List);
         g.MapPost("/accounts/{id:guid}/route-history", Add);
+        g.MapGet("/accounts/{id:guid}/quote-route-snapshots", QuoteRoutes);
         return g;
     }
 
@@ -82,6 +84,60 @@ internal static class AccountRouteEvidenceEndpoints
                 x.PodCode, x.ServiceCode, x.Notes, x.ObservedAt, x.CreatedAt
             }).ToListAsync(ct);
         return Results.Ok(new { items = records, total, page = number, pageSize = size, popularRoutes });
+    }
+
+    private static async Task<IResult> QuoteRoutes(Guid id, CrmDbContext db,
+        HttpContext h, IPricingCommercialClient pricing, int? page, int? pageSize,
+        CancellationToken ct)
+    {
+        if (!CrmDataEndpoints.HasRead(h, "account") ||
+            !CrmAccess.Scope(h, "crm.quote.read") ||
+            !CrmDataEndpoints.HasRead(h, "opportunity"))
+            return CrmAccess.Denied();
+        if (!await CanSeeAccount(db, h, id, ct)) return Results.NotFound();
+        var actor = CrmAccess.UserId(h);
+        var visibleOpportunities = db.Opportunities.AsNoTracking()
+            .Where(o => o.AccountId == id && o.ArchivedAt == null &&
+                (o.ExecutiveUserId == actor ||
+                 CrmAccess.Scope(h, "crm.opportunity.read-all")));
+        var linked = from q in db.OpportunityQuotes.AsNoTracking()
+                     join op in visibleOpportunities on q.OpportunityId equals op.Id
+                     select q;
+        var pageNumber = Math.Max(1, page ?? 1);
+        var size = Math.Clamp(pageSize ?? 8, 1, 10);
+        var total = await linked.CountAsync(ct);
+        var records = await linked.OrderByDescending(x => x.LinkedAt).ThenBy(x => x.Id)
+            .Skip((pageNumber - 1) * size).Take(size)
+            .Select(x => new { x.PricingQuoteId, x.QuoteNumberSnapshot,
+                x.ShipmentModeSnapshot, x.LinkedAt }).ToListAsync(ct);
+        var authorization = h.Request.Headers.Authorization.ToString();
+        if (!authorization.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+            return Results.Unauthorized();
+        var bearer = authorization["Bearer ".Length..].Trim();
+        // An independent Pricing authorization check occurs for every linked quote.
+        // Small bounded pages avoid uncontrolled fan-out to Pricing.
+        var tasks = records.Select(async row =>
+        {
+            var response = await pricing.GetVisibleQuoteRoute(row.PricingQuoteId, bearer, ct);
+            var route = response.Success ? response.Value : null;
+            return new {
+                pricingQuoteId = row.PricingQuoteId,
+                quoteNumber = row.QuoteNumberSnapshot,
+                shipmentMode = row.ShipmentModeSnapshot,
+                linkedAt = row.LinkedAt,
+                polName = route?.PolName,
+                poeName = route?.PoeName,
+                podName = route?.PodName,
+                revisionNumber = route?.RevisionNumber,
+                revisionPending = route?.RevisionPending,
+                available = route is not null &&
+                    (!string.IsNullOrWhiteSpace(route.PolName) ||
+                     !string.IsNullOrWhiteSpace(route.PodName))
+            };
+        }).ToArray();
+        var items = await Task.WhenAll(tasks);
+        return Results.Ok(new { items, page = pageNumber, pageSize = size, total,
+            note = "Current authorized Pricing view; published revision when draft is pending." });
     }
 
     private static async Task<IResult> Add(Guid id, AddAccountRouteEvidenceRequest r,
