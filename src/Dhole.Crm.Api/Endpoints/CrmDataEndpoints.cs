@@ -14,6 +14,7 @@ public static class CrmDataEndpoints
             .AddEndpointFilter(CrmAccess.Verify);
         group.MapHaciendaTaxpayers();
         group.MapAccounts();
+        group.MapAccountCommercialOverview();
         group.MapLeads();
         group.MapContacts();
         group.MapCommercialPipeline();
