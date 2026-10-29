@@ -90,13 +90,37 @@ public sealed class PricingCommercialClient(HttpClient client,IConfiguration cfg
         SetBearer(req,bearer);
         return Send<PricingQuoteSnapshot>(req,ct);
     }
+    private async Task<PricingResult<PricingQuoteRouteSnapshot>> ReadQuoteRoute(
+        HttpRequestMessage req, CancellationToken ct)
+    {
+        var result = await Send<JsonElement>(req, ct);
+        if (!result.Success)
+            return new PricingResult<PricingQuoteRouteSnapshot>(result.Status, null);
+        try
+        {
+            var json = result.Value;
+            // Seller routes return the object directly. Staff /rates/{id}
+            // returns an ApiResponse<T> envelope with the route under data.
+            if (json.ValueKind == JsonValueKind.Object &&
+                json.TryGetProperty("data", out var wrapped)) json = wrapped;
+            if (json.ValueKind != JsonValueKind.Object)
+                return new PricingResult<PricingQuoteRouteSnapshot>(HttpStatusCode.BadGateway, null);
+            var route = json.Deserialize<PricingQuoteRouteSnapshot>(JsonOptions);
+            return new PricingResult<PricingQuoteRouteSnapshot>(result.Status, route);
+        }
+        catch (JsonException)
+        {
+            return new PricingResult<PricingQuoteRouteSnapshot>(HttpStatusCode.BadGateway, null);
+        }
+    }
+
     public async Task<PricingResult<PricingQuoteRouteSnapshot>> GetVisibleQuoteRoute(
         Guid id, string bearer, CancellationToken ct)
     {
         // Pricing validates each caller's seller scope and account ownership.
         var seller = new HttpRequestMessage(HttpMethod.Get, GetUrl("api/pricing/seller-rates/" + id));
         SetBearer(seller, bearer);
-        var result = await Send<PricingQuoteRouteSnapshot>(seller, ct);
+        var result = await ReadQuoteRoute(seller, ct);
         if (result.Success || (result.Status != HttpStatusCode.Forbidden &&
             result.Status != HttpStatusCode.Unauthorized))
             return result;
@@ -106,7 +130,7 @@ public sealed class PricingCommercialClient(HttpClient client,IConfiguration cfg
         // route labels from the response, never amounts or supplier costs.
         var staff = new HttpRequestMessage(HttpMethod.Get, GetUrl("api/pricing/rates/" + id));
         SetBearer(staff, bearer);
-        return await Send<PricingQuoteRouteSnapshot>(staff, ct);
+        return await ReadQuoteRoute(staff, ct);
     }
     public Task<PricingResult<Guid>> CreateRequest(PricingCreateRequest body,
         string bearer,string idempotencyKey,string correlationId,CancellationToken ct)
