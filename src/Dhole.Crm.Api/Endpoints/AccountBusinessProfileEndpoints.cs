@@ -8,7 +8,21 @@ public sealed record UpsertAccountBusinessProfileRequest(
     long? ExpectedVersion, string? Phone, string? Email, string? Website,
     string? Sector, string? BusinessActivity, string? Products, string? CompanyHistory,
     string? BillingEmail, string? MarketingEmail,
-    string? CommercialObservations, string? OperationalInstructions);
+    string? CommercialObservations, string? OperationalInstructions,
+    string? ActiveServices,
+    string? PresenceCountries,
+    string? CommercialStrategy,
+    string? ProjectsOfInterest,
+    string? PricingObservations,
+    string? TariffMonitoringNotes,
+    string? TariffSendingNotes,
+    string? CustomsInstructions,
+    string? CargoCollectionInstructions,
+    string? DocumentReviewInstructions,
+    string? AssignedOperations,
+    string? CompetitorObservations,
+    string? TradeAgreementNotes,
+    string? WebCustomerReference);
 
 internal static class AccountBusinessProfileEndpoints
 {
@@ -51,6 +65,20 @@ internal static class AccountBusinessProfileEndpoints
             !Valid(r.CompanyHistory, 4000) || !Valid(r.BillingEmail, 254) ||
             !Valid(r.MarketingEmail, 254) || !Valid(r.CommercialObservations, 4000) ||
             !Valid(r.OperationalInstructions, 4000) ||
+            !Valid(r.ActiveServices, 2000) ||
+            !Valid(r.PresenceCountries, 2000) ||
+            !Valid(r.CommercialStrategy, 4000) ||
+            !Valid(r.ProjectsOfInterest, 4000) ||
+            !Valid(r.PricingObservations, 4000) ||
+            !Valid(r.TariffMonitoringNotes, 4000) ||
+            !Valid(r.TariffSendingNotes, 4000) ||
+            !Valid(r.CustomsInstructions, 4000) ||
+            !Valid(r.CargoCollectionInstructions, 4000) ||
+            !Valid(r.DocumentReviewInstructions, 4000) ||
+            !Valid(r.AssignedOperations, 500) ||
+            !Valid(r.CompetitorObservations, 4000) ||
+            !Valid(r.TradeAgreementNotes, 2000) ||
+            !Valid(r.WebCustomerReference, 200) ||
             !CrmDataEndpoints.IsEmailValid(r.Email) ||
             !CrmDataEndpoints.IsEmailValid(r.BillingEmail) ||
             !CrmDataEndpoints.IsEmailValid(r.MarketingEmail))
@@ -91,6 +119,20 @@ internal static class AccountBusinessProfileEndpoints
         profile.MarketingEmail = Normalize(r.MarketingEmail);
         profile.CommercialObservations = Normalize(r.CommercialObservations);
         profile.OperationalInstructions = Normalize(r.OperationalInstructions);
+        profile.ActiveServices = Normalize(r.ActiveServices);
+        profile.PresenceCountries = Normalize(r.PresenceCountries);
+        profile.CommercialStrategy = Normalize(r.CommercialStrategy);
+        profile.ProjectsOfInterest = Normalize(r.ProjectsOfInterest);
+        profile.PricingObservations = Normalize(r.PricingObservations);
+        profile.TariffMonitoringNotes = Normalize(r.TariffMonitoringNotes);
+        profile.TariffSendingNotes = Normalize(r.TariffSendingNotes);
+        profile.CustomsInstructions = Normalize(r.CustomsInstructions);
+        profile.CargoCollectionInstructions = Normalize(r.CargoCollectionInstructions);
+        profile.DocumentReviewInstructions = Normalize(r.DocumentReviewInstructions);
+        profile.AssignedOperations = Normalize(r.AssignedOperations);
+        profile.CompetitorObservations = Normalize(r.CompetitorObservations);
+        profile.TradeAgreementNotes = Normalize(r.TradeAgreementNotes);
+        profile.WebCustomerReference = Normalize(r.WebCustomerReference);
         try
         {
             await db.SaveChangesAsync(ct);
