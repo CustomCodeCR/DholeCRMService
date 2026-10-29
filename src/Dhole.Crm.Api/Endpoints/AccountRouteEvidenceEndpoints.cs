@@ -131,8 +131,9 @@ internal static class AccountRouteEvidenceEndpoints
                 where q.PricingQuoteId == r.SourceId && o.AccountId == id &&
                     o.ArchivedAt == null && (o.ExecutiveUserId == CrmAccess.UserId(h) ||
                     CrmAccess.Scope(h, "crm.opportunity.read-all"))
+                orderby q.LinkedAt descending
                 select new { q.LinkedAt }
-            ).SingleOrDefaultAsync(ct);
+            ).FirstOrDefaultAsync(ct);
             if (quote is null) return CrmDataEndpoints.Bad("Quote must be linked to this account");
             observedAt = quote.LinkedAt;
         }

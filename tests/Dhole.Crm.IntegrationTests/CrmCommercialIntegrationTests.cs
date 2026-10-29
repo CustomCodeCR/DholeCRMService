@@ -68,6 +68,28 @@ public sealed class CrmCommercialIntegrationTests
     }
 
     [TestMethod]
+    public async Task Company_profile_stores_details_without_modifying_existing_account()
+    {
+        await using var db = await Open();
+        var user = Guid.NewGuid();
+        var account = new Account { DisplayName = "Business", LegalName = "Business",
+            CategoryCode = "D", ExecutiveUserId = user, CreatedByUserId = user };
+        db.Accounts.Add(account);
+        db.AccountBusinessProfiles.Add(new AccountBusinessProfile {
+            AccountId = account.Id, Phone = "+506 2222 2222", Email = "ventas@example.com",
+            Sector = "Automotriz", BusinessActivity = "Importación",
+            Products = "Repuestos", CompanyHistory = "Empresa comercial",
+            CommercialObservations = "Visita mensual",
+            OperationalInstructions = "Confirmar recepción", CreatedByUserId = user
+        });
+        await db.SaveChangesAsync();
+        var found = await db.AccountBusinessProfiles.SingleAsync(x => x.AccountId == account.Id);
+        Assert.AreEqual("Repuestos", found.Products);
+        Assert.AreEqual("Confirmar recepción", found.OperationalInstructions);
+        Assert.AreEqual("Business", (await db.Accounts.SingleAsync(x => x.Id == account.Id)).DisplayName);
+    }
+
+    [TestMethod]
     public async Task Real_postgres_rejects_opportunity_without_subject_and_negative_amount()
     {
         await using var db=await Open();
