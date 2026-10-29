@@ -15,4 +15,18 @@ public sealed class AccountBusinessProfile : CrmRecord
     public string? MarketingEmail { get; set; }
     public string? CommercialObservations { get; set; }
     public string? OperationalInstructions { get; set; }
+    public string? ActiveServices { get; set; }
+    public string? PresenceCountries { get; set; }
+    public string? CommercialStrategy { get; set; }
+    public string? ProjectsOfInterest { get; set; }
+    public string? PricingObservations { get; set; }
+    public string? TariffMonitoringNotes { get; set; }
+    public string? TariffSendingNotes { get; set; }
+    public string? CustomsInstructions { get; set; }
+    public string? CargoCollectionInstructions { get; set; }
+    public string? DocumentReviewInstructions { get; set; }
+    public string? AssignedOperations { get; set; }
+    public string? CompetitorObservations { get; set; }
+    public string? TradeAgreementNotes { get; set; }
+    public string? WebCustomerReference { get; set; }
 }
