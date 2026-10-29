@@ -40,6 +40,18 @@ public sealed partial class CrmDbContext
         ConfigureRecord<Activity>(b, "crm_activities");
         ConfigureRecord<ActivityParticipant>(b, "crm_activity_participants");
         ConfigureRecord<ActivityNote>(b, "crm_activity_notes");
+        ConfigureRecord<AccountRouteEvidence>(b, "crm_account_route_evidence");
+        b.Entity<AccountRouteEvidence>(e =>
+        {
+            e.HasOne<Account>().WithMany().HasForeignKey(x => x.AccountId).OnDelete(DeleteBehavior.Restrict);
+            e.Property(x => x.SourceKind).HasMaxLength(16).IsRequired();
+            e.Property(x => x.PolCode).HasMaxLength(80).IsRequired();
+            e.Property(x => x.PoeCode).HasMaxLength(80);
+            e.Property(x => x.PodCode).HasMaxLength(80).IsRequired();
+            e.Property(x => x.ServiceCode).HasMaxLength(80);
+            e.Property(x => x.Notes).HasMaxLength(2000);
+            e.HasIndex(x => new { x.AccountId, x.ObservedAt });
+        });
         ConfigureRecord<CommercialAnalysis>(b, "crm_commercial_analyses");
         ConfigureRecord<CommercialAnalysisRoute>(b, "crm_commercial_analysis_routes");
         ConfigureRecord<CommercialAnalysisService>(b, "crm_commercial_analysis_services");
