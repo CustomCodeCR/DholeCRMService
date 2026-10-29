@@ -15,6 +15,8 @@ public static class CrmDataEndpoints
         group.MapHaciendaTaxpayers();
         group.MapAccounts();
         group.MapAccountCommercialOverview();
+        group.MapAccountRouteEvidence();
+        group.MapAccountBusinessProfile();
         group.MapLeads();
         group.MapContacts();
         group.MapCommercialPipeline();

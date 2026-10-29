@@ -25,6 +25,8 @@ public sealed partial class CrmDbContext(DbContextOptions<CrmDbContext> options)
     public DbSet<Activity> Activities => Set<Activity>();
     public DbSet<ActivityParticipant> ActivityParticipants => Set<ActivityParticipant>();
     public DbSet<ActivityNote> ActivityNotes => Set<ActivityNote>();
+    public DbSet<AccountRouteEvidence> AccountRouteEvidence => Set<AccountRouteEvidence>();
+    public DbSet<AccountBusinessProfile> AccountBusinessProfiles => Set<AccountBusinessProfile>();
     public DbSet<CommercialAnalysis> CommercialAnalyses => Set<CommercialAnalysis>();
     public DbSet<CommercialAnalysisRoute> CommercialAnalysisRoutes => Set<CommercialAnalysisRoute>();
     public DbSet<CommercialAnalysisService> CommercialAnalysisServices => Set<CommercialAnalysisService>();

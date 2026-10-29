@@ -40,6 +40,35 @@ public sealed partial class CrmDbContext
         ConfigureRecord<Activity>(b, "crm_activities");
         ConfigureRecord<ActivityParticipant>(b, "crm_activity_participants");
         ConfigureRecord<ActivityNote>(b, "crm_activity_notes");
+        ConfigureRecord<AccountBusinessProfile>(b, "crm_account_business_profiles");
+        b.Entity<AccountBusinessProfile>(e =>
+        {
+            e.HasOne<Account>().WithMany().HasForeignKey(x => x.AccountId).OnDelete(DeleteBehavior.Restrict);
+            e.HasIndex(x => x.AccountId).IsUnique();
+            e.Property(x => x.Phone).HasMaxLength(60);
+            e.Property(x => x.Email).HasMaxLength(254);
+            e.Property(x => x.Website).HasMaxLength(500);
+            e.Property(x => x.Sector).HasMaxLength(350);
+            e.Property(x => x.BusinessActivity).HasMaxLength(2000);
+            e.Property(x => x.Products).HasMaxLength(2000);
+            e.Property(x => x.CompanyHistory).HasMaxLength(4000);
+            e.Property(x => x.BillingEmail).HasMaxLength(254);
+            e.Property(x => x.MarketingEmail).HasMaxLength(254);
+            e.Property(x => x.CommercialObservations).HasMaxLength(4000);
+            e.Property(x => x.OperationalInstructions).HasMaxLength(4000);
+        });
+        ConfigureRecord<AccountRouteEvidence>(b, "crm_account_route_evidence");
+        b.Entity<AccountRouteEvidence>(e =>
+        {
+            e.HasOne<Account>().WithMany().HasForeignKey(x => x.AccountId).OnDelete(DeleteBehavior.Restrict);
+            e.Property(x => x.SourceKind).HasMaxLength(16).IsRequired();
+            e.Property(x => x.PolCode).HasMaxLength(80).IsRequired();
+            e.Property(x => x.PoeCode).HasMaxLength(80);
+            e.Property(x => x.PodCode).HasMaxLength(80).IsRequired();
+            e.Property(x => x.ServiceCode).HasMaxLength(80);
+            e.Property(x => x.Notes).HasMaxLength(2000);
+            e.HasIndex(x => new { x.AccountId, x.ObservedAt });
+        });
         ConfigureRecord<CommercialAnalysis>(b, "crm_commercial_analyses");
         ConfigureRecord<CommercialAnalysisRoute>(b, "crm_commercial_analysis_routes");
         ConfigureRecord<CommercialAnalysisService>(b, "crm_commercial_analysis_services");

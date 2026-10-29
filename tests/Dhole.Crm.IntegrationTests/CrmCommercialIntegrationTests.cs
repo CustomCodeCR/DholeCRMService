@@ -36,6 +36,60 @@ public sealed class CrmCommercialIntegrationTests
         CollectionAssert.Contains(applied,"20261014210000_AddCommercialPipelineActivitiesAnalysis");
     }
     [TestMethod]
+    public async Task Route_evidence_migration_persists_meeting_source_and_rejects_duplicate_ports()
+    {
+        await using var db = await Open();
+        var table = await db.Database.SqlQueryRaw<string>(
+            "SELECT table_name::text FROM information_schema.tables WHERE table_schema='crm' AND table_name='crm_account_route_evidence'")
+            .SingleAsync();
+        Assert.AreEqual("crm_account_route_evidence", table);
+        var user = Guid.NewGuid();
+        var account = new Account { DisplayName = "Route customer", LegalName = "Route customer",
+            ExecutiveUserId = user, CategoryCode = "D", CreatedByUserId = user };
+        db.Accounts.Add(account);
+        var meeting = new Activity { AccountId = account.Id, OwnerUserId = user,
+            Type = "VISIT", Subject = "Shipping meeting", Status = "Completed",
+            OccurredAt = DateTime.UtcNow, CreatedByUserId = user };
+        db.Activities.Add(meeting);
+        var recorded = new AccountRouteEvidence { AccountId = account.Id,
+            SourceKind = "MEETING", SourceId = meeting.Id, PolCode = "CNSHA",
+            PoeCode = "PAMNZ", PodCode = "CRCAL", ObservedAt = DateTime.UtcNow,
+            CreatedByUserId = user };
+        db.AccountRouteEvidence.Add(recorded);
+        await db.SaveChangesAsync();
+        Assert.AreEqual(meeting.Id, (await db.AccountRouteEvidence
+            .SingleAsync(x => x.AccountId == account.Id)).SourceId);
+        db.AccountRouteEvidence.Add(new AccountRouteEvidence {
+            AccountId = account.Id, SourceKind = "MEETING", SourceId = meeting.Id,
+            PolCode = "CNSHA", PoeCode = "PAMNZ", PodCode = "CRCAL",
+            ObservedAt = DateTime.UtcNow, CreatedByUserId = user
+        });
+        await Assert.ThrowsExceptionAsync<DbUpdateException>(async () => await db.SaveChangesAsync());
+    }
+
+    [TestMethod]
+    public async Task Company_profile_stores_details_without_modifying_existing_account()
+    {
+        await using var db = await Open();
+        var user = Guid.NewGuid();
+        var account = new Account { DisplayName = "Business", LegalName = "Business",
+            CategoryCode = "D", ExecutiveUserId = user, CreatedByUserId = user };
+        db.Accounts.Add(account);
+        db.AccountBusinessProfiles.Add(new AccountBusinessProfile {
+            AccountId = account.Id, Phone = "+506 2222 2222", Email = "ventas@example.com",
+            Sector = "Automotriz", BusinessActivity = "Importación",
+            Products = "Repuestos", CompanyHistory = "Empresa comercial",
+            CommercialObservations = "Visita mensual",
+            OperationalInstructions = "Confirmar recepción", CreatedByUserId = user
+        });
+        await db.SaveChangesAsync();
+        var found = await db.AccountBusinessProfiles.SingleAsync(x => x.AccountId == account.Id);
+        Assert.AreEqual("Repuestos", found.Products);
+        Assert.AreEqual("Confirmar recepción", found.OperationalInstructions);
+        Assert.AreEqual("Business", (await db.Accounts.SingleAsync(x => x.Id == account.Id)).DisplayName);
+    }
+
+    [TestMethod]
     public async Task Real_postgres_rejects_opportunity_without_subject_and_negative_amount()
     {
         await using var db=await Open();
