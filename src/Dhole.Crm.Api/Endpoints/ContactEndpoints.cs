@@ -48,6 +48,7 @@ internal static class ContactEndpoints
         group.MapPost("/accounts/{id:guid}/contacts/{contactId:guid}/link", Link);
         group.MapGet("/contacts", ListContacts);
         group.MapGet("/contacts/{id:guid}", Get);
+        group.MapGet("/contacts/{id:guid}/accounts", ListLinkedAccounts);
         group.MapPatch("/contacts/{id:guid}", Patch);
         group.MapPost("/contacts/{id:guid}/archive", Archive);
         group.MapGet("/contacts/{id:guid}/preferences", GetPreferences);
@@ -116,6 +117,26 @@ internal static class ContactEndpoints
                 relationRole = x.link.RelationRole, isPrimary = x.link.IsPrimary,
             }).ToListAsync(ct);
         return Results.Ok(new { items, total, page = number, pageSize = size });
+    }
+
+    // Contact follow-up belongs to its client account. Return only accounts visible
+    // to the current user, with no cross-account information leakage.
+    private static async Task<IResult> ListLinkedAccounts(Guid id, CrmDbContext db,
+        HttpContext h, CancellationToken ct)
+    {
+        if (!CrmAccess.Scope(h, "crm.contact.read")) return CrmAccess.Denied();
+        var userId = CrmAccess.UserId(h);
+        var allAccounts = CrmAccess.Scope(h, "crm.account.read-all");
+        var linked = await (from link in db.AccountContacts.AsNoTracking()
+            join account in db.Accounts.AsNoTracking() on link.AccountId equals account.Id
+            join contact in db.Contacts.AsNoTracking() on link.ContactId equals contact.Id
+            where link.ContactId == id && link.ActiveTo == null &&
+                account.ArchivedAt == null && contact.ArchivedAt == null &&
+                (allAccounts || account.ExecutiveUserId == userId)
+            orderby account.DisplayName
+            select new { accountId = account.Id, accountName = account.DisplayName })
+            .Distinct().ToListAsync(ct);
+        return Results.Ok(linked);
     }
 
     private static async Task<IResult> Get(Guid id, CrmDbContext db, HttpContext h, CancellationToken ct)
