@@ -61,15 +61,11 @@ internal static class ContactEndpoints
         return group;
     }
     private static async Task<bool> OwnsAccount(Guid id, CrmDbContext db, HttpContext h, CancellationToken ct) =>
-        await db.Accounts.AsNoTracking().AnyAsync(x => x.Id == id && x.ArchivedAt == null &&
-            (x.ExecutiveUserId == CrmAccess.UserId(h) ||
-             CrmAccess.Scope(h, "crm.account.read-all")), ct);
+        await CrmAccess.CanSeeAccount(db,h,id,ct);
     private static async Task<bool> CanSeeContact(Guid id, CrmDbContext db, HttpContext h, CancellationToken ct) =>
         await (from rel in db.AccountContacts.AsNoTracking()
-               join acc in db.Accounts.AsNoTracking() on rel.AccountId equals acc.Id
-               where rel.ContactId == id && rel.ActiveTo == null && acc.ArchivedAt == null &&
-                     (acc.ExecutiveUserId == CrmAccess.UserId(h) ||
-                      CrmAccess.Scope(h, "crm.account.read-all"))
+               join acc in CrmAccess.VisibleAccounts(db,h).AsNoTracking() on rel.AccountId equals acc.Id
+               where rel.ContactId == id && rel.ActiveTo == null
                select rel.ContactId).AnyAsync(ct);
     private static async Task<IResult> ListForAccount(Guid id, CrmDbContext db, HttpContext h, CancellationToken ct)
     {
@@ -88,14 +84,11 @@ internal static class ContactEndpoints
         string? q, int? page, int? pageSize, CancellationToken ct)
     {
         if (!CrmAccess.Scope(h, "crm.contact.read")) return CrmAccess.Denied();
-        var userId = CrmAccess.UserId(h);
-        var allAccounts = CrmAccess.Scope(h, "crm.account.read-all");
         var rows =
             from link in db.AccountContacts.AsNoTracking()
-            join account in db.Accounts.AsNoTracking() on link.AccountId equals account.Id
+            join account in CrmAccess.VisibleAccounts(db,h).AsNoTracking() on link.AccountId equals account.Id
             join contact in db.Contacts.AsNoTracking() on link.ContactId equals contact.Id
-            where link.ActiveTo == null && account.ArchivedAt == null && contact.ArchivedAt == null
-              && (allAccounts || account.ExecutiveUserId == userId)
+            where link.ActiveTo == null && contact.ArchivedAt == null
             select new { link, account, contact };
         if (!string.IsNullOrWhiteSpace(q))
         {
@@ -125,14 +118,11 @@ internal static class ContactEndpoints
         HttpContext h, CancellationToken ct)
     {
         if (!CrmAccess.Scope(h, "crm.contact.read")) return CrmAccess.Denied();
-        var userId = CrmAccess.UserId(h);
-        var allAccounts = CrmAccess.Scope(h, "crm.account.read-all");
         var linked = await (from link in db.AccountContacts.AsNoTracking()
-            join account in db.Accounts.AsNoTracking() on link.AccountId equals account.Id
+            join account in CrmAccess.VisibleAccounts(db,h).AsNoTracking() on link.AccountId equals account.Id
             join contact in db.Contacts.AsNoTracking() on link.ContactId equals contact.Id
             where link.ContactId == id && link.ActiveTo == null &&
-                account.ArchivedAt == null && contact.ArchivedAt == null &&
-                (allAccounts || account.ExecutiveUserId == userId)
+                contact.ArchivedAt == null
             orderby account.DisplayName
             select new { accountId = account.Id, accountName = account.DisplayName })
             .Distinct().ToListAsync(ct);
