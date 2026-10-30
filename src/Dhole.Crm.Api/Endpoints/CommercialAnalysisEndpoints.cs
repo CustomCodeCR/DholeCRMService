@@ -49,11 +49,11 @@ internal static class CommercialAnalysisEndpoints
     private static async Task<CommercialAnalysis?> Allowed(Guid id,CrmDbContext db,HttpContext h,CancellationToken ct)
     {
         var a=await db.CommercialAnalyses.FirstOrDefaultAsync(x=>x.Id==id,ct);
-        return a is not null && CommercialAccess.AnalysisOwns(h,a) ? a:null;
+        return a is not null && CommercialAccess.AnalysisOwns(h,a) &&
+            (!a.AccountId.HasValue || await CrmAccess.CanSeeAccount(db,h,a.AccountId.Value,ct)) ? a:null;
     }
     private static async Task<bool> AllowedAccount(Guid accountId,CrmDbContext db,HttpContext h,CancellationToken ct)=>
-        await db.Accounts.AsNoTracking().AnyAsync(a=>a.Id==accountId && a.ArchivedAt==null &&
-            (a.ExecutiveUserId==CrmAccess.UserId(h) || CrmAccess.Scope(h,"crm.account.read-all")),ct);
+        await CrmAccess.CanSeeAccount(db,h,accountId,ct);
     private static bool ValidAnalysis(decimal? amount,string? unit)=>
         (!amount.HasValue||(amount.Value>=0 && amount.Value<=99999999999999.9999m)) &&
         (!amount.HasValue || (!string.IsNullOrWhiteSpace(unit)&&unit.Length<=24));
@@ -92,7 +92,9 @@ internal static class CommercialAnalysisEndpoints
         Guid? opportunityId,int? page,int? pageSize,CancellationToken ct)
     {
         if(!CrmAccess.Scope(h,"crm.analysis.read"))return CrmAccess.Denied();
-        var query=db.CommercialAnalyses.AsNoTracking().AsQueryable();
+        var visibleAccountIds = CrmAccess.VisibleAccounts(db,h).Select(a => a.Id);
+        var query=db.CommercialAnalyses.AsNoTracking().AsQueryable()
+            .Where(x => !x.AccountId.HasValue || visibleAccountIds.Contains(x.AccountId.Value));
         if(!CrmAccess.Scope(h,"crm.opportunity.read-all") && !CrmAccess.Scope(h,"crm.account.read-all"))
             query=query.Where(x=>x.OwnerUserId==CrmAccess.UserId(h));
         if(accountId is { } a)query=query.Where(x=>x.AccountId==a);
