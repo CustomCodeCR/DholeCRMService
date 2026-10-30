@@ -69,7 +69,11 @@ public sealed class AccountAssignment : CrmRecord
 }
 public sealed class Contact : CrmRecord
 {
+    // Keep Name as the derived display/search field for existing integrations.
+    // Legacy records keep FirstName/LastName null until explicitly corrected.
     public string Name { get; set; } = "";
+    public string? FirstName { get; set; }
+    public string? LastName { get; set; }
     public string? JobTitle { get; set; }
     public Guid? CountryId { get; set; }
     public string? Phone { get; set; }

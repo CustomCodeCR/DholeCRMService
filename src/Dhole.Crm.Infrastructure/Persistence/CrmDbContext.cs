@@ -104,6 +104,8 @@ public sealed partial class CrmDbContext(DbContextOptions<CrmDbContext> options)
         b.Entity<Contact>(e =>
         {
             e.Property(x => x.Name).HasMaxLength(220);
+            e.Property(x => x.FirstName).HasMaxLength(120);
+            e.Property(x => x.LastName).HasMaxLength(120);
             e.Property(x => x.Email).HasMaxLength(254);
             e.HasIndex(x => x.Email);
         });
