@@ -41,7 +41,9 @@ internal static class CommercialOpportunityEndpoints
         string? q,Guid? pipelineId,string? status,int? page,int? pageSize,CancellationToken ct)
     {
         if(!CommercialAccess.OpportunityCanRead(h))return CrmAccess.Denied();
-        var query=db.Opportunities.AsNoTracking().Where(x=>x.ArchivedAt==null);
+        var visibleAccounts=CrmAccess.VisibleAccounts(db,h).Select(a=>a.Id);
+        var query=db.Opportunities.AsNoTracking().Where(x=>x.ArchivedAt==null &&
+            (!x.AccountId.HasValue || visibleAccounts.Contains(x.AccountId.Value)));
         if(!CrmAccess.Scope(h,"crm.opportunity.read-all"))
             query=query.Where(x=>x.ExecutiveUserId==CrmAccess.UserId(h));
         if(pipelineId is { } p)query=query.Where(x=>x.PipelineId==p);
@@ -57,7 +59,7 @@ internal static class CommercialOpportunityEndpoints
         if(!CommercialAccess.OpportunityCanRead(h))return CrmAccess.Denied();
         var o=await db.Opportunities.AsNoTracking().FirstOrDefaultAsync(x=>x.Id==id && x.ArchivedAt==null,ct);
         if(o is null)return Results.NotFound();
-        return CommercialAccess.OpportunityOwns(h,o)?Results.Ok(o):CrmAccess.Denied();
+        return await CommercialAccess.OpportunityOwnsAccount(db,h,o,ct)?Results.Ok(o):CrmAccess.Denied();
     }
     private static async Task<IResult> Create(OpportunityCreateRequest r,CrmDbContext db,HttpContext h,
         IAuthReferenceService auth,IConfigReferenceService config,CancellationToken ct)
@@ -107,7 +109,7 @@ internal static class CommercialOpportunityEndpoints
         if(!CrmAccess.Scope(h,"crm.opportunity.update"))return CrmAccess.Denied();
         var o=await db.Opportunities.FindAsync([id],ct);
         if(o is null||o.ArchivedAt!=null)return Results.NotFound();
-        if(!CommercialAccess.OpportunityOwns(h,o))return CrmAccess.Denied();
+        if(!await CommercialAccess.OpportunityOwnsAccount(db,h,o,ct))return CrmAccess.Denied();
         if(o.RowVersion!=r.ExpectedVersion)return CommercialAccess.Conflict("Stale opportunity version");
         if(o.Status!="Open")return CommercialAccess.Conflict("Closed opportunity must be reopened before editing");
         if(string.IsNullOrWhiteSpace(r.Title)||r.Title.Length>250||
@@ -126,7 +128,7 @@ internal static class CommercialOpportunityEndpoints
         if(!CrmAccess.Scope(h,"crm.opportunity.update"))return CrmAccess.Denied();
         var o=await db.Opportunities.FindAsync([id],ct);
         if(o is null||o.ArchivedAt!=null)return Results.NotFound();
-        if(!CommercialAccess.OpportunityOwns(h,o))return CrmAccess.Denied();
+        if(!await CommercialAccess.OpportunityOwnsAccount(db,h,o,ct))return CrmAccess.Denied();
         if(o.RowVersion!=r.ExpectedVersion)return CommercialAccess.Conflict("Stale opportunity version");
         if(o.Status!="Open")return CommercialAccess.Conflict("Closed opportunities cannot move stages");
         var stage=await db.SalesPipelineStages.AsNoTracking().FirstOrDefaultAsync(
@@ -150,7 +152,7 @@ internal static class CommercialOpportunityEndpoints
         if(!CrmAccess.Scope(h,"crm.opportunity.close"))return CrmAccess.Denied();
         var o=await db.Opportunities.FindAsync([id],ct);
         if(o is null||o.ArchivedAt!=null)return Results.NotFound();
-        if(!CommercialAccess.OpportunityOwns(h,o))return CrmAccess.Denied();
+        if(!await CommercialAccess.OpportunityOwnsAccount(db,h,o,ct))return CrmAccess.Denied();
         if(o.RowVersion!=r.ExpectedVersion)return CommercialAccess.Conflict("Stale opportunity version");
         if(o.Status!="Open")return CommercialAccess.Conflict("Opportunity already closed");
         var stage=await db.SalesPipelineStages.AsNoTracking().FirstOrDefaultAsync(
@@ -176,7 +178,7 @@ internal static class CommercialOpportunityEndpoints
         if(!CrmAccess.Scope(h,"crm.opportunity.close"))return CrmAccess.Denied();
         var o=await db.Opportunities.FindAsync([id],ct);
         if(o is null||o.ArchivedAt!=null)return Results.NotFound();
-        if(!CommercialAccess.OpportunityOwns(h,o))return CrmAccess.Denied();
+        if(!await CommercialAccess.OpportunityOwnsAccount(db,h,o,ct))return CrmAccess.Denied();
         if(o.RowVersion!=r.ExpectedVersion)return CommercialAccess.Conflict("Stale opportunity version");
         if(o.Status=="Open")return CommercialAccess.Conflict("Opportunity is already open");
         if(string.IsNullOrWhiteSpace(r.Reason))return CommercialAccess.Invalid("Reopening reason is required");
@@ -211,7 +213,7 @@ internal static class CommercialOpportunityEndpoints
     private static async Task<bool> Allowed(Guid id,CrmDbContext db,HttpContext h,CancellationToken ct)
     {
         var o=await db.Opportunities.AsNoTracking().FirstOrDefaultAsync(x=>x.Id==id&&x.ArchivedAt==null,ct);
-        return o is not null&&CommercialAccess.OpportunityOwns(h,o);
+        return o is not null&&await CommercialAccess.OpportunityOwnsAccount(db,h,o,ct);
     }
     private static async Task<IResult> StageHistory(Guid id,CrmDbContext db,HttpContext h,CancellationToken ct)
     {
@@ -231,7 +233,7 @@ internal static class CommercialOpportunityEndpoints
             return CrmAccess.Denied();
         var o=await db.Opportunities.AsNoTracking().FirstOrDefaultAsync(x=>x.Id==id&&x.ArchivedAt==null,ct);
         if(o is null)return Results.NotFound();
-        if(!CommercialAccess.OpportunityOwns(h,o))return CrmAccess.Denied();
+        if(!await CommercialAccess.OpportunityOwnsAccount(db,h,o,ct))return CrmAccess.Denied();
         if(!await CommercialAccess.ContactBelongsTo(db,r.ContactId,o.AccountId,o.Id,ct))
             return CommercialAccess.Invalid("Contact must belong to opportunity account");
         if(string.IsNullOrWhiteSpace(r.DecisionRole)||r.DecisionRole.Length>60)
@@ -254,7 +256,7 @@ internal static class CommercialOpportunityEndpoints
         if(!CrmAccess.Scope(h,"crm.opportunity.update"))return CrmAccess.Denied();
         var o=await db.Opportunities.AsNoTracking().FirstOrDefaultAsync(x=>x.Id==id&&x.ArchivedAt==null,ct);
         if(o is null)return Results.NotFound();
-        if(!CommercialAccess.OpportunityOwns(h,o))return CrmAccess.Denied();
+        if(!await CommercialAccess.OpportunityOwnsAccount(db,h,o,ct))return CrmAccess.Denied();
         if(o.Status!="Open")return CommercialAccess.Conflict("Closed opportunity");
         if(r.PricingQuoteId is not null)
             return CommercialAccess.Invalid("Pricing quote link will be verified in phase 4");
