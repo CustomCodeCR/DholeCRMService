@@ -5,10 +5,10 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Dhole.Crm.Api.Endpoints;
 
-public sealed record CreateContactRequest(string Name, string? JobTitle, Guid? CountryId, string? Email,
-    string? Phone, string RelationRole, bool IsPrimary);
-public sealed record PatchContactRequest(long ExpectedVersion, string Name, string? JobTitle,
-    string? Email, string? Phone);
+public sealed record CreateContactRequest(string? Name, string? JobTitle, Guid? CountryId, string? Email,
+    string? Phone, string RelationRole, bool IsPrimary, string? FirstName = null, string? LastName = null);
+public sealed record PatchContactRequest(long ExpectedVersion, string? Name, string? JobTitle,
+    string? Email, string? Phone, string? FirstName = null, string? LastName = null);
 public sealed record ContactRelationRequest(string RelationRole, bool IsPrimary);
 public sealed record ContactPreferenceRequest(long? ExpectedVersion, string PreferredChannel,
     int PreferredDaysMask, TimeOnly? StartLocalTime, TimeOnly? EndLocalTime,
@@ -22,6 +22,24 @@ public sealed record PatchAddressRequest(long ExpectedVersion, string AddressTyp
 
 internal static class ContactEndpoints
 {
+    // Never guess first/last name from a legacy full name: compound surnames are ambiguous.
+    private static (string Name, string? FirstName, string? LastName)? ContactIdentity(
+        string? name, string? firstName, string? lastName)
+    {
+        var first = firstName?.Trim();
+        var last = lastName?.Trim();
+        if (firstName is not null || lastName is not null)
+        {
+            if (string.IsNullOrWhiteSpace(first) || string.IsNullOrWhiteSpace(last) ||
+                first.Length > 120 || last.Length > 120) return null;
+            var combined = first + " " + last;
+            return combined.Length <= 220 ? (combined, first, last) : null;
+        }
+        var existing = name?.Trim();
+        return string.IsNullOrWhiteSpace(existing) || existing.Length > 220
+            ? null : (existing, null, null);
+    }
+
     public static RouteGroupBuilder MapContacts(this RouteGroupBuilder group)
     {
         group.MapGet("/accounts/{id:guid}/contacts", ListForAccount);
@@ -90,7 +108,8 @@ internal static class ContactEndpoints
         var items = await rows.OrderBy(x => x.contact.Name).ThenBy(x => x.account.DisplayName)
             .ThenBy(x => x.contact.Id).Skip((number - 1) * size).Take(size)
             .Select(x => new {
-                id = x.contact.Id, name = x.contact.Name, jobTitle = x.contact.JobTitle,
+                id = x.contact.Id, name = x.contact.Name, firstName = x.contact.FirstName,
+                lastName = x.contact.LastName, jobTitle = x.contact.JobTitle,
                 email = x.contact.Email, phone = x.contact.Phone, status = x.contact.Status,
                 accountId = x.account.Id, accountName = x.account.DisplayName,
                 relationRole = x.link.RelationRole, isPrimary = x.link.IsPrimary,
@@ -110,15 +129,18 @@ internal static class ContactEndpoints
     {
         if (!CrmAccess.Scope(h, "crm.contact.create")) return CrmAccess.Denied();
         if (!await OwnsAccount(id, db, h, ct)) return CrmAccess.Denied();
-        if (string.IsNullOrWhiteSpace(r.Name) || r.Name.Length > 220 ||
-            !CrmDataEndpoints.IsEmailValid(r.Email) || r.Email?.Length > 254 || r.Phone?.Length > 60)
-            return CrmDataEndpoints.Bad("Invalid contact identity");
+        var identity = ContactIdentity(r.Name, r.FirstName, r.LastName);
+        if (identity is null || !CrmDataEndpoints.IsEmailValid(r.Email) ||
+            r.Email?.Length > 254 || r.Phone?.Length > 60)
+            return CrmDataEndpoints.Bad("First name and surname are required for structured contacts");
         if (!await CrmDataEndpoints.ValidCountry(config, r.CountryId, ct))
             return CrmDataEndpoints.Bad("Unknown country");
         if (r.IsPrimary && await db.AccountContacts.AnyAsync(x => x.AccountId == id &&
             x.IsPrimary && x.ActiveTo == null, ct))
             return CrmDataEndpoints.Conflict("Account already has a primary contact");
-        var contact = new Contact { Name = r.Name.Trim(), JobTitle = r.JobTitle?.Trim(),
+        var contact = new Contact { Name = identity.Value.Name,
+            FirstName = identity.Value.FirstName, LastName = identity.Value.LastName,
+            JobTitle = r.JobTitle?.Trim(),
             CountryId = r.CountryId, Email = r.Email?.Trim().ToLowerInvariant(),
             Phone = r.Phone?.Trim(), CreatedByUserId = CrmAccess.UserId(h) };
         db.Contacts.Add(contact);
@@ -152,9 +174,19 @@ internal static class ContactEndpoints
         var contact = await db.Contacts.FindAsync([id], ct);
         if (contact is null || contact.ArchivedAt != null) return Results.NotFound();
         if (contact.RowVersion != r.ExpectedVersion) return CrmDataEndpoints.Conflict("Stale row version");
-        if (string.IsNullOrWhiteSpace(r.Name) || r.Name.Length > 220 || !CrmDataEndpoints.IsEmailValid(r.Email))
+        var identity = ContactIdentity(r.Name, r.FirstName, r.LastName);
+        if (identity is null || !CrmDataEndpoints.IsEmailValid(r.Email) ||
+            r.Email?.Length > 254 || r.Phone?.Length > 60)
             return CrmDataEndpoints.Bad("Invalid contact update");
-        contact.Name = r.Name.Trim();
+        var structured = r.FirstName is not null || r.LastName is not null;
+        // If an older client changes the full name, clear stale split fields.
+        // If the full name has not changed, retain the previously verified split fields.
+        if (structured || contact.Name != identity.Value.Name)
+        {
+            contact.FirstName = identity.Value.FirstName;
+            contact.LastName = identity.Value.LastName;
+        }
+        contact.Name = identity.Value.Name;
         contact.JobTitle = r.JobTitle?.Trim();
         contact.Email = r.Email?.Trim().ToLowerInvariant();
         contact.Phone = r.Phone?.Trim();
