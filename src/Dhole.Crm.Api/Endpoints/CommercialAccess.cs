@@ -21,9 +21,7 @@ internal static class CommercialAccess
     {
         if (accountId is null && leadId is null && opportunityId is null) return false;
         if (accountId is { } a &&
-            !await db.Accounts.AsNoTracking().AnyAsync(x => x.Id == a && x.ArchivedAt == null &&
-                (x.ExecutiveUserId == CrmAccess.UserId(h) ||
-                 CrmAccess.Scope(h, "crm.account.read-all")),ct)) return false;
+            !await CrmAccess.CanSeeAccount(db,h,a,ct)) return false;
         if (leadId is { } l &&
             !await db.Leads.AsNoTracking().AnyAsync(x => x.Id == l && x.ArchivedAt == null &&
                 (x.ExecutiveUserId == CrmAccess.UserId(h) ||
