@@ -8,6 +8,10 @@ internal static class CommercialAccess
     public static bool OpportunityCanRead(HttpContext h) => CrmDataEndpoints.HasRead(h, "opportunity");
     public static bool OpportunityOwns(HttpContext h, Opportunity o) =>
         o.ExecutiveUserId == CrmAccess.UserId(h) || CrmAccess.Scope(h, "crm.opportunity.read-all");
+    public static async Task<bool> OpportunityOwnsAccount(CrmDbContext db, HttpContext h,
+        Opportunity o, CancellationToken ct) =>
+        OpportunityOwns(h,o) && (!o.AccountId.HasValue ||
+            await CrmAccess.CanSeeAccount(db,h,o.AccountId.Value,ct));
     public static bool ActivityOwns(HttpContext h, Activity a) =>
         a.OwnerUserId == CrmAccess.UserId(h) || CrmAccess.Scope(h, "crm.activity.read-all");
     public static bool AnalysisOwns(HttpContext h, CommercialAnalysis a) =>
