@@ -15,6 +15,7 @@ public sealed record PatchAccountRequest(long ExpectedVersion, string DisplayNam
     Guid? CountryId = null, string? TaxIdTypeCode = null, string? TaxId = null);
 public sealed record AssignAccountRequest(long ExpectedVersion, Guid ExecutiveUserId, string? Reason);
 public sealed record ArchiveAccountRequest(long ExpectedVersion);
+public sealed record SetAccountLogoRequest(long ExpectedVersion, Guid? LogoFileId);
 public sealed record AddBusinessActivityRequest(string ActivityCode, string? Description, string Source);
 
 internal static class AccountEndpoints
@@ -27,10 +28,19 @@ internal static class AccountEndpoints
         group.MapPatch("/accounts/{id:guid}", Patch);
         group.MapPost("/accounts/{id:guid}/archive", Archive);
         group.MapPost("/accounts/{id:guid}/assign", Assign);
+        group.MapPatch("/accounts/{id:guid}/logo", SetLogo);
         group.MapGet("/accounts/{id:guid}/assignments", Assignments);
         group.MapGet("/accounts/{id:guid}/business-activities", Activities);
         group.MapPost("/accounts/{id:guid}/business-activities", AddActivity);
         return group;
+    }
+
+    private static bool ValidRelationships(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return true;
+        if (value.Length > 256) return false;
+        var types = value.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+        return types.Length <= 10 && types.All(x => x.Length is > 0 and <= 64);
     }
 
     private static async Task<IResult> List(CrmDbContext db, HttpContext http,
@@ -74,6 +84,8 @@ internal static class AccountEndpoints
             !CrmDataEndpoints.CategoryValid(request.CategoryType, request.CategoryCode) ||
             request.CustomerTypeCode is not ("cash" or "credit"))
             return CrmDataEndpoints.Bad("Invalid account identity/category/customer type");
+        if (!ValidRelationships(request.RelationshipTypeCode))
+            return CrmDataEndpoints.Bad("Invalid commercial relationship types");
         var tax = CrmDataEndpoints.NormalizeTax(request.TaxId);
         if (tax is not null && (tax.Length > 80 || request.CountryId is null ||
                                 string.IsNullOrWhiteSpace(request.TaxIdTypeCode)))
@@ -180,6 +192,8 @@ internal static class AccountEndpoints
                 account.HaciendaVerifiedAt = null;
             }
         }
+        if (!ValidRelationships(request.RelationshipTypeCode))
+            return CrmDataEndpoints.Bad("Invalid commercial relationship types");
         account.DisplayName = request.DisplayName.Trim();
         account.LegalName = request.LegalName.Trim();
         account.CustomerTypeCode = request.CustomerTypeCode;
@@ -193,6 +207,24 @@ internal static class AccountEndpoints
         var committed = await CrmDataEndpoints.Commit(db, ct);
         return committed is Microsoft.AspNetCore.Http.HttpResults.Ok ? Results.Ok(account) : committed;
     }
+    private static async Task<IResult> SetLogo(Guid id, SetAccountLogoRequest request, CrmDbContext db,
+        HttpContext http, CancellationToken ct)
+    {
+        if (!CrmAccess.Scope(http, "crm.account.update")) return CrmAccess.Denied();
+        var account = await db.Accounts.FindAsync([id], ct);
+        if (account is null || account.ArchivedAt is not null) return Results.NotFound();
+        if (!CrmAccess.AccountAccess(http, account.ExecutiveUserId)) return CrmAccess.Denied();
+        if (account.RowVersion != request.ExpectedVersion)
+            return CrmDataEndpoints.Conflict("Stale row version");
+        if (request.LogoFileId == Guid.Empty) return CrmDataEndpoints.Bad("Invalid logo file ID");
+        account.LogoFileId = request.LogoFileId;
+        account.RowVersion++;
+        account.UpdatedAt = DateTime.UtcNow;
+        account.UpdatedByUserId = CrmAccess.UserId(http);
+        var committed = await CrmDataEndpoints.Commit(db, ct);
+        return committed is Microsoft.AspNetCore.Http.HttpResults.Ok ? Results.Ok(account) : committed;
+    }
+
     private static async Task<IResult> Archive(Guid id, ArchiveAccountRequest request, CrmDbContext db,
         HttpContext http, CancellationToken ct)
     {
