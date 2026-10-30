@@ -49,9 +49,7 @@ internal static class AccountEndpoints
         string? q, string? customerTypeCode, string? categoryCode, int? page, int? pageSize, CancellationToken ct)
     {
         if (!CrmDataEndpoints.HasRead(http, "account")) return CrmAccess.Denied();
-        var query = db.Accounts.AsNoTracking().Where(x => x.ArchivedAt == null);
-        if (!CrmAccess.Scope(http, "crm.account.read-all"))
-            query = query.Where(x => x.ExecutiveUserId == CrmAccess.UserId(http));
+        var query = CrmAccess.VisibleAccounts(db, http).AsNoTracking();
         if (!string.IsNullOrWhiteSpace(q))
             query = query.Where(x => x.DisplayName.ToLower().Contains(q.Trim().ToLower()) ||
                                      x.LegalName.ToLower().Contains(q.Trim().ToLower()));
@@ -71,7 +69,7 @@ internal static class AccountEndpoints
         if (!CrmDataEndpoints.HasRead(http, "account")) return CrmAccess.Denied();
         var account = await db.Accounts.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id && x.ArchivedAt == null, ct);
         if (account is null) return Results.NotFound();
-        return CrmAccess.AccountAccess(http, account.ExecutiveUserId) ? Results.Ok(account) : CrmAccess.Denied();
+        return await CrmAccess.CanSeeAccount(db, http, account.Id, ct) ? Results.Ok(account) : CrmAccess.Denied();
     }
     private static async Task<IResult> Create(CreateAccountRequest request, CrmDbContext db,
         HttpContext http, IAuthReferenceService auth, IConfigReferenceService config, IMemoryCache cache, CancellationToken ct)
@@ -159,7 +157,7 @@ internal static class AccountEndpoints
         if (!CrmAccess.Scope(http, "crm.account.update")) return CrmAccess.Denied();
         var account = await db.Accounts.FindAsync([id], ct);
         if (account is null || account.ArchivedAt is not null) return Results.NotFound();
-        if (!CrmAccess.AccountAccess(http, account.ExecutiveUserId)) return CrmAccess.Denied();
+        if (!await CrmAccess.CanSeeAccount(db, http, account.Id, ct)) return CrmAccess.Denied();
         if (account.RowVersion != request.ExpectedVersion) return CrmDataEndpoints.Conflict("Stale row version");
         if (string.IsNullOrWhiteSpace(request.DisplayName) || request.DisplayName.Length > 220 ||
             string.IsNullOrWhiteSpace(request.LegalName) || request.LegalName.Length > 220 ||
@@ -220,7 +218,7 @@ internal static class AccountEndpoints
         if (!CrmAccess.Scope(http, "crm.account.update")) return CrmAccess.Denied();
         var account = await db.Accounts.FindAsync([id], ct);
         if (account is null || account.ArchivedAt is not null) return Results.NotFound();
-        if (!CrmAccess.AccountAccess(http, account.ExecutiveUserId)) return CrmAccess.Denied();
+        if (!await CrmAccess.CanSeeAccount(db, http, account.Id, ct)) return CrmAccess.Denied();
         if (account.RowVersion != request.ExpectedVersion)
             return CrmDataEndpoints.Conflict("Stale row version");
         if (request.LogoFileId == Guid.Empty) return CrmDataEndpoints.Bad("Invalid logo file ID");
@@ -238,7 +236,7 @@ internal static class AccountEndpoints
         if (!CrmAccess.Scope(http, "crm.account.archive")) return CrmAccess.Denied();
         var account = await db.Accounts.FindAsync([id], ct);
         if (account is null) return Results.NotFound();
-        if (!CrmAccess.AccountAccess(http, account.ExecutiveUserId)) return CrmAccess.Denied();
+        if (!await CrmAccess.CanSeeAccount(db, http, account.Id, ct)) return CrmAccess.Denied();
         if (account.RowVersion != request.ExpectedVersion) return CrmDataEndpoints.Conflict("Stale row version");
         account.ArchivedAt = DateTime.UtcNow;
         account.Status = "Archived";
@@ -289,7 +287,7 @@ internal static class AccountEndpoints
         if (!CrmDataEndpoints.HasRead(http, "account")) return CrmAccess.Denied();
         var account = await db.Accounts.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id, ct);
         if (account is null) return Results.NotFound();
-        if (!CrmAccess.AccountAccess(http, account.ExecutiveUserId)) return CrmAccess.Denied();
+        if (!await CrmAccess.CanSeeAccount(db, http, account.Id, ct)) return CrmAccess.Denied();
         return Results.Ok(await db.AccountAssignments.AsNoTracking().Where(x => x.AccountId == id)
             .OrderByDescending(x => x.EffectiveFrom).ToListAsync(ct));
     }
@@ -298,7 +296,7 @@ internal static class AccountEndpoints
         if (!CrmDataEndpoints.HasRead(http, "account")) return CrmAccess.Denied();
         var account = await db.Accounts.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id, ct);
         if (account is null) return Results.NotFound();
-        if (!CrmAccess.AccountAccess(http, account.ExecutiveUserId)) return CrmAccess.Denied();
+        if (!await CrmAccess.CanSeeAccount(db, http, account.Id, ct)) return CrmAccess.Denied();
         return Results.Ok(await db.AccountBusinessActivities.AsNoTracking().Where(x => x.AccountId == id)
             .OrderBy(x => x.ActivityCode).ToListAsync(ct));
     }
@@ -308,7 +306,7 @@ internal static class AccountEndpoints
         if (!CrmAccess.Scope(http, "crm.account.update")) return CrmAccess.Denied();
         var account = await db.Accounts.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id && x.ArchivedAt == null, ct);
         if (account is null) return Results.NotFound();
-        if (!CrmAccess.AccountAccess(http, account.ExecutiveUserId)) return CrmAccess.Denied();
+        if (!await CrmAccess.CanSeeAccount(db, http, account.Id, ct)) return CrmAccess.Denied();
         if (string.IsNullOrWhiteSpace(request.ActivityCode) || request.ActivityCode.Length > 64)
             return CrmDataEndpoints.Bad("Invalid economic activity code");
         var item = new AccountBusinessActivity { AccountId = id,
