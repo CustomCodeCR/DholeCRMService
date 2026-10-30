@@ -35,9 +35,7 @@ internal static class AccountBusinessProfileEndpoints
 
     private static async Task<bool> CanAccess(CrmDbContext db, HttpContext h,
         Guid accountId, CancellationToken ct) =>
-        await db.Accounts.AsNoTracking().AnyAsync(x => x.Id == accountId && x.ArchivedAt == null &&
-            (x.ExecutiveUserId == CrmAccess.UserId(h) ||
-             CrmAccess.Scope(h, "crm.account.read-all")), ct);
+        CrmAccess.CanSeeAccount(db,h,accountId,ct);
 
     private static async Task<IResult> Get(Guid id, CrmDbContext db,
         HttpContext h, CancellationToken ct)
