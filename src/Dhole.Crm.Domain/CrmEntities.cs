@@ -26,6 +26,8 @@ public sealed class Account : CrmRecord
     public string CategoryType { get; set; } = "CUSTOMER";
     public string CategoryCode { get; set; } = "D";
     public Guid ExecutiveUserId { get; set; }
+    // Explicit institutional seller; ExecutiveUserId remains the accountable Auth user.
+    public bool IsCastroFallasExecutive { get; set; }
     public string VerificationStatus { get; set; } = "Pending";
     public DateTime? HaciendaVerifiedAt { get; set; }
     public string Status { get; set; } = "Active";
@@ -59,6 +61,7 @@ public sealed class AccountAssignment : CrmRecord
 {
     public Guid AccountId { get; set; }
     public Guid ExecutiveUserId { get; set; }
+    public bool IsCastroFallasExecutive { get; set; }
     public DateTime EffectiveFrom { get; set; } = DateTime.UtcNow;
     public DateTime? EffectiveTo { get; set; }
     public Guid AssignedBy { get; set; }
