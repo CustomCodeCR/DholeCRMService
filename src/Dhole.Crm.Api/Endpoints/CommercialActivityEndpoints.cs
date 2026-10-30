@@ -38,14 +38,17 @@ internal static class CommercialActivityEndpoints
     private static async Task<Activity?> FindAllowed(Guid id,CrmDbContext db,HttpContext h,CancellationToken ct)
     {
         var a=await db.Activities.FirstOrDefaultAsync(x=>x.Id==id&&x.ArchivedAt==null,ct);
-        return a is not null&&CommercialAccess.ActivityOwns(h,a)?a:null;
+        return a is not null && CommercialAccess.ActivityOwns(h,a) &&
+            (!a.AccountId.HasValue || await CrmAccess.CanSeeAccount(db,h,a.AccountId.Value,ct)) ? a : null;
     }
     private static async Task<IResult> List(CrmDbContext db,HttpContext h,
         Guid? accountId,Guid? leadId,Guid? opportunityId,string? type,string? status,
         int? page,int? pageSize,CancellationToken ct)
     {
         if(!CanRead(h))return CrmAccess.Denied();
-        var query=db.Activities.AsNoTracking().Where(x=>x.ArchivedAt==null);
+        var visibleAccounts=CrmAccess.VisibleAccounts(db,h).Select(a=>a.Id);
+        var query=db.Activities.AsNoTracking().Where(x=>x.ArchivedAt==null &&
+            (!x.AccountId.HasValue || visibleAccounts.Contains(x.AccountId.Value)));
         if(!CrmAccess.Scope(h,"crm.activity.read-all"))
             query=query.Where(x=>x.OwnerUserId==CrmAccess.UserId(h));
         if(accountId is { } a)query=query.Where(x=>x.AccountId==a);
