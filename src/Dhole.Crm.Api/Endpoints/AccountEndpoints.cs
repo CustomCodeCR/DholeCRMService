@@ -11,7 +11,8 @@ public sealed record CreateAccountRequest(string DisplayName, string LegalName, 
     string? RelationshipTypeCode, string CategoryType, string CategoryCode, Guid? ExecutiveUserId);
 public sealed record PatchAccountRequest(long ExpectedVersion, string DisplayName, string LegalName,
     string CustomerTypeCode, string? SourceCode, string? RelationshipTypeCode,
-    string CategoryType, string CategoryCode);
+    string CategoryType, string CategoryCode, bool UpdateFiscalIdentity = false,
+    Guid? CountryId = null, string? TaxIdTypeCode = null, string? TaxId = null);
 public sealed record AssignAccountRequest(long ExpectedVersion, Guid ExecutiveUserId, string? Reason);
 public sealed record ArchiveAccountRequest(long ExpectedVersion);
 public sealed record AddBusinessActivityRequest(string ActivityCode, string? Description, string Source);
@@ -134,7 +135,7 @@ internal static class AccountEndpoints
     }
 
     private static async Task<IResult> Patch(Guid id, PatchAccountRequest request, CrmDbContext db,
-        HttpContext http, CancellationToken ct)
+        HttpContext http, IConfigReferenceService config, CancellationToken ct)
     {
         if (!CrmAccess.Scope(http, "crm.account.update")) return CrmAccess.Denied();
         var account = await db.Accounts.FindAsync([id], ct);
@@ -146,6 +147,39 @@ internal static class AccountEndpoints
             request.CustomerTypeCode is not ("cash" or "credit") ||
             !CrmDataEndpoints.CategoryValid(request.CategoryType, request.CategoryCode))
             return CrmDataEndpoints.Bad("Invalid account update");
+        if (request.UpdateFiscalIdentity)
+        {
+            var tax = CrmDataEndpoints.NormalizeTax(request.TaxId);
+            var taxType = request.TaxIdTypeCode?.Trim();
+            if (tax is not null && (tax.Length > 80 || request.CountryId is null ||
+                                    string.IsNullOrWhiteSpace(taxType)))
+                return CrmDataEndpoints.Bad("Tax identifier requires country and document type");
+            if (!await CrmDataEndpoints.ValidCountry(config, request.CountryId, ct))
+                return CrmDataEndpoints.Bad("Country not found in Config");
+
+            var changed = account.CountryId != request.CountryId ||
+                          account.NormalizedTaxId != tax ||
+                          !string.Equals(account.TaxIdTypeCode, taxType, StringComparison.Ordinal);
+            if (changed)
+            {
+                if (tax is not null && await db.Accounts.AnyAsync(x => x.Id != id &&
+                    x.CountryId == request.CountryId && x.TaxIdTypeCode == taxType &&
+                    x.NormalizedTaxId == tax && x.ArchivedAt == null, ct))
+                    return CrmDataEndpoints.Conflict("Account with the same fiscal identity already exists");
+
+                // A verification and imported economic activities belong to the previous ID.
+                // Manually entered activities and the account's history are preserved.
+                var oldHaciendaActivities = await db.AccountBusinessActivities
+                    .Where(x => x.AccountId == id && x.Source == "HACIENDA").ToListAsync(ct);
+                db.AccountBusinessActivities.RemoveRange(oldHaciendaActivities);
+                account.CountryId = request.CountryId;
+                account.TaxIdTypeCode = taxType;
+                account.TaxId = request.TaxId?.Trim();
+                account.NormalizedTaxId = tax;
+                account.VerificationStatus = "Pending";
+                account.HaciendaVerifiedAt = null;
+            }
+        }
         account.DisplayName = request.DisplayName.Trim();
         account.LegalName = request.LegalName.Trim();
         account.CustomerTypeCode = request.CustomerTypeCode;
