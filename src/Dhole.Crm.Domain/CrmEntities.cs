@@ -22,6 +22,7 @@ public sealed class Account : CrmRecord
     public string CustomerTypeCode { get; set; } = "cash";
     public string? SourceCode { get; set; }
     public string? RelationshipTypeCode { get; set; }
+    public Guid? LogoFileId { get; set; }
     public string CategoryType { get; set; } = "CUSTOMER";
     public string CategoryCode { get; set; } = "D";
     public Guid ExecutiveUserId { get; set; }

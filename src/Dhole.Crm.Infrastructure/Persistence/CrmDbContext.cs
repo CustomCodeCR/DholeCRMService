@@ -75,6 +75,7 @@ public sealed partial class CrmDbContext(DbContextOptions<CrmDbContext> options)
             e.Property(x => x.NormalizedTaxId).HasMaxLength(80);
             e.Property(x => x.TaxId).HasMaxLength(80);
             e.Property(x => x.CustomerTypeCode).HasMaxLength(10).IsRequired();
+            e.Property(x => x.RelationshipTypeCode).HasMaxLength(256);
             e.Property(x => x.CategoryType).HasMaxLength(12);
             e.Property(x => x.CategoryCode).HasMaxLength(1);
             e.HasIndex(x => new { x.CountryId, x.TaxIdTypeCode, x.NormalizedTaxId }).IsUnique()
