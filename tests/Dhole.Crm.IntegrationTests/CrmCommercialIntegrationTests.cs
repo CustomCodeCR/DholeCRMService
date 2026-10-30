@@ -128,6 +128,34 @@ public sealed class CrmCommercialIntegrationTests
     }
 
     [TestMethod]
+    public async Task Contact_first_name_and_last_name_are_persisted_independently()
+    {
+        await using var db = await Open();
+        var actor = Guid.NewGuid();
+        var contact = new Contact {
+            Name = "Sofía Jiménez Barboza",
+            FirstName = "Sofía", LastName = "Jiménez Barboza",
+            JobTitle = "Importaciones", CreatedByUserId = actor
+        };
+        var legacy = new Contact {
+            Name = "Nombre histórico sin separar", CreatedByUserId = actor
+        };
+        db.Contacts.AddRange(contact, legacy);
+        await db.SaveChangesAsync();
+        db.ChangeTracker.Clear();
+        var saved = await db.Contacts.SingleAsync(x => x.Id == contact.Id);
+        Assert.AreEqual("Sofía", saved.FirstName);
+        Assert.AreEqual("Jiménez Barboza", saved.LastName);
+        Assert.AreEqual("Sofía Jiménez Barboza", saved.Name);
+        var old = await db.Contacts.SingleAsync(x => x.Id == legacy.Id);
+        Assert.IsNull(old.FirstName);
+        Assert.IsNull(old.LastName);
+        Assert.AreEqual("Nombre histórico sin separar", old.Name);
+        var applied = (await db.Database.GetAppliedMigrationsAsync()).ToList();
+        CollectionAssert.Contains(applied, "20261030160000_AddContactFirstAndLastNames");
+    }
+
+    [TestMethod]
     public async Task Real_postgres_rejects_opportunity_without_subject_and_negative_amount()
     {
         await using var db=await Open();
