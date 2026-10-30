@@ -151,7 +151,7 @@ internal static class LeadEndpoints
             var matched = await db.Accounts.AsNoTracking().FirstOrDefaultAsync(
                 x => x.Id == request.ExistingAccountId.Value && x.ArchivedAt == null, ct);
             if (matched is null) return Results.NotFound();
-            if (!CrmAccess.AccountAccess(http, matched.ExecutiveUserId)) return CrmAccess.Denied();
+            if (!await CrmAccess.CanSeeAccount(db, http, matched.Id, ct)) return CrmAccess.Denied();
             // Explicit operator-selected linkage, never fuzzy automatic matching.
             // Require a matching fiscal identity when one exists; no-tax cases require
             // the elevated account assignment scope in addition to own-record access.
