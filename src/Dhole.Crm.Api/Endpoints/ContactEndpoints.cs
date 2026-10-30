@@ -8,7 +8,8 @@ namespace Dhole.Crm.Api.Endpoints;
 public sealed record CreateContactRequest(string? Name, string? JobTitle, Guid? CountryId, string? Email,
     string? Phone, string RelationRole, bool IsPrimary, string? FirstName = null, string? LastName = null);
 public sealed record PatchContactRequest(long ExpectedVersion, string? Name, string? JobTitle,
-    string? Email, string? Phone, string? FirstName = null, string? LastName = null);
+    string? Email, string? Phone, string? FirstName = null, string? LastName = null,
+    Guid? CountryId = null);
 public sealed record ContactRelationRequest(string RelationRole, bool IsPrimary);
 public sealed record ContactPreferenceRequest(long? ExpectedVersion, string PreferredChannel,
     int PreferredDaysMask, TimeOnly? StartLocalTime, TimeOnly? EndLocalTime,
@@ -167,7 +168,7 @@ internal static class ContactEndpoints
         return await CrmDataEndpoints.Commit(db, ct);
     }
     private static async Task<IResult> Patch(Guid id, PatchContactRequest r, CrmDbContext db,
-        HttpContext h, CancellationToken ct)
+        HttpContext h, IConfigReferenceService config, CancellationToken ct)
     {
         if (!CrmAccess.Scope(h, "crm.contact.update")) return CrmAccess.Denied();
         if (!await CanSeeContact(id, db, h, ct)) return CrmAccess.Denied();
@@ -186,7 +187,11 @@ internal static class ContactEndpoints
             contact.FirstName = identity.Value.FirstName;
             contact.LastName = identity.Value.LastName;
         }
+        if (r.CountryId.HasValue &&
+            !await CrmDataEndpoints.ValidCountry(config, r.CountryId, ct))
+            return CrmDataEndpoints.Bad("Unknown country");
         contact.Name = identity.Value.Name;
+        if (r.CountryId.HasValue) contact.CountryId = r.CountryId;
         contact.JobTitle = r.JobTitle?.Trim();
         contact.Email = r.Email?.Trim().ToLowerInvariant();
         contact.Phone = r.Phone?.Trim();
