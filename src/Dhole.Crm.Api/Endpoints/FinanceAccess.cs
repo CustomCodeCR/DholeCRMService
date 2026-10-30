@@ -20,8 +20,7 @@ internal static class FinanceAccess
     public static bool Has(HttpContext h,string scope)=>CrmAccess.Scope(h,scope);
     public static bool Utc(DateTime dt)=>dt.Kind==DateTimeKind.Utc;
     public static Task<bool> Allowed(Guid accountId,CrmDbContext db,HttpContext h,CancellationToken ct)=>
-        db.Accounts.AsNoTracking().AnyAsync(x=>x.Id==accountId&&x.ArchivedAt==null&&
-            (x.ExecutiveUserId==Actor(h)||Has(h,"crm.account.read-all")),ct);
+        CrmAccess.CanSeeAccount(db,h,accountId,ct);
     public static string Snapshot(CreditProfile p)=>JsonSerializer.Serialize(new {
         p.CreditEnabled,p.CreditDays,p.CreditLimit,p.CurrencyCode,p.MonthlyFinancingPct,
         p.PaymentConditions,p.Status,p.EffectiveFrom,p.ReviewAt });
