@@ -143,6 +143,13 @@ internal static class AccountEndpoints
         db.AccountAssignments.Add(new AccountAssignment { AccountId = account.Id,
             ExecutiveUserId = executiveId, IsCastroFallasExecutive = request.AssignToCastroFallas,
             AssignedBy = id, CreatedByUserId = id });
+        // The creator was explicitly permitted to assign the institutional seller.
+        if (request.AssignToCastroFallas)
+            db.AccountViewerGrants.Add(new AccountViewerGrant
+            {
+                AccountId = account.Id, UserId = id,
+                GrantedByUserId = id, CreatedByUserId = id
+            });
         try
         {
             await db.SaveChangesAsync(ct);
@@ -279,6 +286,15 @@ internal static class AccountEndpoints
             ExecutiveUserId = executiveId, IsCastroFallasExecutive = request.AssignToCastroFallas,
             AssignedBy = CrmAccess.UserId(http), CreatedByUserId = CrmAccess.UserId(http),
             EffectiveFrom = when, Reason = request.Reason });
+        // Grant the assigning administrator access to the newly institutional account.
+        if (request.AssignToCastroFallas && !await db.AccountViewerGrants.AnyAsync(
+            x => x.AccountId == id && x.UserId == CrmAccess.UserId(http) && x.RevokedAt == null, ct))
+            db.AccountViewerGrants.Add(new AccountViewerGrant
+            {
+                AccountId = id, UserId = CrmAccess.UserId(http),
+                GrantedByUserId = CrmAccess.UserId(http),
+                CreatedByUserId = CrmAccess.UserId(http)
+            });
         var committed = await CrmDataEndpoints.Commit(db, ct);
         return committed is Microsoft.AspNetCore.Http.HttpResults.Ok ? Results.Ok(account) : committed;
     }
