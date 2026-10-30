@@ -22,19 +22,17 @@ internal static class AccountCommercialOverviewEndpoints
     {
         if (!CrmDataEndpoints.HasRead(http, "account"))
             return CrmAccess.Denied();
-        var account = await db.Accounts.AsNoTracking()
-            .Where(x => x.Id == id && x.ArchivedAt == null)
-            .Select(x => new { x.Id, x.ExecutiveUserId })
+        var account = await CrmAccess.VisibleAccounts(db, http).AsNoTracking()
+            .Where(x => x.Id == id)
+            .Select(x => new { x.Id, x.IsCastroFallasExecutive })
             .SingleOrDefaultAsync(ct);
         if (account is null) return Results.NotFound();
-        if (!CrmAccess.AccountAccess(http, account.ExecutiveUserId))
-            return CrmAccess.Denied();
 
         var actor = CrmAccess.UserId(http);
-        var allActivities = CrmAccess.Scope(http, "crm.activity.read-all");
-        var allOpportunities = CrmAccess.Scope(http, "crm.opportunity.read-all");
+        var allActivities = CrmAccess.Scope(http, "crm.activity.read-all") || account.IsCastroFallasExecutive;
+        var allOpportunities = CrmAccess.Scope(http, "crm.opportunity.read-all") || account.IsCastroFallasExecutive;
         var allAccounts = CrmAccess.Scope(http, "crm.account.read-all");
-        var allAnalyses = allAccounts || allOpportunities;
+        var allAnalyses = allAccounts || allOpportunities || account.IsCastroFallasExecutive;
 
         // Capped, separate reads: the account page should not load unlimited PII or
         // financial data. Each collection intentionally remains an independent result.
@@ -58,7 +56,7 @@ internal static class AccountCommercialOverviewEndpoints
         {
             followups = await db.Followups.AsNoTracking()
                 .Where(x => x.AccountId == id &&
-                    (x.AssignedUserId == actor || allAccounts))
+                    (x.AssignedUserId == actor || allAccounts || account.IsCastroFallasExecutive))
                 .OrderBy(x => x.DueAt).Take(50)
                 .Select(x => new { x.Id, x.Channel, x.DueAt, x.Status,
                     x.Outcome, x.AssignedUserId }).ToArrayAsync(ct);
