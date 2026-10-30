@@ -8,12 +8,14 @@ namespace Dhole.Crm.Api.Endpoints;
 
 public sealed record CreateAccountRequest(string DisplayName, string LegalName, Guid? CountryId,
     string? TaxIdTypeCode, string? TaxId, string CustomerTypeCode, string? SourceCode,
-    string? RelationshipTypeCode, string CategoryType, string CategoryCode, Guid? ExecutiveUserId);
+    string? RelationshipTypeCode, string CategoryType, string CategoryCode, Guid? ExecutiveUserId,
+    bool AssignToCastroFallas = false);
 public sealed record PatchAccountRequest(long ExpectedVersion, string DisplayName, string LegalName,
     string CustomerTypeCode, string? SourceCode, string? RelationshipTypeCode,
     string CategoryType, string CategoryCode, bool UpdateFiscalIdentity = false,
     Guid? CountryId = null, string? TaxIdTypeCode = null, string? TaxId = null);
-public sealed record AssignAccountRequest(long ExpectedVersion, Guid ExecutiveUserId, string? Reason);
+public sealed record AssignAccountRequest(long ExpectedVersion, Guid? ExecutiveUserId, string? Reason,
+    bool AssignToCastroFallas = false);
 public sealed record ArchiveAccountRequest(long ExpectedVersion);
 public sealed record SetAccountLogoRequest(long ExpectedVersion, Guid? LogoFileId);
 public sealed record AddBusinessActivityRequest(string ActivityCode, string? Description, string Source);
@@ -76,8 +78,10 @@ internal static class AccountEndpoints
     {
         if (!CrmAccess.Scope(http, "crm.account.create")) return CrmAccess.Denied();
         var id = CrmAccess.UserId(http);
-        var executiveId = request.ExecutiveUserId ?? id;
-        if (executiveId != id && !CrmAccess.Scope(http, "crm.account.assign"))
+        if (request.AssignToCastroFallas && request.ExecutiveUserId.HasValue)
+            return CrmDataEndpoints.Bad("Select either Castro Fallas or an Auth executive");
+        var executiveId = request.AssignToCastroFallas ? id : request.ExecutiveUserId ?? id;
+        if ((executiveId != id || request.AssignToCastroFallas) && !CrmAccess.Scope(http, "crm.account.assign"))
             return CrmAccess.Denied();
         if (string.IsNullOrWhiteSpace(request.DisplayName) || request.DisplayName.Length > 220 ||
             string.IsNullOrWhiteSpace(request.LegalName) || request.LegalName.Length > 220 ||
@@ -111,7 +115,9 @@ internal static class AccountEndpoints
         }
         var account = new Account
         {
-            CreatedByUserId = id, ExecutiveUserId = executiveId, DisplayName = request.DisplayName.Trim(),
+            CreatedByUserId = id, ExecutiveUserId = executiveId,
+            IsCastroFallasExecutive = request.AssignToCastroFallas,
+            DisplayName = request.DisplayName.Trim(),
             LegalName = request.LegalName.Trim(), CountryId = request.CountryId,
             TaxIdTypeCode = request.TaxIdTypeCode?.Trim(), TaxId = request.TaxId?.Trim(),
             NormalizedTaxId = tax, CustomerTypeCode = request.CustomerTypeCode,
@@ -137,7 +143,8 @@ internal static class AccountEndpoints
             }
         }
         db.AccountAssignments.Add(new AccountAssignment { AccountId = account.Id,
-            ExecutiveUserId = executiveId, AssignedBy = id, CreatedByUserId = id });
+            ExecutiveUserId = executiveId, IsCastroFallasExecutive = request.AssignToCastroFallas,
+            AssignedBy = id, CreatedByUserId = id });
         try
         {
             await db.SaveChangesAsync(ct);
@@ -248,19 +255,32 @@ internal static class AccountEndpoints
         var account = await db.Accounts.FindAsync([id], ct);
         if (account is null || account.ArchivedAt is not null) return Results.NotFound();
         if (account.RowVersion != request.ExpectedVersion) return CrmDataEndpoints.Conflict("Stale row version");
-        if (await auth.GetActiveAsync(request.ExecutiveUserId, ct) is null)
+        if (request.AssignToCastroFallas && request.ExecutiveUserId.HasValue)
+            return CrmDataEndpoints.Bad("Select either Castro Fallas or an Auth executive");
+        if (!request.AssignToCastroFallas &&
+            (!request.ExecutiveUserId.HasValue || request.ExecutiveUserId == Guid.Empty))
+            return CrmDataEndpoints.Bad("Valid Auth executive required");
+        // House assignments have a real accountable owner (the assigning Auth user)
+        // while the institutional seller identity is stored separately.
+        var executiveId = request.AssignToCastroFallas
+            ? CrmAccess.UserId(http) : request.ExecutiveUserId!.Value;
+        if (await auth.GetActiveAsync(executiveId, ct) is null)
             return CrmDataEndpoints.Bad("Executive is not active in Auth");
-        if (account.ExecutiveUserId == request.ExecutiveUserId) return Results.Ok(account);
+        if (account.ExecutiveUserId == executiveId &&
+            account.IsCastroFallasExecutive == request.AssignToCastroFallas)
+            return Results.Ok(account);
         var previous = await db.AccountAssignments.SingleOrDefaultAsync(x => x.AccountId == id && x.EffectiveTo == null, ct);
         var when = DateTime.UtcNow;
         if (previous is not null) { previous.EffectiveTo = when; previous.RowVersion++; }
-        account.ExecutiveUserId = request.ExecutiveUserId;
+        account.ExecutiveUserId = executiveId;
+        account.IsCastroFallasExecutive = request.AssignToCastroFallas;
         account.UpdatedAt = when;
         account.UpdatedByUserId = CrmAccess.UserId(http);
         account.RowVersion++;
         db.AccountAssignments.Add(new AccountAssignment { AccountId = id,
-            ExecutiveUserId = request.ExecutiveUserId, AssignedBy = CrmAccess.UserId(http),
-            CreatedByUserId = CrmAccess.UserId(http), EffectiveFrom = when, Reason = request.Reason });
+            ExecutiveUserId = executiveId, IsCastroFallasExecutive = request.AssignToCastroFallas,
+            AssignedBy = CrmAccess.UserId(http), CreatedByUserId = CrmAccess.UserId(http),
+            EffectiveFrom = when, Reason = request.Reason });
         var committed = await CrmDataEndpoints.Commit(db, ct);
         return committed is Microsoft.AspNetCore.Http.HttpResults.Ok ? Results.Ok(account) : committed;
     }
