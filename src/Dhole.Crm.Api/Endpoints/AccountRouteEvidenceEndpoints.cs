@@ -27,9 +27,7 @@ internal static class AccountRouteEvidenceEndpoints
 
     private static async Task<bool> CanSeeAccount(CrmDbContext db, HttpContext h,
         Guid id, CancellationToken ct) =>
-        await db.Accounts.AsNoTracking().AnyAsync(x => x.Id == id && x.ArchivedAt == null &&
-            (x.ExecutiveUserId == CrmAccess.UserId(h) ||
-             CrmAccess.Scope(h, "crm.account.read-all")), ct);
+        await CrmAccess.CanSeeAccount(db,h,id,ct);
 
     private static bool CanRead(HttpContext h) =>
         CrmDataEndpoints.HasRead(h, "account") &&
