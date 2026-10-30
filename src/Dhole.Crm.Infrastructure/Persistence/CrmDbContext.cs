@@ -10,6 +10,7 @@ public sealed partial class CrmDbContext(DbContextOptions<CrmDbContext> options)
     public DbSet<Lead> Leads => Set<Lead>();
     public DbSet<LeadConversion> LeadConversions => Set<LeadConversion>();
     public DbSet<AccountAssignment> AccountAssignments => Set<AccountAssignment>();
+    public DbSet<AccountViewerGrant> AccountViewerGrants => Set<AccountViewerGrant>();
     public DbSet<Contact> Contacts => Set<Contact>();
     public DbSet<AccountContact> AccountContacts => Set<AccountContact>();
     public DbSet<Address> Addresses => Set<Address>();
@@ -100,6 +101,13 @@ public sealed partial class CrmDbContext(DbContextOptions<CrmDbContext> options)
         {
             e.HasOne<Account>().WithMany().HasForeignKey(x => x.AccountId).OnDelete(DeleteBehavior.Restrict);
             e.HasIndex(x => x.AccountId).IsUnique().HasFilter("effective_to IS NULL");
+        });
+        ConfigureRecord<AccountViewerGrant>(b, "crm_account_viewer_grants");
+        b.Entity<AccountViewerGrant>(e =>
+        {
+            e.HasOne<Account>().WithMany().HasForeignKey(x => x.AccountId).OnDelete(DeleteBehavior.Restrict);
+            e.HasIndex(x => new { x.AccountId, x.UserId }).IsUnique().HasFilter("revoked_at IS NULL");
+            e.HasIndex(x => x.UserId);
         });
         b.Entity<Contact>(e =>
         {
