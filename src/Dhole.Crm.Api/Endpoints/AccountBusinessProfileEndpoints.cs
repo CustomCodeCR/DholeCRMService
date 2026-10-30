@@ -35,7 +35,7 @@ internal static class AccountBusinessProfileEndpoints
 
     private static async Task<bool> CanAccess(CrmDbContext db, HttpContext h,
         Guid accountId, CancellationToken ct) =>
-        CrmAccess.CanSeeAccount(db,h,accountId,ct);
+        await CrmAccess.CanSeeAccount(db,h,accountId,ct);
 
     private static async Task<IResult> Get(Guid id, CrmDbContext db,
         HttpContext h, CancellationToken ct)
