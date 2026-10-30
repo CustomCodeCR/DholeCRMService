@@ -100,6 +100,34 @@ public sealed class CrmCommercialIntegrationTests
     }
 
     [TestMethod]
+    public async Task Institutional_seller_preserves_owner_and_history_without_fake_auth_guid()
+    {
+        await using var db = await Open();
+        var actor = Guid.NewGuid();
+        var account = new Account {
+            DisplayName = "Cuenta Castro Fallas", LegalName = "Cuenta Castro Fallas",
+            ExecutiveUserId = actor, IsCastroFallasExecutive = true,
+            CategoryType = "CUSTOMER", CategoryCode = "A", CreatedByUserId = actor
+        };
+        var assignment = new AccountAssignment {
+            AccountId = account.Id, ExecutiveUserId = actor,
+            IsCastroFallasExecutive = true, AssignedBy = actor, CreatedByUserId = actor
+        };
+        db.Accounts.Add(account);
+        db.AccountAssignments.Add(assignment);
+        await db.SaveChangesAsync();
+        db.ChangeTracker.Clear();
+        var loaded = await db.Accounts.SingleAsync(x => x.Id == account.Id);
+        var history = await db.AccountAssignments.SingleAsync(x => x.AccountId == account.Id);
+        Assert.AreEqual(actor, loaded.ExecutiveUserId);
+        Assert.IsTrue(loaded.IsCastroFallasExecutive);
+        Assert.IsTrue(history.IsCastroFallasExecutive);
+        Assert.AreEqual(actor, history.ExecutiveUserId);
+        var applied = (await db.Database.GetAppliedMigrationsAsync()).ToList();
+        CollectionAssert.Contains(applied, "20261030140000_AddInstitutionalSellerToAccounts");
+    }
+
+    [TestMethod]
     public async Task Real_postgres_rejects_opportunity_without_subject_and_negative_amount()
     {
         await using var db=await Open();
