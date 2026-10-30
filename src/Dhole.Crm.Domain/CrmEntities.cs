@@ -67,6 +67,15 @@ public sealed class AccountAssignment : CrmRecord
     public Guid AssignedBy { get; set; }
     public string? Reason { get; set; }
 }
+// Explicit per-account viewer access for institutional Castro Fallas accounts.
+public sealed class AccountViewerGrant : CrmRecord
+{
+    public Guid AccountId { get; set; }
+    public Guid UserId { get; set; }
+    public Guid GrantedByUserId { get; set; }
+    public DateTime? RevokedAt { get; set; }
+}
+
 public sealed class Contact : CrmRecord
 {
     // Keep Name as the derived display/search field for existing integrations.
