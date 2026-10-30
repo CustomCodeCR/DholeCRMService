@@ -34,13 +34,13 @@ internal static class CrmFollowupEndpoints
     private static bool Tasks(HttpContext h)=>CrmAccess.Scope(h,"crm.task.manage");
     private static bool Utc(DateTime dt)=>dt.Kind==DateTimeKind.Utc;
     private static async Task<bool> AccountVisible(Guid id,CrmDbContext db,HttpContext h,CancellationToken ct)=>
-        await db.Accounts.AsNoTracking().AnyAsync(a=>a.Id==id && a.ArchivedAt==null &&
-            (a.ExecutiveUserId==CrmAccess.UserId(h)||CrmAccess.Scope(h,"crm.account.read-all")),ct);
-    private static bool HasAccess(Followup x,HttpContext h) =>
-        x.AssignedUserId==CrmAccess.UserId(h) ||
-        (x.AccountId.HasValue && CrmAccess.Scope(h,"crm.account.read-all")) ||
-        (x.LeadId.HasValue && CrmAccess.Scope(h,"crm.lead.read-all")) ||
-        (x.OpportunityId.HasValue && CrmAccess.Scope(h,"crm.opportunity.read-all"));
+        await CrmAccess.CanSeeAccount(db,h,id,ct);
+    private static async Task<bool> HasAccess(Followup x,CrmDbContext db,HttpContext h,CancellationToken ct) =>
+        (!x.AccountId.HasValue || await CrmAccess.CanSeeAccount(db,h,x.AccountId.Value,ct)) &&
+        (x.AssignedUserId==CrmAccess.UserId(h) ||
+         (x.AccountId.HasValue && CrmAccess.Scope(h,"crm.account.read-all")) ||
+         (x.LeadId.HasValue && CrmAccess.Scope(h,"crm.lead.read-all")) ||
+         (x.OpportunityId.HasValue && CrmAccess.Scope(h,"crm.opportunity.read-all")));
     private static async Task<IResult> GetPolicy(Guid accountId,CrmDbContext db,HttpContext h,CancellationToken ct)
     {
         if(!Manage(h)||!await AccountVisible(accountId,db,h,ct))return CrmAccess.Denied();
@@ -83,7 +83,9 @@ internal static class CrmFollowupEndpoints
         int? page,int? pageSize,CancellationToken ct)
     {
         if(!Manage(h)&&!Tasks(h))return CrmAccess.Denied();
-        var query=db.Followups.AsNoTracking().AsQueryable();
+        var visibleAccountIds = CrmAccess.VisibleAccounts(db,h).Select(a=>a.Id);
+        var query=db.Followups.AsNoTracking().Where(x => !x.AccountId.HasValue ||
+            visibleAccountIds.Contains(x.AccountId.Value));
         var actor=CrmAccess.UserId(h);
         var accounts=CrmAccess.Scope(h,"crm.account.read-all");
         var leads=CrmAccess.Scope(h,"crm.lead.read-all");
@@ -102,7 +104,7 @@ internal static class CrmFollowupEndpoints
     {
         if(!Manage(h)&&!Tasks(h))return CrmAccess.Denied();
         var x=await db.Followups.AsNoTracking().FirstOrDefaultAsync(x=>x.Id==id,ct);
-        return x is null?Results.NotFound():HasAccess(x,h)?Results.Ok(x):CrmAccess.Denied();
+        return x is null?Results.NotFound():await HasAccess(x,db,h,ct)?Results.Ok(x):CrmAccess.Denied();
     }
     private static async Task<IResult> Create(FollowupCreateRequest r,CrmDbContext db,HttpContext h,
         IAuthReferenceService auth,CancellationToken ct)
@@ -133,7 +135,7 @@ internal static class CrmFollowupEndpoints
     {
         if(!Manage(h)&&!Tasks(h))return CrmAccess.Denied();
         var x=await db.Followups.FindAsync([id],ct);if(x is null)return Results.NotFound();
-        if(!HasAccess(x,h))return CrmAccess.Denied();
+        if(!await HasAccess(x,db,h,ct))return CrmAccess.Denied();
         if(x.RowVersion!=r.ExpectedVersion)return CrmDataEndpoints.Conflict("Concurrent followup update");
         if(x.Status is not ("Pending" or "Overdue")||!Utc(r.DueAt)||
             r.DueAt<DateTime.UtcNow||string.IsNullOrWhiteSpace(r.Reason)||r.Reason.Length>2000)
@@ -151,7 +153,7 @@ internal static class CrmFollowupEndpoints
     {
         if(!Manage(h)&&!Tasks(h))return CrmAccess.Denied();
         var x=await db.Followups.FindAsync([id],ct);if(x is null)return Results.NotFound();
-        if(!HasAccess(x,h))return CrmAccess.Denied();
+        if(!await HasAccess(x,db,h,ct))return CrmAccess.Denied();
         if(x.RowVersion!=r.ExpectedVersion)return CrmDataEndpoints.Conflict("Concurrent followup update");
         if(x.Status is not ("Pending" or "Overdue")||string.IsNullOrWhiteSpace(r.Outcome)||
             r.Outcome.Length>2000||(r.NextFollowupAt is not null&&!Utc(r.NextFollowupAt.Value)))
@@ -180,7 +182,7 @@ internal static class CrmFollowupEndpoints
     {
         if(!Manage(h)&&!Tasks(h))return CrmAccess.Denied();
         var x=await db.Followups.FindAsync([id],ct);if(x is null)return Results.NotFound();
-        if(!HasAccess(x,h))return CrmAccess.Denied();
+        if(!await HasAccess(x,db,h,ct))return CrmAccess.Denied();
         if(x.RowVersion!=r.ExpectedVersion)return CrmDataEndpoints.Conflict("Concurrent followup update");
         if(x.Status is not ("Pending" or "Overdue")||
             string.IsNullOrWhiteSpace(r.Reason)||r.Reason.Length>2000)
@@ -196,7 +198,7 @@ internal static class CrmFollowupEndpoints
         if(!Manage(h)&&!Tasks(h))return CrmAccess.Denied();
         var x=await db.Followups.AsNoTracking().FirstOrDefaultAsync(x=>x.Id==id,ct);
         if(x is null)return Results.NotFound();
-        if(!HasAccess(x,h))return CrmAccess.Denied();
+        if(!await HasAccess(x,db,h,ct))return CrmAccess.Denied();
         return Results.Ok(await db.FollowupHistories.AsNoTracking().Where(x=>x.FollowupId==id)
             .OrderBy(x=>x.CreatedAt).ToListAsync(ct));
     }
