@@ -22,6 +22,8 @@ public sealed partial class CrmDbContext
             e.HasOne<Opportunity>().WithMany().HasForeignKey(x=>x.OpportunityId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne<AccountFollowupPolicy>().WithMany().HasForeignKey(x=>x.PolicyId).OnDelete(DeleteBehavior.Restrict);
             e.Property(x=>x.Channel).HasMaxLength(12);
+            e.Property(x=>x.Subject).HasMaxLength(250);
+            e.Property(x=>x.ReminderChannelStrategy).HasMaxLength(12);
             e.Property(x=>x.Status).HasMaxLength(22);
             e.HasIndex(x=>new{x.AssignedUserId,x.Status,x.DueAt});
             e.HasIndex(x=>new{x.PolicyId,x.PolicyOccurrenceAt}).IsUnique().HasFilter("policy_id IS NOT NULL");
