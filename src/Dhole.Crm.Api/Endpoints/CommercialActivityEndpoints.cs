@@ -7,7 +7,8 @@ using Microsoft.EntityFrameworkCore;
 namespace Dhole.Crm.Api.Endpoints;
 public sealed record ActivityCreateRequest(Guid? AccountId,Guid? LeadId,Guid? OpportunityId,
     Guid? ContactId,Guid? OwnerUserId,string Type,string Subject,DateTime? ScheduledStartAt,
-    DateTime? ScheduledEndAt,DateTime? OccurredAt,string? LocationText);
+    DateTime? ScheduledEndAt,DateTime? OccurredAt,string? LocationText,
+    int? ReminderLeadMinutes = null,string? ReminderChannelStrategy = null);
 public sealed record ActivityPatchRequest(long ExpectedVersion,string Subject,string? LocationText);
 public sealed record ActivityCompleteRequest(long ExpectedVersion,string Outcome,DateTime OccurredAt,string? Note);
 public sealed record ActivityRescheduleRequest(long ExpectedVersion,DateTime ScheduledStartAt,
@@ -43,7 +44,7 @@ internal static class CommercialActivityEndpoints
     }
     private static async Task<IResult> List(CrmDbContext db,HttpContext h,
         Guid? accountId,Guid? leadId,Guid? opportunityId,string? type,string? status,
-        int? page,int? pageSize,CancellationToken ct)
+        DateTime? from,DateTime? to,int? page,int? pageSize,CancellationToken ct)
     {
         if(!CanRead(h))return CrmAccess.Denied();
         var visibleAccounts=CrmAccess.VisibleAccounts(db,h).Select(a=>a.Id);
@@ -56,6 +57,8 @@ internal static class CommercialActivityEndpoints
         if(opportunityId is { } o)query=query.Where(x=>x.OpportunityId==o);
         if(!string.IsNullOrWhiteSpace(type))query=query.Where(x=>x.Type==type);
         if(!string.IsNullOrWhiteSpace(status))query=query.Where(x=>x.Status==status);
+        if(from.HasValue)query=query.Where(x=>(x.ScheduledStartAt??x.OccurredAt??x.CreatedAt)>=from.Value);
+        if(to.HasValue)query=query.Where(x=>(x.ScheduledStartAt??x.OccurredAt??x.CreatedAt)<to.Value);
         var n=Math.Max(1,page??1);var size=Math.Clamp(pageSize??25,1,100);
         var total=await query.CountAsync(ct);
         return Results.Ok(new {total,page=n,pageSize=size,items=await query
@@ -72,7 +75,9 @@ internal static class CommercialActivityEndpoints
         IAuthReferenceService auth,IConfigReferenceService config,CancellationToken ct)
     {
         if(!CrmAccess.Scope(h,"crm.activity.create"))return CrmAccess.Denied();
-        if(!CommercialRules.ValidActivityType(r.Type)||
+        if((r.ReminderLeadMinutes is < 0 or > 10080) ||
+            (r.ReminderChannelStrategy is not null && r.ReminderChannelStrategy is not ("BOTH" or "EMAIL" or "SYSTEM"))||
+            !CommercialRules.ValidActivityType(r.Type)||
             string.IsNullOrWhiteSpace(r.Subject)||r.Subject.Length>250||
             !CommercialRules.ValidActivitySchedule(r.ScheduledStartAt,r.ScheduledEndAt)||
             (r.OccurredAt.HasValue&&r.OccurredAt.Value.Kind!=DateTimeKind.Utc)||
@@ -94,7 +99,8 @@ internal static class CommercialActivityEndpoints
             ScheduledStartAt=r.ScheduledStartAt,ScheduledEndAt=r.ScheduledEndAt,
             OccurredAt=r.OccurredAt,Status=r.OccurredAt.HasValue?"Completed":"Scheduled",
             Outcome=r.OccurredAt.HasValue?"COMPLETED":null,
-            LocationText=r.LocationText,CreatedByUserId=current
+            LocationText=r.LocationText,CreatedByUserId=current,
+            ReminderLeadMinutes=r.ReminderLeadMinutes,ReminderChannelStrategy=r.ReminderChannelStrategy
         };
         db.Activities.Add(activity);
         try{await db.SaveChangesAsync(ct);return Results.Created("/api/crm/activities/"+activity.Id,activity);}
