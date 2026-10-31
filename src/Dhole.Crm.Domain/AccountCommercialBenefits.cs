@@ -24,6 +24,7 @@ public sealed class AccountPreferentialRate : CrmRecord
     public decimal? MinimumCharge { get; set; }
     public string? CurrencyCode { get; set; }
     public string? UnitCode { get; set; }
+    public string? EquipmentCode { get; set; }
     public string? OriginCode { get; set; }
     public string? DestinationCode { get; set; }
     public DateTime? ValidFrom { get; set; }
