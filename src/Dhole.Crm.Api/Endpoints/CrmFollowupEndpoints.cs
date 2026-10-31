@@ -136,6 +136,9 @@ internal static class CrmFollowupEndpoints
         db.Followups.Add(x);
         db.FollowupHistories.Add(new FollowupHistory {FollowupId=x.Id,ActorUserId=CrmAccess.UserId(h),
             Action="Created",NewDueAt=r.DueAt,CreatedByUserId=CrmAccess.UserId(h)});
+        await CrmReminderEnqueue.QueueAsync(db,"Followup",x.Id,x.AccountId,
+            x.AssignedUserId,x.RowVersion,x.DueAt,x.ReminderLeadMinutes,
+            x.ReminderChannelStrategy,"crm.followup.reminder.v1",x.CreatedByUserId,ct);
         var ok=await CrmDataEndpoints.Commit(db,ct);
         return ok is Microsoft.AspNetCore.Http.HttpResults.Ok?
             Results.Created("/api/crm/followups/"+x.Id,x):ok;
@@ -155,6 +158,9 @@ internal static class CrmFollowupEndpoints
             CreatedByUserId=CrmAccess.UserId(h)});
         x.DueAt=r.DueAt;x.Status="Pending";x.RowVersion++;
         x.UpdatedByUserId=CrmAccess.UserId(h);x.UpdatedAt=DateTime.UtcNow;
+        await CrmReminderEnqueue.QueueAsync(db,"Followup",x.Id,x.AccountId,
+            x.AssignedUserId,x.RowVersion,x.DueAt,x.ReminderLeadMinutes,
+            x.ReminderChannelStrategy,"crm.followup.reminder.v1",x.CreatedByUserId,ct);
         var ok=await CrmDataEndpoints.Commit(db,ct);
         return ok is Microsoft.AspNetCore.Http.HttpResults.Ok?Results.Ok(x):ok;
     }
