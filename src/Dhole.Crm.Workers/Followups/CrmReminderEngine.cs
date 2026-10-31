@@ -75,8 +75,8 @@ public static class CrmReminderEngine
                 ? await db.AccountFollowupPolicies.AsNoTracking().FirstOrDefaultAsync(x=>x.Id==pid,ct)
                 : null;
             if(p is { Enabled:false } || p?.PausedUntil>now)continue;
-            var lead=p?.ReminderLeadMinutes??60;
-            var channel=p?.ChannelStrategy??"BOTH";
+            var lead=f.ReminderLeadMinutes??p?.ReminderLeadMinutes??60;
+            var channel=f.ReminderChannelStrategy??p?.ChannelStrategy??"BOTH";
             if(f.DueAt<now && f.Status=="Pending")
             {
                 f.Status="Overdue";f.RowVersion++;f.UpdatedAt=now;
@@ -90,7 +90,7 @@ public static class CrmReminderEngine
         }
         var visits=await db.Activities.AsNoTracking()
             .Where(x=>x.ArchivedAt==null && x.Status=="Scheduled" &&
-                (x.Type=="VISIT"||x.Type=="MEETING") && x.ScheduledStartAt!=null &&
+                x.ScheduledStartAt!=null &&
                 x.ScheduledStartAt<=future && x.ScheduledStartAt>now.AddHours(-24))
             .OrderBy(x=>x.ScheduledStartAt).Take(200).ToListAsync(ct);
         foreach(var v in visits)
@@ -100,8 +100,11 @@ public static class CrmReminderEngine
                 : null;
             if(p is {Enabled:false} || p?.PausedUntil>now)continue;
             await AddReminders(db,"Activity",v.Id,v.OwnerUserId,v.RowVersion,v.ScheduledStartAt!.Value,
-                now,p?.ReminderLeadMinutes??60,p?.ChannelStrategy??"BOTH",
-                "crm.visit.reminder.v1",v.CreatedByUserId,ct);
+                now,v.ReminderLeadMinutes??p?.ReminderLeadMinutes??60,
+                v.ReminderChannelStrategy??p?.ChannelStrategy??"BOTH",
+                v.Type=="CALL"?"crm.call.reminder.v1":
+                v.Type=="VISIT"?"crm.visit.reminder.v1":
+                v.Type=="MEETING"?"crm.meeting.reminder.v1":"crm.activity.reminder.v1",v.CreatedByUserId,ct);
         }
         await db.SaveChangesAsync(ct);
         await tx.CommitAsync(ct);
