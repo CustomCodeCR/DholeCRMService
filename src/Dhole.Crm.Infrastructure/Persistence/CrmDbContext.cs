@@ -132,6 +132,12 @@ public sealed partial class CrmDbContext(DbContextOptions<CrmDbContext> options)
             e.Property(x => x.RateType).HasMaxLength(24);
             e.Property(x => x.Value).HasPrecision(18, 6);
             e.Property(x => x.MinimumCharge).HasPrecision(18, 6);
+            e.Property(x => x.InsuranceCostPercent).HasPrecision(9, 6);
+            e.Property(x => x.InsuranceSalePercent).HasPrecision(9, 6);
+            e.Property(x => x.EquipmentCodes).HasColumnType("text[]");
+            e.Property(x => x.PolCodes).HasColumnType("text[]");
+            e.Property(x => x.PoeCodes).HasColumnType("text[]");
+            e.Property(x => x.PodCodes).HasColumnType("text[]");
             e.Property(x => x.CurrencyCode).HasMaxLength(3);
             e.Property(x => x.UnitCode).HasMaxLength(32);
             e.Property(x => x.EquipmentCode).HasMaxLength(80);
