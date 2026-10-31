@@ -26,7 +26,7 @@ public sealed class CrmFinanceIntegrationTests
             "crm_credit_terms_history","crm_credit_contract_renewals","crm_credit_contract_amendments"})
             CollectionAssert.Contains(tables,table);
         var overdueColumn=await db.Database.SqlQueryRaw<string>(
-            "SELECT column_name AS \\"Value\\" FROM information_schema.columns WHERE table_schema='crm' AND table_name='crm_credit_profiles' AND column_name='late_interest_monthly_pct'")
+            "SELECT column_name AS \"Value\" FROM information_schema.columns WHERE table_schema='crm' AND table_name='crm_credit_profiles' AND column_name='late_interest_monthly_pct'")
             .ToListAsync();
         CollectionAssert.Contains(overdueColumn,"late_interest_monthly_pct");
     }
