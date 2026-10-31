@@ -40,6 +40,7 @@ CREATE TABLE crm.crm_account_preferential_rates (
     minimum_charge numeric(18,6),
     currency_code varchar(3),
     unit_code varchar(32),
+    equipment_code varchar(80),
     origin_code varchar(80),
     destination_code varchar(80),
     valid_from timestamptz,
