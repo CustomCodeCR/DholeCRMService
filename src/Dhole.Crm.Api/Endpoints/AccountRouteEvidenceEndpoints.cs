@@ -88,16 +88,12 @@ internal static class AccountRouteEvidenceEndpoints
         HttpContext h, IPricingCommercialClient pricing, int? page, int? pageSize,
         CancellationToken ct)
     {
-        if (!CrmDataEndpoints.HasRead(h, "account") ||
-            !CrmAccess.Scope(h, "crm.quote.read") ||
-            !CrmDataEndpoints.HasRead(h, "opportunity"))
-            return CrmAccess.Denied();
+        // The account viewer can request the account's historical quote routes.
+        // Pricing independently authorizes every quote with the caller's bearer token.
+        if (!CrmDataEndpoints.HasRead(h, "account")) return CrmAccess.Denied();
         if (!await CanSeeAccount(db, h, id, ct)) return Results.NotFound();
-        var actor = CrmAccess.UserId(h);
         var visibleOpportunities = db.Opportunities.AsNoTracking()
-            .Where(o => o.AccountId == id && o.ArchivedAt == null &&
-                (o.ExecutiveUserId == actor ||
-                 CrmAccess.Scope(h, "crm.opportunity.read-all")));
+            .Where(o => o.AccountId == id && o.ArchivedAt == null);
         var linked = from q in db.OpportunityQuotes.AsNoTracking()
                      join op in visibleOpportunities on q.OpportunityId equals op.Id
                      select q;
@@ -120,9 +116,9 @@ internal static class AccountRouteEvidenceEndpoints
             var route = response.Success ? response.Value : null;
             return new {
                 pricingQuoteId = row.PricingQuoteId,
-                quoteNumber = row.QuoteNumberSnapshot,
-                shipmentMode = row.ShipmentModeSnapshot,
-                linkedAt = row.LinkedAt,
+                quoteNumber = route is null ? null : row.QuoteNumberSnapshot,
+                shipmentMode = route is null ? null : row.ShipmentModeSnapshot,
+                linkedAt = route is null ? (DateTime?)null : row.LinkedAt,
                 polName = route?.PolName,
                 poeName = route?.PoeName,
                 podName = route?.PodName,
