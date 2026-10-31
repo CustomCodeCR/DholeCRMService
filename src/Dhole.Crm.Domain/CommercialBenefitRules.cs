@@ -90,7 +90,9 @@ public static class CommercialBenefitRules
                 return false;
             // Existing historical records can have neither percent; the original Value
             // was the sale percentage. Newly created benefits must specify both.
-            if (rule.InsuranceCostPercent.HasValue != rule.InsuranceSalePercent.HasValue)
+            // Old rates legitimately only have a sale percentage. Keep them editable
+            // so an authorized user can complete the missing supplier cost later.
+            if (rule.InsuranceCostPercent.HasValue && !rule.InsuranceSalePercent.HasValue)
                 return false;
             if (rule.InsuranceSalePercent.HasValue &&
                 rule.Value != rule.InsuranceSalePercent)
