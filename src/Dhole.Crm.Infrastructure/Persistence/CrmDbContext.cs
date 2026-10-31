@@ -11,6 +11,7 @@ public sealed partial class CrmDbContext(DbContextOptions<CrmDbContext> options)
     public DbSet<LeadConversion> LeadConversions => Set<LeadConversion>();
     public DbSet<AccountAssignment> AccountAssignments => Set<AccountAssignment>();
     public DbSet<AccountViewerGrant> AccountViewerGrants => Set<AccountViewerGrant>();
+    public DbSet<CastroFallasViewerGrant> CastroFallasViewerGrants => Set<CastroFallasViewerGrant>();
     public DbSet<AccountBenefitSettings> AccountBenefitSettings => Set<AccountBenefitSettings>();
     public DbSet<AccountPreferentialRate> AccountPreferentialRates => Set<AccountPreferentialRate>();
     public DbSet<Contact> Contacts => Set<Contact>();
@@ -105,6 +106,11 @@ public sealed partial class CrmDbContext(DbContextOptions<CrmDbContext> options)
             e.HasIndex(x => x.AccountId).IsUnique().HasFilter("effective_to IS NULL");
         });
         ConfigureRecord<AccountViewerGrant>(b, "crm_account_viewer_grants");
+        ConfigureRecord<CastroFallasViewerGrant>(b, "crm_castro_fallas_viewer_grants");
+        b.Entity<CastroFallasViewerGrant>(e =>
+        {
+            e.HasIndex(x => x.UserId).IsUnique().HasFilter("revoked_at IS NULL");
+        });
         ConfigureRecord<AccountBenefitSettings>(b, "crm_account_benefit_settings");
         ConfigureRecord<AccountPreferentialRate>(b, "crm_account_preferential_rates");
         b.Entity<AccountBenefitSettings>(e =>
