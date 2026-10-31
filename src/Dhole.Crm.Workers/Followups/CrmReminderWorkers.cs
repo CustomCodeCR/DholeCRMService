@@ -14,7 +14,7 @@ internal sealed class CrmFollowupSchedulerWorker(IServiceScopeFactory scopes,
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         using var interval=new PeriodicTimer(TimeSpan.FromSeconds(
-            Math.Clamp(configuration.GetValue("Crm:Scheduler:IntervalSeconds",300),30,3600)));
+            Math.Clamp(configuration.GetValue("Crm:Scheduler:IntervalSeconds",30),30,3600)));
         do
         {
             if(configuration.GetValue("Features:CrmBackgroundTasksEnabled",false))
