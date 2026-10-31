@@ -25,6 +25,10 @@ public sealed class CrmFinanceIntegrationTests
         foreach(var table in new[]{"crm_credit_profiles","crm_credit_coverages","crm_credit_contracts",
             "crm_credit_terms_history","crm_credit_contract_renewals","crm_credit_contract_amendments"})
             CollectionAssert.Contains(tables,table);
+        var overdueColumn=await db.Database.SqlQueryRaw<string>(
+            "SELECT column_name AS \\"Value\\" FROM information_schema.columns WHERE table_schema='crm' AND table_name='crm_credit_profiles' AND column_name='late_interest_monthly_pct'")
+            .ToListAsync();
+        CollectionAssert.Contains(overdueColumn,"late_interest_monthly_pct");
     }
     [TestMethod]
     public async Task Credit_approved_and_pending_are_unique_per_account()
@@ -36,6 +40,7 @@ public sealed class CrmFinanceIntegrationTests
         db.Accounts.Add(a);
         db.CreditProfiles.Add(new CreditProfile {AccountId=a.Id,CreatedByUserId=owner,
             CreditDays=30,CreditLimit=1000m,MonthlyFinancingPct=2.5000m,
+            LateInterestMonthlyPct=3.2500m,
             CurrencyCode="USD",EffectiveFrom=DateTime.UtcNow,Status="PendingApproval"});
         await db.SaveChangesAsync();
         db.CreditProfiles.Add(new CreditProfile {AccountId=a.Id,CreatedByUserId=owner,
@@ -45,6 +50,8 @@ public sealed class CrmFinanceIntegrationTests
         catch(DbUpdateException){db.ChangeTracker.Clear();}
         var count=await db.CreditProfiles.CountAsync(x=>x.AccountId==a.Id);
         Assert.AreEqual(1,count);
+        var stored=await db.CreditProfiles.AsNoTracking().SingleAsync(x=>x.AccountId==a.Id);
+        Assert.AreEqual(3.2500m,stored.LateInterestMonthlyPct);
     }
     [TestMethod]
     public async Task Finance_scheduler_persists_once_across_runs_and_uses_existing_outbox()
