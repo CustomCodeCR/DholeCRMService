@@ -38,10 +38,8 @@ ALTER TABLE crm.crm_account_preferential_rates
     ADD CONSTRAINT ck_crm_preferential_insurance_sale_pct
       CHECK (insurance_sale_percent IS NULL OR insurance_sale_percent BETWEEN 0 AND 100);
 
--- Miami classifications are now read from crm_accounts.category_type / category_code,
--- not a second, potentially conflicting customer classification.
-UPDATE crm.crm_account_benefit_settings SET miami_lcl_plan_code = NULL
-WHERE miami_lcl_plan_code IS NOT NULL;
+-- Legacy Miami selections remain archived for history; the API never reads them
+-- as the account category, which now comes only from crm_accounts.
 """);
     }
 
