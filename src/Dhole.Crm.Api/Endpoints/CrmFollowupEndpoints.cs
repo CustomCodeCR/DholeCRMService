@@ -46,7 +46,8 @@ internal static class CrmFollowupEndpoints
     {
         if(!Manage(h)||!await AccountVisible(accountId,db,h,ct))return CrmAccess.Denied();
         var p=await db.AccountFollowupPolicies.AsNoTracking().FirstOrDefaultAsync(x=>x.AccountId==accountId,ct);
-        return p is null?Results.NotFound():Results.Ok(p);
+        // Absence of a policy is the normal create state, not a broken account.
+        return p is null?Results.Json((object?)null):Results.Ok(p);
     }
     private static async Task<IResult> UpsertPolicy(Guid accountId,FollowupPolicyRequest r,
         CrmDbContext db,HttpContext h,IAuthReferenceService auth,CancellationToken ct)
