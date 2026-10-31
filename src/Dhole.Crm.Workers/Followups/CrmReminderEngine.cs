@@ -65,7 +65,8 @@ public static class CrmReminderEngine
     {
         await using var tx=await db.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted,ct);
         if(!await Acquire(db,5012506,ct))return;
-        var future=now.AddHours(24);
+        // Honor per-event reminders up to seven days before the appointment.
+        var future=now.AddDays(7);
         var active=await db.Followups
             .Where(x=>(x.Status=="Pending"||x.Status=="Overdue") && x.DueAt<=future)
             .OrderBy(x=>x.DueAt).Take(200).ToListAsync(ct);
