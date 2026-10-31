@@ -91,7 +91,7 @@ internal static class AccountCommercialBenefitsEndpoints
             settings.UpdatedAt = DateTime.UtcNow;
             settings.UpdatedByUserId = actor;
         }
-        settings.MiamiLclPlanCode = null;
+        // Preserve historical Miami values as archival data; they are no longer authoritative.
         settings.Notes = notes;
         var result = await CrmDataEndpoints.Commit(db, ct);
         return result is Microsoft.AspNetCore.Http.HttpResults.Ok ? Results.Ok(settings) : result;
