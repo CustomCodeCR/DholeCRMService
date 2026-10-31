@@ -103,7 +103,19 @@ internal static class CommercialActivityEndpoints
             ReminderLeadMinutes=r.ReminderLeadMinutes,ReminderChannelStrategy=r.ReminderChannelStrategy
         };
         db.Activities.Add(activity);
-        try{await db.SaveChangesAsync(ct);return Results.Created("/api/crm/activities/"+activity.Id,activity);}
+        try
+        {
+            if(activity.Status=="Scheduled" && activity.ScheduledStartAt is { } scheduled)
+                await CrmReminderEnqueue.QueueAsync(db,"Activity",activity.Id,activity.AccountId,
+                    activity.OwnerUserId,activity.RowVersion,scheduled,
+                    activity.ReminderLeadMinutes,activity.ReminderChannelStrategy,
+                    activity.Type=="CALL"?"crm.call.reminder.v1":
+                    activity.Type=="VISIT"?"crm.visit.reminder.v1":
+                    activity.Type=="MEETING"?"crm.meeting.reminder.v1":"crm.activity.reminder.v1",
+                    activity.CreatedByUserId,ct);
+            await db.SaveChangesAsync(ct);
+            return Results.Created("/api/crm/activities/"+activity.Id,activity);
+        }
         catch(DbUpdateException){return CommercialAccess.Conflict("Activity relation constraint");}
     }
     private static async Task<IResult> Patch(Guid id,ActivityPatchRequest r,CrmDbContext db,HttpContext h,CancellationToken ct)
@@ -155,6 +167,12 @@ internal static class CommercialActivityEndpoints
         db.ActivityNotes.Add(new ActivityNote {ActivityId=id,
             AuthorUserId=CrmAccess.UserId(h),CreatedByUserId=CrmAccess.UserId(h),
             NoteText=$"Rescheduled: {oldStart:O} - {oldEnd:O} -> {r.ScheduledStartAt:O} - {r.ScheduledEndAt:O}; {r.Reason}"});
+        await CrmReminderEnqueue.QueueAsync(db,"Activity",a.Id,a.AccountId,
+            a.OwnerUserId,a.RowVersion,r.ScheduledStartAt,a.ReminderLeadMinutes,
+            a.ReminderChannelStrategy,a.Type=="CALL"?"crm.call.reminder.v1":
+            a.Type=="VISIT"?"crm.visit.reminder.v1":
+            a.Type=="MEETING"?"crm.meeting.reminder.v1":"crm.activity.reminder.v1",
+            a.CreatedByUserId,ct);
         var result=await CommercialAccess.Save(db,ct);
         return result is Microsoft.AspNetCore.Http.HttpResults.Ok?Results.Ok(a):result;
     }
