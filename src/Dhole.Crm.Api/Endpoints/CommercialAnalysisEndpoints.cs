@@ -23,9 +23,11 @@ public sealed record AnalysisServicePatchRequest(long ExpectedVersion,string Ser
     string VolumeUnit,string? ContainerTypeCode,int? EquipmentQuantity,
     decimal? ExpectedMovementsPerMonth,string? Notes);
 public sealed record TradeProfileRequest(string ServiceCode,string? PreferredOriginCode,string? PreferredDestinationCode,
-    string Frequency,decimal ExpectedVolume,string VolumeUnit);
+    string Frequency,decimal ExpectedVolume,string VolumeUnit,string? ModalityCode = null,
+    string? PolCode = null,string? PoeCode = null,string? PodCode = null);
 public sealed record TradeProfilePatchRequest(long ExpectedVersion,string ServiceCode,string? PreferredOriginCode,
-    string? PreferredDestinationCode,string Frequency,decimal ExpectedVolume,string VolumeUnit,bool IsActive);
+    string? PreferredDestinationCode,string Frequency,decimal ExpectedVolume,string VolumeUnit,bool IsActive,
+    string? ModalityCode = null,string? PolCode = null,string? PoeCode = null,string? PodCode = null);
 
 internal static class CommercialAnalysisEndpoints
 {
@@ -233,6 +235,23 @@ internal static class CommercialAnalysisEndpoints
         !string.IsNullOrWhiteSpace(r.ServiceCode)&&r.ServiceCode.Length<=80 &&
         !string.IsNullOrWhiteSpace(r.Frequency)&&r.Frequency.Length<=32 &&
         CommercialRules.ValidVolume(r.ExpectedVolume,r.VolumeUnit);
+    private static async Task<bool> ValidTradeRoute(TradeProfileRequest r,IConfigReferenceService config,CancellationToken ct)
+    {
+        // Backward compatible with historic trade profiles that had only origin/destination.
+        if(string.IsNullOrWhiteSpace(r.ModalityCode))
+            return r.PolCode is null && r.PoeCode is null && r.PodCode is null;
+        if(r.ModalityCode is not ("MARITIME" or "LAND" or "AIR"))return false;
+        if(!await config.IsActiveCodeAsync("transport-modalities",r.ModalityCode,ct))return false;
+        if(string.IsNullOrWhiteSpace(r.PolCode)||string.IsNullOrWhiteSpace(r.PoeCode))return false;
+        if(r.ModalityCode=="MARITIME" && string.IsNullOrWhiteSpace(r.PodCode))return false;
+        if(r.ModalityCode!="MARITIME" && !string.IsNullOrWhiteSpace(r.PodCode))return false;
+        foreach(var (catalog,code) in new [] {("pol",r.PolCode),("poe",r.PoeCode),("pod",r.PodCode)})
+        {
+            if(code is not null && (code.Length>80 || !await config.IsActiveCodeAsync(catalog,code,ct)))
+                return false;
+        }
+        return true;
+    }
     private static async Task<IResult> TradeProfiles(Guid id,CrmDbContext db,HttpContext h,CancellationToken ct)
     {
         if(!CrmAccess.Scope(h,"crm.analysis.read")||!await AllowedAccount(id,db,h,ct))
@@ -245,10 +264,12 @@ internal static class CommercialAnalysisEndpoints
     {
         if(!CrmAccess.Scope(h,"crm.analysis.manage")||!await AllowedAccount(id,db,h,ct))
             return CrmAccess.Denied();
-        if(!ValidTrade(r)||!await config.IsActiveCodeAsync("pricing-services",r.ServiceCode,ct))
-            return CommercialAccess.Invalid("Invalid trade profile or service");
+        if(!ValidTrade(r)||!await config.IsActiveCodeAsync("pricing-services",r.ServiceCode,ct)
+           ||!await ValidTradeRoute(r,config,ct))
+            return CommercialAccess.Invalid("Invalid trade profile, modality or port references in Config");
         var p=new CustomerTradeProfile {AccountId=id,ServiceCode=r.ServiceCode,
             PreferredOriginCode=r.PreferredOriginCode,PreferredDestinationCode=r.PreferredDestinationCode,
+            ModalityCode=r.ModalityCode,PolCode=r.PolCode,PoeCode=r.PoeCode,PodCode=r.PodCode,
             Frequency=r.Frequency,ExpectedVolume=r.ExpectedVolume,VolumeUnit=r.VolumeUnit,
             CreatedByUserId=CrmAccess.UserId(h)};
         db.CustomerTradeProfiles.Add(p);await db.SaveChangesAsync(ct);
@@ -263,11 +284,13 @@ internal static class CommercialAnalysisEndpoints
         if(!await AllowedAccount(p.AccountId,db,h,ct))return CrmAccess.Denied();
         if(p.RowVersion!=r.ExpectedVersion)return CommercialAccess.Conflict("Stale profile");
         var next=new TradeProfileRequest(r.ServiceCode,r.PreferredOriginCode,r.PreferredDestinationCode,
-            r.Frequency,r.ExpectedVolume,r.VolumeUnit);
-        if(!ValidTrade(next)||!await config.IsActiveCodeAsync("pricing-services",r.ServiceCode,ct))
-            return CommercialAccess.Invalid("Invalid service/volume");
+            r.Frequency,r.ExpectedVolume,r.VolumeUnit,r.ModalityCode,r.PolCode,r.PoeCode,r.PodCode);
+        if(!ValidTrade(next)||!await config.IsActiveCodeAsync("pricing-services",r.ServiceCode,ct)
+           ||!await ValidTradeRoute(next,config,ct))
+            return CommercialAccess.Invalid("Invalid trade profile, modality or port references in Config");
         p.ServiceCode=r.ServiceCode;p.PreferredOriginCode=r.PreferredOriginCode;
         p.PreferredDestinationCode=r.PreferredDestinationCode;p.Frequency=r.Frequency;
+        p.ModalityCode=r.ModalityCode;p.PolCode=r.PolCode;p.PoeCode=r.PoeCode;p.PodCode=r.PodCode;
         p.ExpectedVolume=r.ExpectedVolume;p.VolumeUnit=r.VolumeUnit;p.IsActive=r.IsActive;
         p.RowVersion++;p.UpdatedAt=DateTime.UtcNow;p.UpdatedByUserId=CrmAccess.UserId(h);
         var save=await CommercialAccess.Save(db,ct);
