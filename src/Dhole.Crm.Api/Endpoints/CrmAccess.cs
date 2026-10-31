@@ -28,8 +28,8 @@ internal static class CrmAccess
             return db.Accounts.Where(a => a.ArchivedAt == null);
         return db.Accounts.Where(a => a.ArchivedAt == null &&
             ((!a.IsCastroFallasExecutive && a.ExecutiveUserId == actor) ||
-             (a.IsCastroFallasExecutive && db.AccountViewerGrants.Any(v =>
-                 v.AccountId == a.Id && v.UserId == actor && v.RevokedAt == null))));
+             (a.IsCastroFallasExecutive && db.CastroFallasViewerGrants.Any(v =>
+                 v.UserId == actor && v.RevokedAt == null))));
     }
     public static Task<bool> CanSeeAccount(CrmDbContext db, HttpContext http, Guid id, CancellationToken ct) =>
         VisibleAccounts(db, http).AnyAsync(a => a.Id == id);
