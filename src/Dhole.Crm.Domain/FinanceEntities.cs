@@ -12,6 +12,8 @@ public sealed class CreditProfile : CrmRecord
     public string CurrencyCode { get; set; } = "USD";
     // Percent units: 2.5000 means 2.5%, NOT 0.025.
     public decimal MonthlyFinancingPct { get; set; }
+    // Interest charged for overdue payments, as a monthly percentage; not calculated automatically.
+    public decimal LateInterestMonthlyPct { get; set; }
     public string PaymentConditions { get; set; } = "";
     public string Status { get; set; } = "PendingApproval";
     public Guid? ApprovedByUserId { get; set; }
