@@ -140,6 +140,10 @@ public sealed class CustomerTradeProfile : CrmRecord
     public string ServiceCode { get; set; } = "";
     public string? PreferredOriginCode { get; set; }
     public string? PreferredDestinationCode { get; set; }
+    public string? ModalityCode { get; set; }
+    public string? PolCode { get; set; }
+    public string? PoeCode { get; set; }
+    public string? PodCode { get; set; }
     public string Frequency { get; set; } = "MONTHLY";
     public decimal ExpectedVolume { get; set; }
     public string VolumeUnit { get; set; } = "CBM";
