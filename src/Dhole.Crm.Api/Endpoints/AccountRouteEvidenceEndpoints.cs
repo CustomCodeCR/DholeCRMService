@@ -115,7 +115,7 @@ internal static class AccountRouteEvidenceEndpoints
             var response = await pricing.GetVisibleQuoteRoute(row.PricingQuoteId, bearer, ct);
             var route = response.Success ? response.Value : null;
             return new {
-                pricingQuoteId = row.PricingQuoteId,
+                pricingQuoteId = route is null ? (Guid?)null : row.PricingQuoteId,
                 quoteNumber = route is null ? null : row.QuoteNumberSnapshot,
                 shipmentMode = route is null ? null : row.ShipmentModeSnapshot,
                 linkedAt = route is null ? (DateTime?)null : row.LinkedAt,
