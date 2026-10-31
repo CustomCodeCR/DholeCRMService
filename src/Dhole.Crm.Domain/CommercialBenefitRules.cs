@@ -50,6 +50,10 @@ public static class CommercialBenefitRules
         codes.Distinct(StringComparer.OrdinalIgnoreCase).Count() == codes.Length;
 
     // A single classification is owned by the Account, not a separate Miami settings record.
+    // Accepted only for migrating older records; Account.CategoryType/CategoryCode governs the plan.
+    public static bool ValidMiamiPlan(string? value) => value is null ||
+        new[] { "A", "B", "C", "D", "NVOCC-A", "NVOCC-B", "LITTLE" }.Contains(value, StringComparer.Ordinal);
+
     public static string? MiamiTier(string type, string code) =>
         type == "NVOCC" && code is "A" or "B" ? "NVOCC-" + code :
         type == "CUSTOMER" && code is "A" or "B" or "C" or "D" ? code :
