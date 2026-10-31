@@ -22,7 +22,7 @@ internal static class FinanceAccess
     public static Task<bool> Allowed(Guid accountId,CrmDbContext db,HttpContext h,CancellationToken ct)=>
         CrmAccess.CanSeeAccount(db,h,accountId,ct);
     public static string Snapshot(CreditProfile p)=>JsonSerializer.Serialize(new {
-        p.CreditEnabled,p.CreditDays,p.CreditLimit,p.CurrencyCode,p.MonthlyFinancingPct,
+        p.CreditEnabled,p.CreditDays,p.CreditLimit,p.CurrencyCode,p.MonthlyFinancingPct,p.LateInterestMonthlyPct,
         p.PaymentConditions,p.Status,p.EffectiveFrom,p.ReviewAt });
     public static void Audit(CrmDbContext db,CreditProfile p,Guid actor,string before,string reason)
     {
