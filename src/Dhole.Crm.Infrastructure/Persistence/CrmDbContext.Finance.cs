@@ -15,6 +15,7 @@ public sealed partial class CrmDbContext
             e.HasOne<Account>().WithMany().HasForeignKey(x=>x.AccountId).OnDelete(DeleteBehavior.Restrict);
             e.Property(x=>x.CreditLimit).HasPrecision(18,2);
             e.Property(x=>x.MonthlyFinancingPct).HasPrecision(7,4);
+            e.Property(x=>x.LateInterestMonthlyPct).HasPrecision(7,4);
             e.Property(x=>x.CurrencyCode).HasMaxLength(12);
             e.Property(x=>x.PaymentConditions).HasMaxLength(4000);
             e.Property(x=>x.Status).HasMaxLength(24);
