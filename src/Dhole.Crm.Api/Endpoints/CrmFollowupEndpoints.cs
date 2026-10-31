@@ -81,7 +81,7 @@ internal static class CrmFollowupEndpoints
         var result=await CrmDataEndpoints.Commit(db,ct);
         return result is Microsoft.AspNetCore.Http.HttpResults.Ok?Results.Ok(p):result;
     }
-    private static async Task<IResult> List(CrmDbContext db,HttpContext h,Guid? accountId,string? status,
+    private static async Task<IResult> List(CrmDbContext db,HttpContext h,Guid? accountId,Guid? leadId,string? status,
         DateTime? from,DateTime? to,int? page,int? pageSize,CancellationToken ct)
     {
         if(!Manage(h)&&!Tasks(h))return CrmAccess.Denied();
@@ -97,6 +97,8 @@ internal static class CrmFollowupEndpoints
             (leads && x.LeadId!=null) ||
             (opportunities && x.OpportunityId!=null));
         if(accountId.HasValue)query=query.Where(x=>x.AccountId==accountId);
+        // Prospect calendars only request tasks linked to that lead.
+        if(leadId.HasValue)query=query.Where(x=>x.LeadId==leadId);
         if(!string.IsNullOrWhiteSpace(status))query=query.Where(x=>x.Status==status);
         if(from.HasValue)query=query.Where(x=>x.DueAt>=from.Value);
         if(to.HasValue)query=query.Where(x=>x.DueAt<to.Value);
