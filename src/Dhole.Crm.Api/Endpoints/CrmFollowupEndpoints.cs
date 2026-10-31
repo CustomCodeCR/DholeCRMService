@@ -7,7 +7,8 @@ namespace Dhole.Crm.Api.Endpoints;
 public sealed record FollowupPolicyRequest(long? ExpectedVersion,bool Enabled,Guid OwnerUserId,string ChannelStrategy,
     int FrequencyDays,DateTime NextDueAt,string TimezoneId,int ReminderLeadMinutes,DateTime? PausedUntil);
 public sealed record FollowupCreateRequest(Guid? AccountId,Guid? LeadId,Guid? OpportunityId,
-    Guid AssignedUserId,string Channel,DateTime DueAt);
+    Guid AssignedUserId,string Channel,DateTime DueAt,
+    string? Subject = null,int? ReminderLeadMinutes = null,string? ReminderChannelStrategy = null);
 public sealed record FollowupRescheduleRequest(long ExpectedVersion,DateTime DueAt,string Reason);
 public sealed record FollowupCompleteRequest(long ExpectedVersion,string Outcome,DateTime? NextFollowupAt);
 public sealed record FollowupCancelRequest(long ExpectedVersion,string Reason);
@@ -80,7 +81,7 @@ internal static class CrmFollowupEndpoints
         return result is Microsoft.AspNetCore.Http.HttpResults.Ok?Results.Ok(p):result;
     }
     private static async Task<IResult> List(CrmDbContext db,HttpContext h,Guid? accountId,string? status,
-        int? page,int? pageSize,CancellationToken ct)
+        DateTime? from,DateTime? to,int? page,int? pageSize,CancellationToken ct)
     {
         if(!Manage(h)&&!Tasks(h))return CrmAccess.Denied();
         var visibleAccountIds = CrmAccess.VisibleAccounts(db,h).Select(a=>a.Id);
@@ -96,6 +97,8 @@ internal static class CrmFollowupEndpoints
             (opportunities && x.OpportunityId!=null));
         if(accountId.HasValue)query=query.Where(x=>x.AccountId==accountId);
         if(!string.IsNullOrWhiteSpace(status))query=query.Where(x=>x.Status==status);
+        if(from.HasValue)query=query.Where(x=>x.DueAt>=from.Value);
+        if(to.HasValue)query=query.Where(x=>x.DueAt<to.Value);
         var n=Math.Max(1,page??1);var s=Math.Clamp(pageSize??25,1,100);var total=await query.CountAsync(ct);
         return Results.Ok(new{total,page=n,pageSize=s,items=await query.OrderBy(x=>x.DueAt)
             .ThenBy(x=>x.Id).Skip((n-1)*s).Take(s).ToListAsync(ct)});
@@ -111,6 +114,8 @@ internal static class CrmFollowupEndpoints
     {
         if(!Manage(h)&&!Tasks(h))return CrmAccess.Denied();
         if(!Utc(r.DueAt)||r.DueAt<DateTime.UtcNow.AddDays(-1)||
+            r.Subject?.Length>250||r.ReminderLeadMinutes is < 0 or > 10080||
+            (r.ReminderChannelStrategy is not null && r.ReminderChannelStrategy is not ("BOTH" or "EMAIL" or "SYSTEM"))||
             r.Channel is not ("EMAIL" or "SYSTEM" or "PHONE" or "VISIT")||
             r.AssignedUserId==Guid.Empty)return CrmDataEndpoints.Bad("Invalid followup schedule or channel");
         if(!await CommercialAccess.SubjectCanRead(db,h,r.AccountId,r.LeadId,r.OpportunityId,ct))
@@ -122,6 +127,8 @@ internal static class CrmFollowupEndpoints
             return CrmDataEndpoints.Bad("Assignee is not active");
         var x=new Followup {AccountId=r.AccountId,LeadId=r.LeadId,OpportunityId=r.OpportunityId,
             AssignedUserId=r.AssignedUserId,Channel=r.Channel,DueAt=r.DueAt,
+            Subject=r.Subject?.Trim(),ReminderLeadMinutes=r.ReminderLeadMinutes,
+            ReminderChannelStrategy=r.ReminderChannelStrategy,
             CreatedByUserId=CrmAccess.UserId(h)};
         db.Followups.Add(x);
         db.FollowupHistories.Add(new FollowupHistory {FollowupId=x.Id,ActorUserId=CrmAccess.UserId(h),
