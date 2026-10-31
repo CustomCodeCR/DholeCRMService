@@ -18,6 +18,7 @@ public static class CrmDataEndpoints
         group.MapAccountCommercialOverview();
         group.MapAccountRouteEvidence();
         group.MapAccountBusinessProfile();
+        group.MapAccountCommercialBenefits();
         group.MapLeads();
         group.MapContacts();
         group.MapCommercialPipeline();
