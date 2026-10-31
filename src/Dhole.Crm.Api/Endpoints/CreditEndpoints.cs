@@ -8,7 +8,7 @@ namespace Dhole.Crm.Api.Endpoints;
 
 public sealed record CreditTermsRequest(bool CreditEnabled,int CreditDays,decimal CreditLimit,
     string CurrencyCode,decimal MonthlyFinancingPct,string PaymentConditions,
-    DateTime EffectiveFrom,DateTime? ReviewAt);
+    DateTime EffectiveFrom,DateTime? ReviewAt,decimal LateInterestMonthlyPct = 0m);
 public sealed record CreditApprovalRequest(long ExpectedVersion,string Reason);
 public sealed record CreditCoverageRequest(long ExpectedVersion,string ServiceCode,string CoverageType,string Description);
 public sealed record CreditChangeRequest(long ExpectedVersion,CreditTermsRequest Terms,string Reason);
@@ -30,6 +30,8 @@ internal static class CreditEndpoints
     }
     private static bool Read(HttpContext h)=>FinanceAccess.Has(h,"crm.credit.read");
     private static bool Manage(HttpContext h)=>FinanceAccess.Has(h,"crm.credit.manage");
+    // Sales staff may request credit for a visible account without being allowed to approve it.
+    private static bool CanRequest(HttpContext h)=>Manage(h)||FinanceAccess.Has(h,"crm.account.update");
     private static bool Approver(HttpContext h)=>FinanceAccess.Has(h,"crm.credit.approve");
     private static bool Valid(CreditTermsRequest r)=>
         r.CreditDays is >=0 and <=3650 &&
@@ -37,6 +39,8 @@ internal static class CreditEndpoints
         decimal.Round(r.CreditLimit,2)==r.CreditLimit &&
         r.MonthlyFinancingPct is >=0 and <=100 &&
         decimal.Round(r.MonthlyFinancingPct,4)==r.MonthlyFinancingPct &&
+        r.LateInterestMonthlyPct is >=0 and <=100 &&
+        decimal.Round(r.LateInterestMonthlyPct,4)==r.LateInterestMonthlyPct &&
         Regex.IsMatch(r.CurrencyCode??"",@"^[A-Za-z]{3}$") &&
         r.PaymentConditions is not null && r.PaymentConditions.Length<=4000 &&
         FinanceAccess.Utc(r.EffectiveFrom) &&
@@ -45,6 +49,7 @@ internal static class CreditEndpoints
     {
         p.CreditEnabled=r.CreditEnabled;p.CreditDays=r.CreditDays;p.CreditLimit=r.CreditLimit;
         p.CurrencyCode=r.CurrencyCode.ToUpperInvariant();p.MonthlyFinancingPct=r.MonthlyFinancingPct;
+        p.LateInterestMonthlyPct=r.LateInterestMonthlyPct;
         p.PaymentConditions=r.PaymentConditions.Trim();p.EffectiveFrom=r.EffectiveFrom;p.ReviewAt=r.ReviewAt;
     }
     private static async Task<bool> Can(CreditProfile p,CrmDbContext db,HttpContext h,CancellationToken ct)
@@ -86,9 +91,16 @@ internal static class CreditEndpoints
     {
         var logger=loggerFactory.CreateLogger("Dhole.Crm.CreditProposal");
         logger.LogInformation("CRM credit proposal received for account {AccountId}",accountId);
-        if(!Manage(h)||!await FinanceAccess.Allowed(accountId,db,h,ct))
+        if (!CanRequest(h))
         {
-            logger.LogWarning("CRM credit proposal denied for account {AccountId}",accountId);
+            logger.LogWarning("CRM credit proposal denied: user lacks credit request scope");
+            return Results.Problem(statusCode:403,
+                title:"No tiene permiso para solicitar crédito",
+                detail:"Se requiere autorización para gestionar créditos o actualizar la cuenta.");
+        }
+        if (!await FinanceAccess.Allowed(accountId,db,h,ct))
+        {
+            logger.LogWarning("CRM credit proposal denied: account is not accessible");
             return CrmAccess.Denied();
         }
         if(!Valid(req))
