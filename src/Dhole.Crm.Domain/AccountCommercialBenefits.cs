@@ -2,7 +2,7 @@ namespace Dhole.Crm.Domain;
 
 /// <summary>
 /// Standalone CRM commercial benefits. Pricing does not consume these yet.
-/// Miami customer classification is intentionally separate from Account.CategoryCode.
+/// Account.CategoryType + Account.CategoryCode are the sole authority for the Miami customer tier.
 /// </summary>
 public sealed class AccountBenefitSettings : CrmRecord
 {
@@ -22,6 +22,14 @@ public sealed class AccountPreferentialRate : CrmRecord
     public string RateType { get; set; } = "FIXED_AMOUNT";
     public decimal? Value { get; set; }
     public decimal? MinimumCharge { get; set; }
+    // The insured merchandise value multiplied by each percent gives the cost/sale amount.
+    public decimal? InsuranceCostPercent { get; set; }
+    public decimal? InsuranceSalePercent { get; set; }
+    // A null or empty list means unrestricted (all equipment/ports for that role).
+    public string[] EquipmentCodes { get; set; } = [];
+    public string[] PolCodes { get; set; } = [];
+    public string[] PoeCodes { get; set; } = [];
+    public string[] PodCodes { get; set; } = [];
     public string? CurrencyCode { get; set; }
     public string? UnitCode { get; set; }
     public string? EquipmentCode { get; set; }
