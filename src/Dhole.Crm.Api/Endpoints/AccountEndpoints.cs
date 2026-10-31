@@ -33,6 +33,7 @@ internal static class AccountEndpoints
         group.MapPatch("/accounts/{id:guid}/logo", SetLogo);
         group.MapGet("/accounts/{id:guid}/assignments", Assignments);
         group.MapGet("/accounts/{id:guid}/assigned-executive", AssignedExecutive);
+        group.MapGet("/accounts/assigned-executives", AssignedExecutives);
         group.MapGet("/accounts/{id:guid}/business-activities", Activities);
         group.MapPost("/accounts/{id:guid}/business-activities", AddActivity);
         return group;
@@ -74,6 +75,56 @@ internal static class AccountEndpoints
     }
     // Resolve the seller through the server-to-server Auth reference so ordinary
     // CRM viewers do not need permission to browse all employee accounts.
+    // Resolve visible account sellers in one request. Do not require Auth directory
+    // permissions on the client or expose employees assigned to hidden accounts.
+    private static async Task<IResult> AssignedExecutives(
+        string? ids, CrmDbContext db, HttpContext http, IAuthReferenceService auth,
+        IMemoryCache cache, ILoggerFactory loggerFactory, CancellationToken ct)
+    {
+        if (!CrmDataEndpoints.HasRead(http, "account")) return CrmAccess.Denied();
+        var parts = (ids ?? "").Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length is < 1 or > 100 || parts.Any(x => !Guid.TryParse(x, out _)))
+            return Results.BadRequest(new { error = "Account ids must be 1 to 100 valid GUIDs" });
+        var requested = parts.Select(Guid.Parse).Distinct().ToArray();
+        var visible = await CrmAccess.VisibleAccounts(db, http).AsNoTracking()
+            .Where(x => requested.Contains(x.Id))
+            .Select(x => new { x.Id, x.ExecutiveUserId, x.IsCastroFallasExecutive })
+            .ToArrayAsync(ct);
+        var userIds = visible.Where(x => !x.IsCastroFallasExecutive && x.ExecutiveUserId != Guid.Empty)
+            .Select(x => x.ExecutiveUserId).Distinct().ToArray();
+        using var gate = new SemaphoreSlim(4);
+        var logger = loggerFactory.CreateLogger("Dhole.Crm.AccountAssignedExecutives");
+        var resolved = await Task.WhenAll(userIds.Select(async userId =>
+        {
+            await gate.WaitAsync(ct);
+            try
+            {
+                var name = await cache.GetOrCreateAsync($"crm:assigned-seller:{userId:N}", async entry =>
+                {
+                    entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(2);
+                    var person = await auth.GetActiveAsync(userId, ct);
+                    return string.IsNullOrWhiteSpace(person?.DisplayName)
+                        ? "Vendedor no disponible" : person.DisplayName.Trim();
+                });
+                return (Id: userId, Name: name ?? "Vendedor no disponible");
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "Could not resolve assigned CRM seller");
+                return (Id: userId, Name: "Vendedor no disponible");
+            }
+            finally { gate.Release(); }
+        }));
+        var names = resolved.ToDictionary(x => x.Id, x => x.Name);
+        var sellers = visible.ToDictionary(
+            x => x.Id.ToString("D"),
+            x => x.IsCastroFallasExecutive ? "Castro Fallas"
+                : x.ExecutiveUserId == Guid.Empty ? "Sin asignar"
+                : names.TryGetValue(x.ExecutiveUserId, out var name) ? name : "Vendedor no disponible");
+        return Results.Ok(new { sellers });
+    }
+
     private static async Task<IResult> AssignedExecutive(Guid id, CrmDbContext db,
         HttpContext http, IAuthReferenceService auth, CancellationToken ct)
     {
