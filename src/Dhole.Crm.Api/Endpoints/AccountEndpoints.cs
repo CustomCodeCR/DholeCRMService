@@ -32,6 +32,7 @@ internal static class AccountEndpoints
         group.MapPost("/accounts/{id:guid}/assign", Assign);
         group.MapPatch("/accounts/{id:guid}/logo", SetLogo);
         group.MapGet("/accounts/{id:guid}/assignments", Assignments);
+        group.MapGet("/accounts/{id:guid}/assigned-executive", AssignedExecutive);
         group.MapGet("/accounts/{id:guid}/business-activities", Activities);
         group.MapPost("/accounts/{id:guid}/business-activities", AddActivity);
         return group;
@@ -70,6 +71,36 @@ internal static class AccountEndpoints
         var account = await db.Accounts.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id && x.ArchivedAt == null, ct);
         if (account is null) return Results.NotFound();
         return await CrmAccess.CanSeeAccount(db, http, account.Id, ct) ? Results.Ok(account) : CrmAccess.Denied();
+    }
+    // Resolve the seller through the server-to-server Auth reference so ordinary
+    // CRM viewers do not need permission to browse all employee accounts.
+    private static async Task<IResult> AssignedExecutive(Guid id, CrmDbContext db,
+        HttpContext http, IAuthReferenceService auth, CancellationToken ct)
+    {
+        if (!CrmDataEndpoints.HasRead(http, "account")) return CrmAccess.Denied();
+        var account = await db.Accounts.AsNoTracking()
+            .FirstOrDefaultAsync(x => x.Id == id && x.ArchivedAt == null, ct);
+        if (account is null) return Results.NotFound();
+        if (!await CrmAccess.CanSeeAccount(db, http, id, ct)) return CrmAccess.Denied();
+        if (account.IsCastroFallasExecutive)
+            return Results.Ok(new { displayName = "Castro Fallas", institutional = true });
+        if (account.ExecutiveUserId == Guid.Empty)
+            return Results.Ok(new { displayName = (string?)null, institutional = false });
+        try
+        {
+            var assigned = await auth.GetActiveAsync(account.ExecutiveUserId, ct);
+            return Results.Ok(new {
+                displayName = string.IsNullOrWhiteSpace(assigned?.DisplayName)
+                    ? (string?)null : assigned.DisplayName,
+                institutional = false
+            });
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+        catch (Exception)
+        {
+            return Results.Json(new { error = "No se pudo consultar el vendedor asignado" },
+                statusCode: StatusCodes.Status503ServiceUnavailable);
+        }
     }
     private static async Task<IResult> Create(CreateAccountRequest request, CrmDbContext db,
         HttpContext http, IAuthReferenceService auth, IConfigReferenceService config, IMemoryCache cache, CancellationToken ct)
