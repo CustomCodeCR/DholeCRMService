@@ -21,6 +21,9 @@ public sealed class Followup : CrmRecord
     public DateTime? PolicyOccurrenceAt { get; set; }
     public Guid AssignedUserId { get; set; }
     public string Channel { get; set; } = "SYSTEM";
+    public string? Subject { get; set; }
+    public int? ReminderLeadMinutes { get; set; }
+    public string? ReminderChannelStrategy { get; set; }
     public DateTime DueAt { get; set; }
     public string Status { get; set; } = "Pending";
     public DateTime? CompletedAt { get; set; }
