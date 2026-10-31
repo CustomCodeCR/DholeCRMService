@@ -82,10 +82,20 @@ internal static class CreditEndpoints
     private static async Task<bool> Currency(IConfigReferenceService config,string code,CancellationToken ct)=>
         await config.IsActiveCodeAsync("currencies",code.ToUpperInvariant(),ct);
     private static async Task<IResult> Propose(Guid accountId,CreditTermsRequest req,CrmDbContext db,
-        HttpContext h,IConfigReferenceService config,CancellationToken ct)
+        HttpContext h,IConfigReferenceService config,ILoggerFactory loggerFactory,CancellationToken ct)
     {
-        if(!Manage(h)||!await FinanceAccess.Allowed(accountId,db,h,ct))return CrmAccess.Denied();
-        if(!Valid(req))return FinanceAccess.Bad("Invalid financing percentage, currency or credit terms");
+        var logger=loggerFactory.CreateLogger("Dhole.Crm.CreditProposal");
+        logger.LogInformation("CRM credit proposal received for account {AccountId}",accountId);
+        if(!Manage(h)||!await FinanceAccess.Allowed(accountId,db,h,ct))
+        {
+            logger.LogWarning("CRM credit proposal denied for account {AccountId}",accountId);
+            return CrmAccess.Denied();
+        }
+        if(!Valid(req))
+        {
+            logger.LogWarning("CRM credit proposal invalid terms for account {AccountId}",accountId);
+            return FinanceAccess.Bad("Invalid financing percentage, currency or credit terms");
+        }
         var key=FinanceAccess.RequestKey(h);
         if(key==null)return FinanceAccess.Bad("Idempotency-Key required (8–128 ASCII alphanumeric, hyphen or underscore)");
         var payload=FinanceAccess.PayloadHash(req);
@@ -93,8 +103,19 @@ internal static class CreditEndpoints
             x.AccountId==accountId && x.CreationKeyHash==key,ct);
         if(replay!=null)return replay.CreationPayloadHash==payload?
             Results.Ok(replay):FinanceAccess.Conflict("Idempotency key reused with other credit terms");
-        try{if(!await Currency(config,req.CurrencyCode,ct))return FinanceAccess.Bad("Inactive Config currency");}
-        catch(Exception) when(!ct.IsCancellationRequested){return CrmDataEndpoints.Unavailable();}
+        try
+        {
+            if(!await Currency(config,req.CurrencyCode,ct))
+            {
+                logger.LogWarning("CRM credit proposal inactive currency {Currency} for account {AccountId}",req.CurrencyCode,accountId);
+                return FinanceAccess.Bad("Inactive Config currency");
+            }
+        }
+        catch(Exception ex) when(!ct.IsCancellationRequested)
+        {
+            logger.LogError(ex,"CRM credit proposal Config lookup failed for account {AccountId}",accountId);
+            return CrmDataEndpoints.Unavailable();
+        }
         if(await db.CreditProfiles.AnyAsync(x=>x.AccountId==accountId&&x.Status=="PendingApproval",ct))
             return FinanceAccess.Conflict("Pending credit proposal already exists");
         var actor=FinanceAccess.Actor(h);var p=new CreditProfile{AccountId=accountId,CreatedByUserId=actor,
@@ -102,8 +123,13 @@ internal static class CreditEndpoints
         Apply(p,req);db.CreditProfiles.Add(p);
         FinanceAccess.Audit(db,p,actor,"{}","Created pending credit proposal");
         var result=await FinanceAccess.Save(db,ct);
-        return result is Microsoft.AspNetCore.Http.HttpResults.Ok?
-            Results.Created("/api/crm/credit-profiles/"+p.Id,p):result;
+        if(result is Microsoft.AspNetCore.Http.HttpResults.Ok)
+        {
+            logger.LogInformation("CRM credit proposal created {CreditProfileId} account {AccountId}",p.Id,accountId);
+            return Results.Created("/api/crm/credit-profiles/"+p.Id,p);
+        }
+        logger.LogWarning("CRM credit proposal persistence rejected for account {AccountId}",accountId);
+        return result;
     }
     private static async Task<IResult> Revise(Guid id,CreditChangeRequest req,CrmDbContext db,
         HttpContext h,IConfigReferenceService config,CancellationToken ct)
