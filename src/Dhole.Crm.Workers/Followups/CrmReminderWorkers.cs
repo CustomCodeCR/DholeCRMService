@@ -92,15 +92,26 @@ internal sealed class CrmReminderDispatcherWorker(IServiceScopeFactory scopes,IC
                     throw new InvalidOperationException("CRM reminder has no active recipient email");
                 var subject=reminder.NotificationType switch
                 {
-                    "crm.visit.reminder.v1"=>"Próxima visita o reunión comercial",
+                    "crm.visit.reminder.v1"=>"Próxima visita comercial",
+                    "crm.call.reminder.v1"=>"Próxima llamada comercial",
+                    "crm.meeting.reminder.v1"=>"Próxima reunión comercial",
+                    "crm.activity.reminder.v1"=>"Actividad comercial programada",
                     "crm.activity.overdue.v1"=>"Actividad comercial vencida",
                     "crm.credit.review.v1"=>"Revisión de crédito comercial pendiente",
                     "crm.contract.renewal.v1"=>"Renovación de contrato comercial próxima",
                     _=>"Seguimiento comercial pendiente"
                 };
+                var relatedActivity=reminder.EntityType=="Activity"
+                    ? await db.Activities.AsNoTracking().FirstOrDefaultAsync(x=>x.Id==reminder.EntityId,ct) : null;
+                var relatedFollowup=reminder.EntityType=="Followup"
+                    ? await db.Followups.AsNoTracking().FirstOrDefaultAsync(x=>x.Id==reminder.EntityId,ct) : null;
+                var dueAt=relatedActivity?.ScheduledStartAt??relatedFollowup?.DueAt;
+                var title=relatedActivity?.Subject??relatedFollowup?.Subject??subject;
+                var localDate=dueAt.HasValue?TimeZoneInfo.ConvertTimeFromUtc(dueAt.Value,
+                    TimeZoneInfo.FindSystemTimeZoneById("America/Costa_Rica")).ToString("dd/MM/yyyy HH:mm"):null;
                 var body=reminder.NotificationType=="crm.activity.overdue.v1"?
                     "Existe una actividad vencida. Revise su agenda CRM; no se registra una ejecución automática.":
-                    "Tiene un seguimiento o visita programada en DholeCRM. Revise el detalle de su agenda.";
+                    $"Recordatorio: {title}. {(localDate is null?"":$"Fecha: {localDate} (Costa Rica). ")}Revise su agenda CRM en Dhole.";
                 var payload=new {
                     eventId=reminder.Id.ToString(),
                     notificationType=reminder.NotificationType,
