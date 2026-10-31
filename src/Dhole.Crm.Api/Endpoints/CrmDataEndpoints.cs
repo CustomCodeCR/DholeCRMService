@@ -37,7 +37,8 @@ public static class CrmDataEndpoints
         Regex.Replace(value.Trim().ToUpperInvariant(), @"[\s.\-]", "");
     internal static bool CategoryValid(string type, string code) =>
         (type == "CUSTOMER" && "ABCD".Contains(code, StringComparison.Ordinal)) ||
-        (type == "NVOCC" && "AB".Contains(code, StringComparison.Ordinal));
+        (type == "NVOCC" && "AB".Contains(code, StringComparison.Ordinal)) ||
+        (type == "LITTLE" && code == "A");
     internal static bool IsEmailValid(string? address) =>
         string.IsNullOrWhiteSpace(address) ||
         (System.Net.Mail.MailAddress.TryCreate(address, out var parsed) &&
