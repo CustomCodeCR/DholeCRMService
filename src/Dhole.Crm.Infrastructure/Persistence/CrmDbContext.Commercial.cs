@@ -142,6 +142,7 @@ public sealed partial class CrmDbContext
             e.Property(x => x.Type).HasMaxLength(24);
             e.Property(x => x.Status).HasMaxLength(24);
             e.Property(x => x.Subject).HasMaxLength(250);
+            e.Property(x => x.ReminderChannelStrategy).HasMaxLength(12);
             e.HasOne<Account>().WithMany().HasForeignKey(x => x.AccountId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne<Lead>().WithMany().HasForeignKey(x => x.LeadId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne<Opportunity>().WithMany().HasForeignKey(x => x.OpportunityId).OnDelete(DeleteBehavior.Restrict);
