@@ -83,4 +83,67 @@ public sealed class CrmCommercialBenefitsTests
         pct.Value = -2m;
         Assert.IsFalse(CommercialBenefitRules.ValidRate(pct));
     }
+    [TestMethod]
+    public void Miami_tier_is_derived_from_account_category_not_independent_settings()
+    {
+        Assert.AreEqual("A", CommercialBenefitRules.MiamiTier("CUSTOMER", "A"));
+        Assert.AreEqual("NVOCC-B", CommercialBenefitRules.MiamiTier("NVOCC", "B"));
+        Assert.AreEqual("LITTLE", CommercialBenefitRules.MiamiTier("LITTLE", "A"));
+        Assert.IsNull(CommercialBenefitRules.MiamiTier("NVOCC", "C"));
+    }
+
+    [TestMethod]
+    public void Insurance_uses_distinct_cost_and_sale_percentages_on_merchandise_value()
+    {
+        var rate = new AccountPreferentialRate {
+            Modality = "AIR", ChargeCode = "Insurance", RateType = "INSURANCE_PERCENT",
+            Value = 0.75m, InsuranceCostPercent = 0.35m,
+            InsuranceSalePercent = 0.75m
+        };
+        Assert.IsTrue(CommercialBenefitRules.ValidRate(rate));
+        rate.InsuranceCostPercent = 101m;
+        Assert.IsFalse(CommercialBenefitRules.ValidRate(rate));
+        rate.InsuranceCostPercent = .35m;
+        rate.InsuranceSalePercent = 0.8m;
+        Assert.IsFalse(CommercialBenefitRules.ValidRate(rate), "Legacy Value must agree with the current sale percent.");
+    }
+
+    [TestMethod]
+    public void Multiselect_equipment_and_all_three_port_roles_are_validated()
+    {
+        var rule = new AccountPreferentialRate {
+            Modality = "FCL", ChargeCode = "OriginCharge", CustomChargeName = "Pick up",
+            RateType = "FIXED_AMOUNT", Value = 100m, CurrencyCode = "USD",
+            UnitCode = "SHIPMENT", EquipmentCodes = ["40HC", "20DC"],
+            PolCodes = ["POL-2026-001"], PoeCodes = ["POE-2026-002"],
+            PodCodes = ["POD-2026-003"]
+        };
+        Assert.IsTrue(CommercialBenefitRules.ValidRate(rule));
+        rule.PodCodes = ["", "POD-2026-003"];
+        Assert.IsFalse(CommercialBenefitRules.ValidRate(rule));
+        rule.PodCodes = ["POD-2026-003"];
+        rule.EquipmentCodes = ["20DC", "20DC"];
+        Assert.IsFalse(CommercialBenefitRules.ValidRate(rule));
+    }
+
+    [TestMethod]
+    public void Multiselect_overlap_blocks_intersecting_scopes_but_not_unrelated_ports()
+    {
+        var one = new AccountPreferentialRate {
+            Modality = "FCL", ChargeCode = "Freight",
+            EquipmentCodes = ["20DC", "40HC"], PolCodes = ["POL-SHA", "POL-YTN"],
+            PoeCodes = ["POE-BALBOA"], PodCodes = ["POD-SJO"]
+        };
+        var same = new AccountPreferentialRate {
+            Modality = "FCL", ChargeCode = "FREIGHT",
+            EquipmentCodes = ["40HC"], PolCodes = ["POL-YTN"],
+            PoeCodes = ["POE-BALBOA"], PodCodes = ["POD-SJO"]
+        };
+        Assert.IsTrue(CommercialBenefitRules.Overlap(one, same));
+        same.PodCodes = ["POD-SAP"];
+        Assert.IsFalse(CommercialBenefitRules.Overlap(one, same));
+        same.PodCodes = [];
+        Assert.IsTrue(CommercialBenefitRules.Overlap(one, same), "Empty selection means all PODs.");
+    }
+
 }
