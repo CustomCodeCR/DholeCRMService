@@ -11,6 +11,8 @@ public sealed partial class CrmDbContext(DbContextOptions<CrmDbContext> options)
     public DbSet<LeadConversion> LeadConversions => Set<LeadConversion>();
     public DbSet<AccountAssignment> AccountAssignments => Set<AccountAssignment>();
     public DbSet<AccountViewerGrant> AccountViewerGrants => Set<AccountViewerGrant>();
+    public DbSet<AccountBenefitSettings> AccountBenefitSettings => Set<AccountBenefitSettings>();
+    public DbSet<AccountPreferentialRate> AccountPreferentialRates => Set<AccountPreferentialRate>();
     public DbSet<Contact> Contacts => Set<Contact>();
     public DbSet<AccountContact> AccountContacts => Set<AccountContact>();
     public DbSet<Address> Addresses => Set<Address>();
@@ -103,6 +105,34 @@ public sealed partial class CrmDbContext(DbContextOptions<CrmDbContext> options)
             e.HasIndex(x => x.AccountId).IsUnique().HasFilter("effective_to IS NULL");
         });
         ConfigureRecord<AccountViewerGrant>(b, "crm_account_viewer_grants");
+        ConfigureRecord<AccountBenefitSettings>(b, "crm_account_benefit_settings");
+        ConfigureRecord<AccountPreferentialRate>(b, "crm_account_preferential_rates");
+        b.Entity<AccountBenefitSettings>(e =>
+        {
+            e.HasOne<Account>().WithMany().HasForeignKey(x => x.AccountId).OnDelete(DeleteBehavior.Restrict);
+            e.HasIndex(x => x.AccountId).IsUnique();
+            e.Property(x => x.MiamiLclPlanCode).HasMaxLength(16);
+            e.Property(x => x.Notes).HasMaxLength(2000);
+        });
+        b.Entity<AccountPreferentialRate>(e =>
+        {
+            e.HasOne<Account>().WithMany().HasForeignKey(x => x.AccountId).OnDelete(DeleteBehavior.Restrict);
+            e.HasIndex(x => new { x.AccountId, x.Modality, x.IsActive });
+            e.HasIndex(x => new { x.AccountId, x.ValidFrom, x.ValidUntil });
+            e.Property(x => x.Modality).HasMaxLength(12);
+            e.Property(x => x.LaneCode).HasMaxLength(32);
+            e.Property(x => x.ChargeCode).HasMaxLength(32);
+            e.Property(x => x.CustomChargeName).HasMaxLength(120);
+            e.Property(x => x.RateType).HasMaxLength(24);
+            e.Property(x => x.Value).HasPrecision(18, 6);
+            e.Property(x => x.MinimumCharge).HasPrecision(18, 6);
+            e.Property(x => x.CurrencyCode).HasMaxLength(3);
+            e.Property(x => x.UnitCode).HasMaxLength(32);
+            e.Property(x => x.EquipmentCode).HasMaxLength(80);
+            e.Property(x => x.OriginCode).HasMaxLength(80);
+            e.Property(x => x.DestinationCode).HasMaxLength(80);
+            e.Property(x => x.Notes).HasMaxLength(2000);
+        });
         b.Entity<AccountViewerGrant>(e =>
         {
             e.HasOne<Account>().WithMany().HasForeignKey(x => x.AccountId).OnDelete(DeleteBehavior.Restrict);
