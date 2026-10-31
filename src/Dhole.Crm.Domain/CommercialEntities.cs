@@ -76,6 +76,9 @@ public sealed class Activity : CrmRecord
     public string Status { get; set; } = "Scheduled";
     public string? Outcome { get; set; }
     public string? LocationText { get; set; }
+    // Individual reminder settings; the account policy remains the fallback.
+    public int? ReminderLeadMinutes { get; set; }
+    public string? ReminderChannelStrategy { get; set; }
     public DateTime? ArchivedAt { get; set; }
 }
 public sealed class ActivityParticipant : CrmRecord
