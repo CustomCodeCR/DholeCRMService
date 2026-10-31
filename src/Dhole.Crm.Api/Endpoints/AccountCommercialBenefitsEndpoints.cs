@@ -11,7 +11,10 @@ public sealed record AccountPreferentialRateRequest(
     string? CustomChargeName, string RateType, decimal? Value, decimal? MinimumCharge,
     string? CurrencyCode, string? UnitCode, string? EquipmentCode,
     string? OriginCode, string? DestinationCode,
-    DateTime? ValidFrom, DateTime? ValidUntil, string? Notes, bool IsActive);
+    DateTime? ValidFrom, DateTime? ValidUntil, string? Notes, bool IsActive,
+    decimal? InsuranceCostPercent = null, decimal? InsuranceSalePercent = null,
+    string[]? EquipmentCodes = null, string[]? PolCodes = null,
+    string[]? PoeCodes = null, string[]? PodCodes = null);
 
 internal static class AccountCommercialBenefitsEndpoints
 {
@@ -42,9 +45,16 @@ internal static class AccountCommercialBenefitsEndpoints
             .OrderBy(x => x.Modality).ThenBy(x => x.ChargeCode)
             .ThenByDescending(x => x.IsActive).ThenByDescending(x => x.UpdatedAt)
             .ToArrayAsync(ct);
+        var account = await db.Accounts.AsNoTracking()
+            .Where(x => x.Id == accountId)
+            .Select(x => new { x.CategoryType, x.CategoryCode })
+            .SingleAsync(ct);
         return Results.Ok(new
         {
             accountId,
+            account.CategoryType,
+            account.CategoryCode,
+            miamiLclPlanCode = CommercialBenefitRules.MiamiTier(account.CategoryType, account.CategoryCode),
             settings,
             rates,
             pricingIntegrationStatus = "NOT_CONNECTED",
@@ -58,10 +68,11 @@ internal static class AccountCommercialBenefitsEndpoints
     {
         if (!CanManage(http)) return CrmAccess.Denied();
         if (!await Visible(accountId, db, http, ct)) return Results.NotFound();
-        var plan = Clean(request.MiamiLclPlanCode);
+        // The account's category is authoritative, including for LCL Miami.
+        // Legacy requests may still contain MiamiLclPlanCode; never persist a second category.
         var notes = Clean(request.Notes);
-        if (!CommercialBenefitRules.ValidMiamiPlan(plan) || notes?.Length > 2000)
-            return CrmDataEndpoints.Bad("Invalid LCL Miami category or notes");
+        if (notes?.Length > 2000)
+            return CrmDataEndpoints.Bad("Invalid commercial terms notes");
         var settings = await db.AccountBenefitSettings
             .SingleOrDefaultAsync(x => x.AccountId == accountId, ct);
         var actor = CrmAccess.UserId(http);
@@ -80,7 +91,7 @@ internal static class AccountCommercialBenefitsEndpoints
             settings.UpdatedAt = DateTime.UtcNow;
             settings.UpdatedByUserId = actor;
         }
-        settings.MiamiLclPlanCode = plan;
+        settings.MiamiLclPlanCode = null;
         settings.Notes = notes;
         var result = await CrmDataEndpoints.Commit(db, ct);
         return result is Microsoft.AspNetCore.Http.HttpResults.Ok ? Results.Ok(settings) : result;
@@ -97,8 +108,10 @@ internal static class AccountCommercialBenefitsEndpoints
         var actor = CrmAccess.UserId(http);
         var rate = new AccountPreferentialRate { AccountId = accountId, CreatedByUserId = actor };
         Apply(rate, request);
-        if (!CommercialBenefitRules.ValidRate(rate))
-            return CrmDataEndpoints.Bad("Invalid modality, charge, financial value, unit or validity");
+        if (!CommercialBenefitRules.ValidRate(rate) ||
+            (rate.RateType == "INSURANCE_PERCENT" &&
+             (!rate.InsuranceCostPercent.HasValue || !rate.InsuranceSalePercent.HasValue)))
+            return CrmDataEndpoints.Bad("Invalid benefit: insurance requires both cost and sale percentages on merchandise value (0–100 %)");
         if (await Conflicts(db, rate, Guid.Empty, ct))
             return CrmDataEndpoints.Conflict("Another active benefit has the same scope and overlapping dates");
         db.AccountPreferentialRates.Add(rate);
@@ -139,16 +152,32 @@ internal static class AccountCommercialBenefitsEndpoints
     {
         record.Modality = r.Modality?.Trim().ToUpperInvariant() ?? "";
         record.LaneCode = Clean(r.LaneCode)?.ToUpperInvariant();
-        record.ChargeCode = r.ChargeCode?.Trim().ToUpperInvariant() ?? "";
-        record.CustomChargeName = record.ChargeCode == "OTHER" ? Clean(r.CustomChargeName) : null;
+        var incomingCharge = Clean(r.ChargeCode);
+        record.ChargeCode = CommercialBenefitRules.CanonicalCharge(incomingCharge);
+        record.CustomChargeName = Clean(r.CustomChargeName) ??
+            (record.ChargeCode == "Other" && incomingCharge != "Other" &&
+             incomingCharge != "OTHER" ? incomingCharge : null);
         record.RateType = r.RateType?.Trim().ToUpperInvariant() ?? "";
         record.Value = r.Value;
         record.MinimumCharge = r.MinimumCharge;
+        record.InsuranceCostPercent = r.RateType == "INSURANCE_PERCENT" ? r.InsuranceCostPercent : null;
+        record.InsuranceSalePercent = r.RateType == "INSURANCE_PERCENT" ? r.InsuranceSalePercent : null;
         record.CurrencyCode = Clean(r.CurrencyCode)?.ToUpperInvariant();
         record.UnitCode = Clean(r.UnitCode)?.ToUpperInvariant();
         record.EquipmentCode = Clean(r.EquipmentCode)?.ToUpperInvariant();
         record.OriginCode = Clean(r.OriginCode)?.ToUpperInvariant();
         record.DestinationCode = Clean(r.DestinationCode)?.ToUpperInvariant();
+        record.EquipmentCodes = CommercialBenefitRules.NormalizeSelections(r.EquipmentCodes ??
+            (record.EquipmentCode is null ? [] : [record.EquipmentCode]));
+        record.PolCodes = CommercialBenefitRules.NormalizeSelections(r.PolCodes ??
+            (record.OriginCode is null ? [] : [record.OriginCode]));
+        record.PoeCodes = CommercialBenefitRules.NormalizeSelections(r.PoeCodes ??
+            (record.DestinationCode is null ? [] : [record.DestinationCode]));
+        record.PodCodes = CommercialBenefitRules.NormalizeSelections(r.PodCodes);
+        // New multi-select data is canonical; no stale single port/equipment shadows.
+        record.EquipmentCode = null;
+        record.OriginCode = null;
+        record.DestinationCode = null;
         record.ValidFrom = r.ValidFrom;
         record.ValidUntil = r.ValidUntil;
         record.Notes = Clean(r.Notes);
@@ -161,8 +190,7 @@ internal static class AccountCommercialBenefitsEndpoints
         if (!candidate.IsActive) return false;
         var existing = await db.AccountPreferentialRates.AsNoTracking()
             .Where(x => x.AccountId == candidate.AccountId && x.IsActive &&
-                x.Id != excludedId && x.Modality == candidate.Modality &&
-                x.ChargeCode == candidate.ChargeCode)
+                x.Id != excludedId && x.Modality == candidate.Modality)
             .ToListAsync(ct);
         return existing.Any(x => CommercialBenefitRules.Overlap(x, candidate));
     }
