@@ -285,6 +285,17 @@ internal static class CreditEndpoints
         var prior=FinanceAccess.Snapshot(p);
         p.Status="Approved";p.ApprovedByUserId=actor;p.ApprovedAt=now;
         p.UpdatedAt=now;p.UpdatedByUserId=actor;p.RowVersion++;
+        // An approved financing facility must change the account classification
+        // in the SAME database transaction, never before the approval commits.
+        var account = await db.Accounts.FirstOrDefaultAsync(x => x.Id == p.AccountId && x.ArchivedAt == null, ct);
+        if (account is null) return Results.NotFound();
+        if (account.CustomerTypeCode != "credit")
+        {
+            account.CustomerTypeCode = "credit";
+            account.RowVersion++;
+            account.UpdatedAt = now;
+            account.UpdatedByUserId = actor;
+        }
         FinanceAccess.Audit(db,p,actor,prior,req.Coverages is null
             ? req.Reason.Trim()
             : req.Reason.Trim() + $" | Coberturas aprobadas: {coverageSnapshot.Values.Count(x => x.CoverageType == "INCLUDED")} incluidas, {coverageSnapshot.Values.Count(x => x.CoverageType == "EXCLUDED")} excluidas");
