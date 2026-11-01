@@ -51,7 +51,7 @@ internal static class ContactEndpoints
         group.MapGet("/contacts/{id:guid}/accounts", ListLinkedAccounts);
         group.MapPatch("/contacts/{id:guid}", Patch);
         group.MapPost("/contacts/{id:guid}/archive", Archive);
-        group.MapPost("/contacts/{id:guid}/delete", DeletePermanently);
+
         group.MapGet("/contacts/{id:guid}/preferences", GetPreferences);
         group.MapPut("/contacts/{id:guid}/preferences", PutPreferences);
         group.MapGet("/contacts/{id:guid}/consents", ListConsents);
@@ -231,39 +231,6 @@ internal static class ContactEndpoints
         var ok = await CrmDataEndpoints.Commit(db, ct);
         return ok is Microsoft.AspNetCore.Http.HttpResults.Ok ? Results.Ok(item) : ok;
     }
-    private static async Task<IResult> DeletePermanently(Guid id,ArchiveAccountRequest r,
-        CrmDbContext db,HttpContext h,CancellationToken ct)
-    {
-        if(!CrmAccess.Scope(h,"crm.contact.archive"))return CrmAccess.Denied();
-        if(!await CanSeeContact(id,db,h,ct))return CrmAccess.Denied();
-        var contact=await db.Contacts.FindAsync([id],ct);
-        if(contact is null || contact.ArchivedAt!=null)return Results.NotFound();
-        if(contact.RowVersion!=r.ExpectedVersion)return CrmDataEndpoints.Conflict("Stale row version");
-        if(string.IsNullOrWhiteSpace(r.Reason)||r.Reason.Length>1000)
-            return CrmDataEndpoints.Bad("Delete reason required");
-        // Never sever historic commercial interactions while removing a contact.
-        if(await db.Activities.AnyAsync(x=>x.ContactId==id,ct) ||
-           await db.ActivityParticipants.AnyAsync(x=>x.ContactId==id,ct) ||
-           await db.Addresses.AnyAsync(x=>x.ContactId==id,ct) ||
-           await db.OpportunityContacts.AnyAsync(x=>x.ContactId==id,ct))
-            return CrmDataEndpoints.Conflict("Este contacto tiene actividades, direcciones u oportunidades vinculadas. No se puede eliminar permanentemente.");
-        await using var tx=await db.Database.BeginTransactionAsync(ct);
-        db.AccountContacts.RemoveRange(await db.AccountContacts.Where(x=>x.ContactId==id).ToListAsync(ct));
-        db.ContactPreferences.RemoveRange(await db.ContactPreferences.Where(x=>x.ContactId==id).ToListAsync(ct));
-        db.MarketingConsents.RemoveRange(await db.MarketingConsents.Where(x=>x.ContactId==id).ToListAsync(ct));
-        db.Contacts.Remove(contact);
-        try
-        {
-            await db.SaveChangesAsync(ct);
-            await tx.CommitAsync(ct);
-            return Results.NoContent();
-        }
-        catch(DbUpdateException)
-        {
-            return CrmDataEndpoints.Conflict("El contacto tiene referencias adicionales; no se pudo eliminar permanentemente.");
-        }
-    }
-
     private static async Task<IResult> GetPreferences(Guid id, CrmDbContext db, HttpContext h, CancellationToken ct)
     {
         if (!CrmAccess.Scope(h, "crm.contact.read")) return CrmAccess.Denied();
