@@ -25,7 +25,7 @@ internal static class LeadEndpoints
         group.MapPost("/leads/{id:guid}/convert", Convert);
         group.MapPost("/leads/{id:guid}/assign", Assign);
         group.MapPost("/leads/{id:guid}/archive", Archive);
-        group.MapPost("/leads/{id:guid}/delete", DeletePermanently);
+
         return group;
     }
     private static async Task<IResult> List(CrmDbContext db, HttpContext http,
@@ -137,34 +137,6 @@ internal static class LeadEndpoints
         var committed = await CrmDataEndpoints.Commit(db, ct);
         return committed is Microsoft.AspNetCore.Http.HttpResults.Ok ? Results.Ok(lead) : committed;
     }
-    private static async Task<IResult> DeletePermanently(Guid id,ArchiveAccountRequest r,
-        CrmDbContext db,HttpContext http,CancellationToken ct)
-    {
-        if(!CrmAccess.Scope(http,"crm.lead.archive"))return CrmAccess.Denied();
-        var lead=await db.Leads.FindAsync([id],ct);
-        if(lead is null || lead.ArchivedAt!=null)return Results.NotFound();
-        if(lead.ExecutiveUserId!=CrmAccess.UserId(http) && !CrmAccess.Scope(http,"crm.lead.read-all"))
-            return CrmAccess.Denied();
-        if(lead.RowVersion!=r.ExpectedVersion)return CrmDataEndpoints.Conflict("Stale row version");
-        if(string.IsNullOrWhiteSpace(r.Reason)||r.Reason.Length>1000)
-            return CrmDataEndpoints.Bad("Delete reason required");
-        if(lead.ConvertedAt!=null ||
-           await db.LeadConversions.AnyAsync(x=>x.LeadId==id,ct) ||
-           await db.Activities.AnyAsync(x=>x.LeadId==id,ct) ||
-           await db.Followups.AnyAsync(x=>x.LeadId==id,ct))
-            return CrmDataEndpoints.Conflict("El prospecto tiene conversión o gestiones vinculadas y no puede eliminarse permanentemente.");
-        db.Leads.Remove(lead);
-        try
-        {
-            await db.SaveChangesAsync(ct);
-            return Results.NoContent();
-        }
-        catch(DbUpdateException)
-        {
-            return CrmDataEndpoints.Conflict("El prospecto tiene historial comercial vinculado; no puede eliminarse permanentemente.");
-        }
-    }
-
     private static async Task<IResult> Convert(Guid id, ConvertLeadRequest request, CrmDbContext db,
         HttpContext http, IConfigReferenceService config, CancellationToken ct)
     {
