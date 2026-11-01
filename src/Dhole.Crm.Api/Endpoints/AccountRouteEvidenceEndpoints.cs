@@ -22,6 +22,7 @@ internal static class AccountRouteEvidenceEndpoints
         g.MapGet("/accounts/{id:guid}/route-history", List);
         g.MapPost("/accounts/{id:guid}/route-history", Add);
         g.MapGet("/accounts/{id:guid}/quote-route-snapshots", QuoteRoutes);
+        g.MapGet("/accounts/{id:guid}/pricing-quotations", AccountQuotes);
         return g;
     }
 
@@ -82,6 +83,33 @@ internal static class AccountRouteEvidenceEndpoints
                 x.PodCode, x.ServiceCode, x.Notes, x.ObservedAt, x.CreatedAt
             }).ToListAsync(ct);
         return Results.Ok(new { items = records, total, page = number, pageSize = size, popularRoutes });
+    }
+
+    // Only account-scoped quotes verified by Pricing using the caller's JWT.
+    // The association is persisted by account ID; never infer from client name.
+    private static async Task<IResult> AccountQuotes(Guid id, CrmDbContext db,
+        HttpContext h, IPricingCommercialClient pricing, int? page, int? pageSize,
+        CancellationToken ct)
+    {
+        if (!CrmDataEndpoints.HasRead(h, "account") ||
+            !CrmAccess.Scope(h, "crm.quote.read")) return CrmAccess.Denied();
+        if (!await CanSeeAccount(db, h, id, ct)) return Results.NotFound();
+
+        var authorization = h.Request.Headers.Authorization.ToString();
+        if (!authorization.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+            return Results.Unauthorized();
+        var bearer = authorization["Bearer ".Length..].Trim();
+        var result = await pricing.GetAccountQuotes(id, bearer,
+            Math.Max(1, page ?? 1), Math.Clamp(pageSize ?? 100, 1, 100), ct);
+        if (result.Success) return Results.Ok(result.Value);
+        return result.Status switch
+        {
+            HttpStatusCode.Unauthorized => Results.Unauthorized(),
+            HttpStatusCode.Forbidden => CrmAccess.Denied(),
+            HttpStatusCode.NotFound => Results.NotFound(),
+            _ => Results.Problem(statusCode: 503,
+                title: "No se pudo consultar el historial de Pricing")
+        };
     }
 
     private static async Task<IResult> QuoteRoutes(Guid id, CrmDbContext db,

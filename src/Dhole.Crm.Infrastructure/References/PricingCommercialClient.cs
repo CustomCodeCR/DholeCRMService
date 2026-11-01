@@ -14,6 +14,12 @@ public sealed record PricingQuoteRouteSnapshot(
     Guid Id, string? QuoNumber, string? PolName, string? PoeName,
     string? PodName, string? ShipmentMode, string? Status, int? RevisionNumber,
     bool RevisionPending);
+public sealed record PricingAccountQuote(
+    Guid PricingQuoteId, string? QuoteNumberSnapshot, string? ShipmentModeSnapshot,
+    string? CommercialStatusSnapshot, DateTime LinkedAt,
+    string? PolName, string? PoeName, string? PodName, int RevisionNumber, bool Available);
+public sealed record PricingAccountQuotePage(
+    IReadOnlyList<PricingAccountQuote> Items, int Total, int Page, int PageSize);
 public sealed record PricingCreateRequest(
     string Priority, string? ClientName, string? ExecutiveName,
     string? ShipmentMode, string? OriginName, string? DestinationName,
@@ -28,6 +34,8 @@ public interface IPricingCommercialClient
     Task<PricingResult<PricingRequestSnapshot>> GetRequest(Guid id,string bearer,CancellationToken ct);
     Task<PricingResult<PricingQuoteSnapshot>> GetQuote(Guid id,string bearer,CancellationToken ct);
     Task<PricingResult<PricingQuoteRouteSnapshot>> GetVisibleQuoteRoute(Guid id,string bearer,CancellationToken ct);
+    Task<PricingResult<PricingAccountQuotePage>> GetAccountQuotes(
+        Guid accountId, string bearer, int page, int pageSize, CancellationToken ct);
     Task<PricingResult<Guid>> CreateRequest(PricingCreateRequest body,
         string bearer,string idempotencyKey,string correlationId,CancellationToken ct);
 }
@@ -77,6 +85,14 @@ public sealed class PricingCommercialClient(HttpClient client,IConfiguration cfg
                 return new PricingResult<T>(HttpStatusCode.BadGateway,default);
             }
         }
+    }
+    public Task<PricingResult<PricingAccountQuotePage>> GetAccountQuotes(
+        Guid accountId, string bearer, int page, int pageSize, CancellationToken ct)
+    {
+        var req = new HttpRequestMessage(HttpMethod.Get,
+            GetUrl($"api/pricing/rates/crm-account/{accountId:D}?page={page}&pageSize={pageSize}"));
+        SetBearer(req, bearer);
+        return Send<PricingAccountQuotePage>(req, ct);
     }
     public Task<PricingResult<PricingRequestSnapshot>> GetRequest(Guid id,string bearer,CancellationToken ct)
     {
