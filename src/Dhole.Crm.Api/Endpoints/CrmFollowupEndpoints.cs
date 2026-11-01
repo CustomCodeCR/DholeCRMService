@@ -26,6 +26,7 @@ internal static class CrmFollowupEndpoints
         group.MapPost("/followups/{id:guid}/complete",Complete);
         group.MapPost("/followups/{id:guid}/cancel",Cancel);
         group.MapPost("/followups/{id:guid}/archive",Archive);
+        group.MapPost("/followups/{id:guid}/delete",DeletePermanently);
         group.MapGet("/followups/{id:guid}/history",History);
         group.MapGet("/reminders",ListReminders);
         group.MapGet("/messaging/outbox",ListOutbox);
@@ -231,6 +232,35 @@ internal static class CrmFollowupEndpoints
         });
         var ok=await CrmDataEndpoints.Commit(db,ct);
         return ok is Microsoft.AspNetCore.Http.HttpResults.Ok?Results.Ok(x):ok;
+    }
+
+    private static async Task<IResult> DeletePermanently(Guid id,FollowupCancelRequest r,
+        CrmDbContext db,HttpContext h,CancellationToken ct)
+    {
+        if(!Manage(h)&&!Tasks(h))return CrmAccess.Denied();
+        var f=await db.Followups.FindAsync([id],ct);
+        if(f is null || f.ArchivedAt!=null)return Results.NotFound();
+        if(!await HasAccess(f,db,h,ct))return CrmAccess.Denied();
+        if(f.RowVersion!=r.ExpectedVersion)return CrmDataEndpoints.Conflict("Concurrent followup update");
+        if(string.IsNullOrWhiteSpace(r.Reason)||r.Reason.Length>1000)
+            return CrmDataEndpoints.Bad("Delete reason required");
+        await using var tx=await db.Database.BeginTransactionAsync(ct);
+        var reminders=await db.Reminders.Where(x=>x.EntityType=="Followup"&&x.EntityId==id).ToListAsync(ct);
+        var keys=reminders.Select(x=>x.Id).ToList();
+        db.OutboxMessages.RemoveRange(await db.OutboxMessages.Where(x=>keys.Contains(x.ReminderId)).ToListAsync(ct));
+        db.Reminders.RemoveRange(reminders);
+        db.FollowupHistories.RemoveRange(await db.FollowupHistories.Where(x=>x.FollowupId==id).ToListAsync(ct));
+        db.Followups.Remove(f);
+        try
+        {
+            await db.SaveChangesAsync(ct);
+            await tx.CommitAsync(ct);
+            return Results.NoContent();
+        }
+        catch(DbUpdateException)
+        {
+            return CrmDataEndpoints.Conflict("El seguimiento tiene referencias adicionales y no puede eliminarse permanentemente.");
+        }
     }
 
     private static async Task<IResult> History(Guid id,CrmDbContext db,HttpContext h,CancellationToken ct)
