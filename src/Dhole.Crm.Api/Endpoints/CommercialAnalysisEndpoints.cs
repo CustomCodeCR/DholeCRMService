@@ -25,6 +25,7 @@ public sealed record AnalysisServicePatchRequest(long ExpectedVersion,string Ser
 public sealed record TradeProfileRequest(string ServiceCode,string? PreferredOriginCode,string? PreferredDestinationCode,
     string Frequency,decimal ExpectedVolume,string VolumeUnit,string? ModalityCode = null,
     string? PolCode = null,string? PoeCode = null,string? PodCode = null);
+public sealed record TradeProfileBulkRequest(IReadOnlyList<TradeProfileRequest> Routes);
 public sealed record TradeProfilePatchRequest(long ExpectedVersion,string ServiceCode,string? PreferredOriginCode,
     string? PreferredDestinationCode,string Frequency,decimal ExpectedVolume,string VolumeUnit,bool IsActive,
     string? ModalityCode = null,string? PolCode = null,string? PoeCode = null,string? PodCode = null);
@@ -45,6 +46,7 @@ internal static class CommercialAnalysisEndpoints
         g.MapPatch("/analyses/{id:guid}/services/{serviceId:guid}",PatchService);
         g.MapGet("/accounts/{id:guid}/trade-profiles",TradeProfiles);
         g.MapPost("/accounts/{id:guid}/trade-profiles",AddTradeProfile);
+        g.MapPost("/accounts/{id:guid}/trade-profiles/bulk",AddTradeProfilesBulk);
         g.MapPatch("/trade-profiles/{id:guid}",PatchTradeProfile);
         return g;
     }
@@ -275,6 +277,63 @@ internal static class CommercialAnalysisEndpoints
         db.CustomerTradeProfiles.Add(p);await db.SaveChangesAsync(ct);
         return Results.Created("/api/crm/trade-profiles/"+p.Id,p);
     }
+    // A multi-port selection expands into individual approved routes, without
+    // changing the existing single-route schema consumed by Pricing and reports.
+    // The entire batch is validated before any insert and committed atomically.
+    private static async Task<IResult> AddTradeProfilesBulk(Guid id,TradeProfileBulkRequest request,
+        CrmDbContext db,HttpContext h,IConfigReferenceService config,CancellationToken ct)
+    {
+        if(!CrmAccess.Scope(h,"crm.analysis.manage")||!await AllowedAccount(id,db,h,ct))
+            return CrmAccess.Denied();
+        if(request.Routes is null || request.Routes.Count is <1 or >24)
+            return CommercialAccess.Invalid("Select between 1 and 24 route combinations");
+        var keys=new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach(var route in request.Routes)
+        {
+            if(route is null || !ValidTrade(route) ||
+               !await config.IsActiveCodeAsync("pricing-services",route.ServiceCode,ct) ||
+               !await ValidTradeRoute(route,config,ct))
+                return CommercialAccess.Invalid("Invalid or inactive route combination in Config");
+            var key=string.Join("|",route.ServiceCode,route.ModalityCode,route.PolCode,
+                route.PoeCode,route.PodCode,route.Frequency);
+            if(!keys.Add(key))return CommercialAccess.Invalid("Duplicate route combination");
+        }
+
+        await using var tx=await db.Database.BeginTransactionAsync(
+            System.Data.IsolationLevel.Serializable,ct);
+        var existing=await db.CustomerTradeProfiles.AsNoTracking()
+            .Where(x=>x.AccountId==id && x.IsActive)
+            .Select(x=>new {x.ServiceCode,x.ModalityCode,x.PolCode,x.PoeCode,x.PodCode,x.Frequency})
+            .ToListAsync(ct);
+        var newRows=new List<CustomerTradeProfile>();
+        var actor=CrmAccess.UserId(h);
+        foreach(var route in request.Routes)
+        {
+            if(existing.Any(x=>x.ServiceCode==route.ServiceCode &&
+                x.ModalityCode==route.ModalityCode && x.PolCode==route.PolCode &&
+                x.PoeCode==route.PoeCode && x.PodCode==route.PodCode &&
+                x.Frequency==route.Frequency))continue;
+            newRows.Add(new CustomerTradeProfile
+            {
+                AccountId=id,ServiceCode=route.ServiceCode,
+                PreferredOriginCode=route.PreferredOriginCode,
+                PreferredDestinationCode=route.PreferredDestinationCode,
+                ModalityCode=route.ModalityCode,
+                PolCode=route.PolCode,PoeCode=route.PoeCode,PodCode=route.PodCode,
+                Frequency=route.Frequency,ExpectedVolume=route.ExpectedVolume,
+                VolumeUnit=route.VolumeUnit,CreatedByUserId=actor
+            });
+        }
+        if(newRows.Count>0)
+        {
+            db.CustomerTradeProfiles.AddRange(newRows);
+            var result=await CommercialAccess.Save(db,ct);
+            if(result is not Microsoft.AspNetCore.Http.HttpResults.Ok)return result;
+        }
+        await tx.CommitAsync(ct);
+        return Results.Ok(new {created=newRows.Count,alreadyExisting=request.Routes.Count-newRows.Count});
+    }
+
     private static async Task<IResult> PatchTradeProfile(Guid id,TradeProfilePatchRequest r,
         CrmDbContext db,HttpContext h,IConfigReferenceService config,CancellationToken ct)
     {
