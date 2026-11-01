@@ -9,7 +9,9 @@ namespace Dhole.Crm.Api.Endpoints;
 public sealed record CreditTermsRequest(bool CreditEnabled,int CreditDays,decimal CreditLimit,
     string CurrencyCode,decimal MonthlyFinancingPct,string PaymentConditions,
     DateTime EffectiveFrom,DateTime? ReviewAt,decimal LateInterestMonthlyPct = 0m);
-public sealed record CreditApprovalRequest(long ExpectedVersion,string Reason);
+public sealed record CreditApprovalCoverage(string ServiceCode,string CoverageType,string Description);
+public sealed record CreditApprovalRequest(long ExpectedVersion,string Reason,
+    IReadOnlyList<CreditApprovalCoverage>? Coverages = null);
 public sealed record CreditCoverageRequest(long ExpectedVersion,string ServiceCode,string CoverageType,string Description);
 public sealed record CreditChangeRequest(long ExpectedVersion,CreditTermsRequest Terms,string Reason);
 internal static class CreditEndpoints
@@ -184,12 +186,71 @@ internal static class CreditEndpoints
         return result is Microsoft.AspNetCore.Http.HttpResults.Ok?
             Results.Created("/api/crm/credit-profiles/"+p.Id,p):result;
     }
+    // Coverage is part of the approved financial terms. Reconcile the whole
+    // snapshot in the same transaction as approval; never approve unsaved UI selections.
+    private static bool TryNormalizeCoverages(IReadOnlyList<CreditApprovalCoverage>? requested,
+        out Dictionary<string, CreditApprovalCoverage> desired)
+    {
+        desired = new Dictionary<string, CreditApprovalCoverage>(StringComparer.OrdinalIgnoreCase);
+        if (requested is null) return true; // Backward-compatible approval without a new snapshot.
+        if (requested.Count > 100) return false;
+        foreach (var item in requested)
+        {
+            if (item is null || item.CoverageType is not ("INCLUDED" or "EXCLUDED") ||
+                !Regex.IsMatch(item.ServiceCode ?? "", @"^[A-Za-z0-9_-]{1,80}$") ||
+                item.Description is null || item.Description.Length > 2000)
+                return false;
+            var code = item.ServiceCode.Trim().ToUpperInvariant();
+            if (!desired.TryAdd(code, new CreditApprovalCoverage(
+                code, item.CoverageType, item.Description.Trim()))) return false;
+        }
+        return true;
+    }
+
+    private static async Task ApplyCoverageSnapshot(CrmDbContext db, Guid profileId, Guid actor,
+        Dictionary<string, CreditApprovalCoverage> desired, CancellationToken ct)
+    {
+        var existing = await db.CreditCoverages
+            .Where(x => x.CreditProfileId == profileId && x.IsActive).ToListAsync(ct);
+        var now = DateTime.UtcNow;
+        var retired = false;
+        foreach (var item in existing)
+        {
+            if (desired.TryGetValue(item.ServiceCode, out var requested) &&
+                item.CoverageType == requested.CoverageType) continue;
+            item.IsActive = false;
+            item.UpdatedAt = now;
+            item.UpdatedByUserId = actor;
+            item.RowVersion++;
+            retired = true;
+        }
+        // Partial unique index on active (profile, service) is enforced immediately:
+        // retire changed rows before adding replacement rows, inside the transaction.
+        if (retired) await db.SaveChangesAsync(ct);
+        foreach (var item in desired.Values)
+        {
+            if (existing.Any(x => x.IsActive &&
+                string.Equals(x.ServiceCode, item.ServiceCode, StringComparison.OrdinalIgnoreCase) &&
+                x.CoverageType == item.CoverageType)) continue;
+            db.CreditCoverages.Add(new CreditCoverage
+            {
+                CreditProfileId = profileId,
+                ServiceCode = item.ServiceCode,
+                CoverageType = item.CoverageType,
+                Description = item.Description,
+                CreatedByUserId = actor
+            });
+        }
+    }
+
     private static async Task<IResult> Approve(Guid id,CreditApprovalRequest req,CrmDbContext db,
         HttpContext h,CancellationToken ct)
     {
         if(!Approver(h))return CrmAccess.Denied();
         if(string.IsNullOrWhiteSpace(req.Reason)||req.Reason.Length>1000)
             return FinanceAccess.Bad("Approval reason required");
+        if (!TryNormalizeCoverages(req.Coverages, out var coverageSnapshot))
+            return FinanceAccess.Bad("Invalid or duplicate credit coverages");
         await using var tx=await db.Database.BeginTransactionAsync(IsolationLevel.Serializable,ct);
         var p=await db.CreditProfiles.FirstOrDefaultAsync(x=>x.Id==id,ct);
         if(p==null)return Results.NotFound();
@@ -208,10 +269,14 @@ internal static class CreditEndpoints
         if(db.ChangeTracker.Entries<CreditProfile>().Any(x=>x.Entity!=p &&
             x.State==EntityState.Modified))
             await db.SaveChangesAsync(ct);
+        if (req.Coverages is not null)
+            await ApplyCoverageSnapshot(db, p.Id, actor, coverageSnapshot, ct);
         var prior=FinanceAccess.Snapshot(p);
         p.Status="Approved";p.ApprovedByUserId=actor;p.ApprovedAt=now;
         p.UpdatedAt=now;p.UpdatedByUserId=actor;p.RowVersion++;
-        FinanceAccess.Audit(db,p,actor,prior,req.Reason.Trim());
+        FinanceAccess.Audit(db,p,actor,prior,req.Coverages is null
+            ? req.Reason.Trim()
+            : req.Reason.Trim() + $" | Coberturas aprobadas: {coverageSnapshot.Values.Count(x => x.CoverageType == "INCLUDED")} incluidas, {coverageSnapshot.Values.Count(x => x.CoverageType == "EXCLUDED")} excluidas");
         var result=await FinanceAccess.Save(db,ct);
         if(result is not Microsoft.AspNetCore.Http.HttpResults.Ok)return result;
         await tx.CommitAsync(ct);return Results.Ok(p);
