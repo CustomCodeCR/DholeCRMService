@@ -17,7 +17,8 @@ public sealed record PricingQuoteRouteSnapshot(
 public sealed record PricingAccountQuote(
     Guid PricingQuoteId, string? QuoteNumberSnapshot, string? ShipmentModeSnapshot,
     string? CommercialStatusSnapshot, DateTime LinkedAt,
-    string? PolName, string? PoeName, string? PodName, int RevisionNumber, bool Available);
+    string? PolName, string? PoeName, string? PodName, int RevisionNumber, bool Available,
+    Guid? ClientLeadId);
 public sealed record PricingAccountQuotePage(
     IReadOnlyList<PricingAccountQuote> Items, int Total, int Page, int PageSize);
 public sealed record PricingCreateRequest(
@@ -35,7 +36,10 @@ public interface IPricingCommercialClient
     Task<PricingResult<PricingQuoteSnapshot>> GetQuote(Guid id,string bearer,CancellationToken ct);
     Task<PricingResult<PricingQuoteRouteSnapshot>> GetVisibleQuoteRoute(Guid id,string bearer,CancellationToken ct);
     Task<PricingResult<PricingAccountQuotePage>> GetAccountQuotes(
-        Guid accountId, string bearer, int page, int pageSize, CancellationToken ct);
+        Guid accountId, IReadOnlyCollection<Guid> convertedLeadIds,
+        string bearer, int page, int pageSize, CancellationToken ct);
+    Task<PricingResult<PricingAccountQuotePage>> GetLeadQuotes(
+        Guid leadId, string bearer, int page, int pageSize, CancellationToken ct);
     Task<PricingResult<Guid>> CreateRequest(PricingCreateRequest body,
         string bearer,string idempotencyKey,string correlationId,CancellationToken ct);
 }
@@ -87,10 +91,21 @@ public sealed class PricingCommercialClient(HttpClient client,IConfiguration cfg
         }
     }
     public Task<PricingResult<PricingAccountQuotePage>> GetAccountQuotes(
-        Guid accountId, string bearer, int page, int pageSize, CancellationToken ct)
+        Guid accountId, IReadOnlyCollection<Guid> convertedLeadIds,
+        string bearer, int page, int pageSize, CancellationToken ct)
+    {
+        var leads = string.Join(",", convertedLeadIds.Select(x => x.ToString("D")));
+        var req = new HttpRequestMessage(HttpMethod.Get,
+            GetUrl($"api/pricing/rates/crm-account/{accountId:D}?page={page}&pageSize={pageSize}&convertedLeadIds={leads}"));
+        SetBearer(req, bearer);
+        return Send<PricingAccountQuotePage>(req, ct);
+    }
+
+    public Task<PricingResult<PricingAccountQuotePage>> GetLeadQuotes(
+        Guid leadId, string bearer, int page, int pageSize, CancellationToken ct)
     {
         var req = new HttpRequestMessage(HttpMethod.Get,
-            GetUrl($"api/pricing/rates/crm-account/{accountId:D}?page={page}&pageSize={pageSize}"));
+            GetUrl($"api/pricing/rates/crm-lead/{leadId:D}?page={page}&pageSize={pageSize}"));
         SetBearer(req, bearer);
         return Send<PricingAccountQuotePage>(req, ct);
     }

@@ -23,6 +23,7 @@ internal static class AccountRouteEvidenceEndpoints
         g.MapPost("/accounts/{id:guid}/route-history", Add);
         g.MapGet("/accounts/{id:guid}/quote-route-snapshots", QuoteRoutes);
         g.MapGet("/accounts/{id:guid}/pricing-quotations", AccountQuotes);
+        g.MapGet("/leads/{id:guid}/pricing-quotations", LeadQuotes);
         return g;
     }
 
@@ -99,7 +100,10 @@ internal static class AccountRouteEvidenceEndpoints
         if (!authorization.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
             return Results.Unauthorized();
         var bearer = authorization["Bearer ".Length..].Trim();
-        var result = await pricing.GetAccountQuotes(id, bearer,
+        var linkedLeadIds = await db.Leads.AsNoTracking()
+            .Where(x => x.ConvertedAccountId == id && x.ConvertedAt != null)
+            .Select(x => x.Id).Distinct().Take(100).ToArrayAsync(ct);
+        var result = await pricing.GetAccountQuotes(id, linkedLeadIds, bearer,
             Math.Max(1, page ?? 1), Math.Clamp(pageSize ?? 100, 1, 100), ct);
         if (result.Success) return Results.Ok(result.Value);
         return result.Status switch
@@ -109,6 +113,34 @@ internal static class AccountRouteEvidenceEndpoints
             HttpStatusCode.NotFound => Results.NotFound(),
             _ => Results.Problem(statusCode: 503,
                 title: "No se pudo consultar el historial de Pricing")
+        };
+    }
+
+    private static async Task<IResult> LeadQuotes(Guid id, CrmDbContext db,
+        HttpContext h, IPricingCommercialClient pricing, int? page, int? pageSize,
+        CancellationToken ct)
+    {
+        if (!CrmDataEndpoints.HasRead(h, "lead") ||
+            !CrmAccess.Scope(h, "crm.quote.read")) return CrmAccess.Denied();
+        var lead = await db.Leads.AsNoTracking()
+            .FirstOrDefaultAsync(x => x.Id == id && x.ArchivedAt == null, ct);
+        if (lead is null) return Results.NotFound();
+        if (!CrmAccess.LeadAccess(h, lead.ExecutiveUserId)) return CrmAccess.Denied();
+
+        var authorization = h.Request.Headers.Authorization.ToString();
+        if (!authorization.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+            return Results.Unauthorized();
+        var bearer = authorization["Bearer ".Length..].Trim();
+        var response = await pricing.GetLeadQuotes(id, bearer,
+            Math.Max(1, page ?? 1), Math.Clamp(pageSize ?? 100, 1, 100), ct);
+        if (response.Success) return Results.Ok(response.Value);
+        return response.Status switch
+        {
+            HttpStatusCode.Unauthorized => Results.Unauthorized(),
+            HttpStatusCode.Forbidden => CrmAccess.Denied(),
+            HttpStatusCode.NotFound => Results.NotFound(),
+            _ => Results.Problem(statusCode: 503,
+                title: "No se pudo consultar las cotizaciones del prospecto")
         };
     }
 
