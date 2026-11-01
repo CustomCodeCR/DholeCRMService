@@ -62,6 +62,7 @@ internal static class AccountEndpoints
             return CrmAccess.Denied();
 
         var query = db.Accounts.AsNoTracking().Where(x => x.ArchivedAt == null);
+        Guid[]? allowedSellerIds = null;
         if (isRequest)
         {
             // Pricing is the source of truth for own/delegated seller visibility.
@@ -92,6 +93,7 @@ internal static class AccountEndpoints
                 return CrmAccess.Denied();
             var allowed = (visibility.Sellers ?? Array.Empty<SellerOption>())
                 .Select(x => x.UserId).Where(x => x != Guid.Empty).Distinct().ToArray();
+            allowedSellerIds = allowed;
             if (sellerUserId.HasValue && !allowed.Contains(sellerUserId.Value))
                 return CrmAccess.Denied();
             var actor = CrmAccess.UserId(http);
@@ -114,13 +116,37 @@ internal static class AccountEndpoints
                 x.LegalName.ToLower().Contains(search) ||
                 (x.TaxId != null && x.TaxId.Contains(term)));
         }
-        var total = await query.CountAsync(ct);
+        // Both account and prospect identities come from CRM, with the same
+        // server-validated seller portfolio rules for Pricing requests.
+        var leads = db.Leads.AsNoTracking().Where(x =>
+            x.ArchivedAt == null && x.ConvertedAt == null);
+        if (isRequest)
+        {
+            var allowed = allowedSellerIds ?? Array.Empty<Guid>();
+            leads = leads.Where(x =>
+                (sellerUserId.HasValue ? x.ExecutiveUserId == sellerUserId.Value :
+                    allowed.Contains(x.ExecutiveUserId)));
+        }
+        if (!string.IsNullOrEmpty(term))
+        {
+            var search = term.ToLowerInvariant();
+            leads = leads.Where(x => x.Name.ToLower().Contains(search) ||
+                (x.CompanyName != null && x.CompanyName.ToLower().Contains(search)) ||
+                (x.TaxId != null && x.TaxId.Contains(term)));
+        }
+        var matches = query.Select(x => new {
+            x.Id, x.DisplayName, x.LegalName, x.TaxId,
+            x.ExecutiveUserId, x.IsCastroFallasExecutive, Kind = "account"
+        }).Concat(leads.Select(x => new {
+            x.Id, DisplayName = x.CompanyName ?? x.Name,
+            LegalName = x.CompanyName ?? x.Name,
+            x.TaxId, x.ExecutiveUserId,
+            IsCastroFallasExecutive = false, Kind = "lead"
+        }));
+        var total = await matches.CountAsync(ct);
         var currentPage = Math.Clamp(page ?? 1, 1, 100000);
-        var rows = await query.OrderBy(x => x.DisplayName).ThenBy(x => x.Id)
-            .Skip((currentPage-1)*30).Take(30).Select(x => new {
-                x.Id,x.DisplayName,x.LegalName,x.TaxId,
-                x.ExecutiveUserId,x.IsCastroFallasExecutive
-            }).ToListAsync(ct);
+        var rows = await matches.OrderBy(x => x.DisplayName).ThenBy(x => x.Kind)
+            .ThenBy(x => x.Id).Skip((currentPage-1)*30).Take(30).ToListAsync(ct);
         var sellers = await Task.WhenAll(rows.Where(x=>!x.IsCastroFallasExecutive &&
             x.ExecutiveUserId != Guid.Empty).Select(x=>x.ExecutiveUserId).Distinct()
             .Select(async id => {
@@ -131,7 +157,7 @@ internal static class AccountEndpoints
         var names = sellers.ToDictionary(x=>x.Id,x=>x.Name);
         return Results.Ok(new {
             items = rows.Select(x=>new {
-                id=x.Id, displayName=x.DisplayName, legalName=x.LegalName,
+                id=x.Id, kind=x.Kind, displayName=x.DisplayName, legalName=x.LegalName,
                 taxId=x.TaxId, executiveUserId=x.ExecutiveUserId,
                 isCastroFallasExecutive=x.IsCastroFallasExecutive,
                 executiveName=x.IsCastroFallasExecutive ? "Castro Fallas" :
