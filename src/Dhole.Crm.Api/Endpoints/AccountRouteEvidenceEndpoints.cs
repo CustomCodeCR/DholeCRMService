@@ -10,6 +10,12 @@ public sealed record AddAccountRouteEvidenceRequest(
     string SourceKind, Guid SourceId, string PolCode, string? PoeCode,
     string PodCode, string? ServiceCode, string? Notes);
 
+// One provenance record applies to every selected POL/POE/POD combination.
+public sealed record AccountRouteEvidenceSelection(string PolCode, string? PoeCode, string PodCode);
+public sealed record AddAccountRouteEvidenceBatchRequest(
+    string SourceKind, Guid SourceId, AccountRouteEvidenceSelection[] Routes,
+    string? ServiceCode, string? Notes);
+
 /// <summary>
 /// Historical route observations are tied to a verified CRM meeting or a quote
 /// explicitly linked to the account's opportunity. Quote routes are NOT inferred
@@ -21,6 +27,7 @@ internal static class AccountRouteEvidenceEndpoints
     {
         g.MapGet("/accounts/{id:guid}/route-history", List);
         g.MapPost("/accounts/{id:guid}/route-history", Add);
+        g.MapPost("/accounts/{id:guid}/route-history/bulk", AddBatch);
         g.MapGet("/accounts/{id:guid}/quote-route-snapshots", QuoteRoutes);
         g.MapGet("/accounts/{id:guid}/pricing-quotations", AccountQuotes);
         g.MapGet("/accounts/{id:guid}/pricing-quotation-candidates", LegacyCandidates);
@@ -280,6 +287,53 @@ internal static class AccountRouteEvidenceEndpoints
         var items = await Task.WhenAll(tasks);
         return Results.Ok(new { items, page = pageNumber, pageSize = size, total,
             note = "Current authorized Pricing view; published revision when draft is pending." });
+    }
+
+    private static async Task<IResult> AddBatch(Guid id,
+        AddAccountRouteEvidenceBatchRequest r, CrmDbContext db,
+        HttpContext h, IConfigReferenceService config, CancellationToken ct)
+    {
+        if (r.Routes is not { Length: > 0 and <= 24 } ||
+            r.SourceId == Guid.Empty || r.SourceKind is not ("MEETING" or "QUOTE"))
+            return CrmDataEndpoints.Bad("Select a source and 1 to 24 route combinations");
+
+        // Keep bulk requests strictly unique. A replay of the same batch is
+        // idempotent because Add returns an existing record instead of inserting.
+        var normalized = r.Routes.Select(x => new AccountRouteEvidenceSelection(
+            x.PolCode?.Trim() ?? string.Empty,
+            string.IsNullOrWhiteSpace(x.PoeCode) ? null : x.PoeCode.Trim(),
+            x.PodCode?.Trim() ?? string.Empty)).ToArray();
+        var distinct = normalized.DistinctBy(x =>
+            (x.PolCode.ToUpperInvariant(), x.PoeCode?.ToUpperInvariant(),
+             x.PodCode.ToUpperInvariant())).ToArray();
+        if (distinct.Length != normalized.Length ||
+            normalized.Any(x => string.IsNullOrWhiteSpace(x.PolCode) ||
+                string.IsNullOrWhiteSpace(x.PodCode) ||
+                string.Equals(x.PolCode, x.PoeCode, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(x.PolCode, x.PodCode, StringComparison.OrdinalIgnoreCase) ||
+                (!string.IsNullOrEmpty(x.PoeCode) &&
+                 string.Equals(x.PoeCode, x.PodCode, StringComparison.OrdinalIgnoreCase))))
+            return CrmDataEndpoints.Bad("Routes must have distinct, non-repeated endpoints");
+
+        // All selected routes are saved or none are. Add enforces the existing
+        // account visibility, catalog validity, and provenance authorization on
+        // each route; transaction prevents partially-saved multi-select requests.
+        await using var transaction = await db.Database.BeginTransactionAsync(ct);
+        var created = 0;
+        var alreadyExisting = 0;
+        foreach (var route in distinct)
+        {
+            var result = await Add(id, new AddAccountRouteEvidenceRequest(
+                r.SourceKind, r.SourceId, route.PolCode, route.PoeCode,
+                route.PodCode, r.ServiceCode, r.Notes), db, h, config, ct);
+            if (result is not IStatusCodeHttpResult status ||
+                status.StatusCode is not (>= 200 and < 300))
+                return result; // Roll back the entire batch when disposed.
+            if (status.StatusCode == StatusCodes.Status201Created) created++;
+            else alreadyExisting++;
+        }
+        await transaction.CommitAsync(ct);
+        return Results.Ok(new { created, alreadyExisting, total = distinct.Length });
     }
 
     private static async Task<IResult> Add(Guid id, AddAccountRouteEvidenceRequest r,
