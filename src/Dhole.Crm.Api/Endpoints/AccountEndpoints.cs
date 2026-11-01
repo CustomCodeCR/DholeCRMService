@@ -16,7 +16,7 @@ public sealed record PatchAccountRequest(long ExpectedVersion, string DisplayNam
     Guid? CountryId = null, string? TaxIdTypeCode = null, string? TaxId = null);
 public sealed record AssignAccountRequest(long ExpectedVersion, Guid? ExecutiveUserId, string? Reason,
     bool AssignToCastroFallas = false);
-public sealed record ArchiveAccountRequest(long ExpectedVersion);
+public sealed record ArchiveAccountRequest(long ExpectedVersion, string? Reason = null);
 public sealed record SetAccountLogoRequest(long ExpectedVersion, Guid? LogoFileId);
 public sealed record AddBusinessActivityRequest(string ActivityCode, string? Description, string Source);
 
@@ -321,6 +321,8 @@ internal static class AccountEndpoints
         HttpContext http, CancellationToken ct)
     {
         if (!CrmAccess.Scope(http, "crm.account.archive")) return CrmAccess.Denied();
+        if (string.IsNullOrWhiteSpace(request.Reason) || request.Reason.Length > 1000)
+            return CrmDataEndpoints.Bad("Archive reason required");
         var account = await db.Accounts.FindAsync([id], ct);
         if (account is null) return Results.NotFound();
         if (!await CrmAccess.CanSeeAccount(db, http, account.Id, ct)) return CrmAccess.Denied();
