@@ -25,6 +25,7 @@ internal static class CrmFollowupEndpoints
         group.MapPost("/followups/{id:guid}/reschedule",Reschedule);
         group.MapPost("/followups/{id:guid}/complete",Complete);
         group.MapPost("/followups/{id:guid}/cancel",Cancel);
+        group.MapPost("/followups/{id:guid}/archive",Archive);
         group.MapGet("/followups/{id:guid}/history",History);
         group.MapGet("/reminders",ListReminders);
         group.MapGet("/messaging/outbox",ListOutbox);
@@ -86,8 +87,8 @@ internal static class CrmFollowupEndpoints
     {
         if(!Manage(h)&&!Tasks(h))return CrmAccess.Denied();
         var visibleAccountIds = CrmAccess.VisibleAccounts(db,h).Select(a=>a.Id);
-        var query=db.Followups.AsNoTracking().Where(x => !x.AccountId.HasValue ||
-            visibleAccountIds.Contains(x.AccountId.Value));
+        var query=db.Followups.AsNoTracking().Where(x => x.ArchivedAt == null &&
+            (!x.AccountId.HasValue || visibleAccountIds.Contains(x.AccountId.Value)));
         var actor=CrmAccess.UserId(h);
         var accounts=CrmAccess.Scope(h,"crm.account.read-all");
         var leads=CrmAccess.Scope(h,"crm.lead.read-all");
@@ -109,7 +110,7 @@ internal static class CrmFollowupEndpoints
     private static async Task<IResult> Get(Guid id,CrmDbContext db,HttpContext h,CancellationToken ct)
     {
         if(!Manage(h)&&!Tasks(h))return CrmAccess.Denied();
-        var x=await db.Followups.AsNoTracking().FirstOrDefaultAsync(x=>x.Id==id,ct);
+        var x=await db.Followups.AsNoTracking().FirstOrDefaultAsync(x=>x.Id==id && x.ArchivedAt==null,ct);
         return x is null?Results.NotFound():await HasAccess(x,db,h,ct)?Results.Ok(x):CrmAccess.Denied();
     }
     private static async Task<IResult> Create(FollowupCreateRequest r,CrmDbContext db,HttpContext h,
@@ -209,6 +210,29 @@ internal static class CrmFollowupEndpoints
         var ok=await CrmDataEndpoints.Commit(db,ct);
         return ok is Microsoft.AspNetCore.Http.HttpResults.Ok?Results.Ok(x):ok;
     }
+    private static async Task<IResult> Archive(Guid id,FollowupCancelRequest r,CrmDbContext db,
+        HttpContext h,CancellationToken ct)
+    {
+        if(!Manage(h) && !Tasks(h))return CrmAccess.Denied();
+        var x=await db.Followups.FindAsync([id],ct);
+        if(x is null || x.ArchivedAt is not null)return Results.NotFound();
+        if(!await HasAccess(x,db,h,ct))return CrmAccess.Denied();
+        if(x.RowVersion!=r.ExpectedVersion)return CrmDataEndpoints.Conflict("Concurrent followup update");
+        if(string.IsNullOrWhiteSpace(r.Reason)||r.Reason.Length>2000)
+            return CrmDataEndpoints.Bad("Archive reason required");
+        var actor=CrmAccess.UserId(h);
+        if(x.Status is "Pending" or "Overdue")x.Status="Cancelled";
+        x.ArchivedAt=DateTime.UtcNow;
+        x.UpdatedAt=DateTime.UtcNow;x.UpdatedByUserId=actor;x.RowVersion++;
+        db.FollowupHistories.Add(new FollowupHistory
+        {
+            FollowupId=id,ActorUserId=actor,Action="Archived",
+            Reason=r.Reason.Trim(),CreatedByUserId=actor
+        });
+        var ok=await CrmDataEndpoints.Commit(db,ct);
+        return ok is Microsoft.AspNetCore.Http.HttpResults.Ok?Results.Ok(x):ok;
+    }
+
     private static async Task<IResult> History(Guid id,CrmDbContext db,HttpContext h,CancellationToken ct)
     {
         if(!Manage(h)&&!Tasks(h))return CrmAccess.Denied();
