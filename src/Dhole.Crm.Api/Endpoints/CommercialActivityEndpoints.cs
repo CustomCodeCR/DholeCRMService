@@ -29,7 +29,7 @@ internal static class CommercialActivityEndpoints
         g.MapPost("/activities/{id:guid}/reschedule",Reschedule);
         g.MapPost("/activities/{id:guid}/cancel",Cancel);
         g.MapPost("/activities/{id:guid}/archive",Archive);
-        g.MapPost("/activities/{id:guid}/delete",DeletePermanently);
+
         g.MapGet("/activities/{id:guid}/notes",Notes);
         g.MapPost("/activities/{id:guid}/notes",AddNote);
         g.MapGet("/activities/{id:guid}/participants",Participants);
@@ -208,39 +208,6 @@ internal static class CommercialActivityEndpoints
         var result=await CommercialAccess.Save(db,ct);
         return result is Microsoft.AspNetCore.Http.HttpResults.Ok?Results.Ok(a):result;
     }
-    private static async Task<IResult> DeletePermanently(Guid id,ActivityCancelRequest r,
-        CrmDbContext db,HttpContext h,CancellationToken ct)
-    {
-        if(!CrmAccess.Scope(h,"crm.activity.delete"))return CrmAccess.Denied();
-        var activity=await FindAllowed(id,db,h,ct);
-        if(activity is null)return Results.NotFound();
-        if(activity.RowVersion!=r.ExpectedVersion)return CommercialAccess.Conflict("Stale activity version");
-        if(string.IsNullOrWhiteSpace(r.Reason) || r.Reason.Length>1000)
-            return CommercialAccess.Invalid("Delete reason required");
-        // Route evidence is commercial history; do not silently orphan it.
-        if(await db.AccountRouteEvidence.AsNoTracking().AnyAsync(x =>
-            x.SourceKind=="MEETING" && x.SourceId==id,ct))
-            return CommercialAccess.Conflict("La actividad tiene rutas comerciales documentadas. No puede eliminarse permanentemente.");
-        await using var tx=await db.Database.BeginTransactionAsync(ct);
-        var reminders=await db.Reminders.Where(x=>x.EntityType=="Activity"&&x.EntityId==id).ToListAsync(ct);
-        var reminderIds=reminders.Select(x=>x.Id).ToList();
-        db.OutboxMessages.RemoveRange(await db.OutboxMessages.Where(x=>reminderIds.Contains(x.ReminderId)).ToListAsync(ct));
-        db.Reminders.RemoveRange(reminders);
-        db.ActivityParticipants.RemoveRange(await db.ActivityParticipants.Where(x=>x.ActivityId==id).ToListAsync(ct));
-        db.ActivityNotes.RemoveRange(await db.ActivityNotes.Where(x=>x.ActivityId==id).ToListAsync(ct));
-        db.Activities.Remove(activity);
-        try
-        {
-            await db.SaveChangesAsync(ct);
-            await tx.CommitAsync(ct);
-            return Results.NoContent();
-        }
-        catch(DbUpdateException)
-        {
-            return CommercialAccess.Conflict("La actividad tiene referencias adicionales y no puede eliminarse permanentemente.");
-        }
-    }
-
     private static async Task<IResult> Notes(Guid id,CrmDbContext db,HttpContext h,CancellationToken ct)
     {
         if(!CanRead(h)||await FindAllowed(id,db,h,ct) is null)return CrmAccess.Denied();
