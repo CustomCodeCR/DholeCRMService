@@ -92,8 +92,11 @@ internal static class AccountRouteEvidenceEndpoints
         HttpContext h, IPricingCommercialClient pricing, int? page, int? pageSize,
         CancellationToken ct)
     {
-        if (!CrmDataEndpoints.HasRead(h, "account") ||
-            !CrmAccess.Scope(h, "crm.quote.read")) return CrmAccess.Denied();
+        // CRM account visibility authorizes the account-scoped view. The remote
+        // Pricing API independently requires pricing.rate.view on the caller token.
+        // crm.quote.read is specific to commercial opportunities, not mandatory
+        // for viewing an existing customer's own historical rates.
+        if (!CrmDataEndpoints.HasRead(h, "account")) return CrmAccess.Denied();
         if (!await CanSeeAccount(db, h, id, ct)) return Results.NotFound();
 
         var authorization = h.Request.Headers.Authorization.ToString();
@@ -109,7 +112,8 @@ internal static class AccountRouteEvidenceEndpoints
         return result.Status switch
         {
             HttpStatusCode.Unauthorized => Results.Unauthorized(),
-            HttpStatusCode.Forbidden => CrmAccess.Denied(),
+            HttpStatusCode.Forbidden => Results.Problem(statusCode: 403,
+                title: "Pricing requiere permiso pricing.rate.view para consultar cotizaciones"),
             HttpStatusCode.NotFound => Results.NotFound(),
             _ => Results.Problem(statusCode: 503,
                 title: "No se pudo consultar el historial de Pricing")
@@ -120,8 +124,9 @@ internal static class AccountRouteEvidenceEndpoints
         HttpContext h, IPricingCommercialClient pricing, int? page, int? pageSize,
         CancellationToken ct)
     {
-        if (!CrmDataEndpoints.HasRead(h, "lead") ||
-            !CrmAccess.Scope(h, "crm.quote.read")) return CrmAccess.Denied();
+        // Lead readers may consult this lead's rates without the optional
+        // opportunity quote scope; Pricing still authorizes the caller.
+        if (!CrmDataEndpoints.HasRead(h, "lead")) return CrmAccess.Denied();
         var lead = await db.Leads.AsNoTracking()
             .FirstOrDefaultAsync(x => x.Id == id && x.ArchivedAt == null, ct);
         if (lead is null) return Results.NotFound();
@@ -137,7 +142,8 @@ internal static class AccountRouteEvidenceEndpoints
         return response.Status switch
         {
             HttpStatusCode.Unauthorized => Results.Unauthorized(),
-            HttpStatusCode.Forbidden => CrmAccess.Denied(),
+            HttpStatusCode.Forbidden => Results.Problem(statusCode: 403,
+                title: "Pricing requiere permiso pricing.rate.view para consultar cotizaciones"),
             HttpStatusCode.NotFound => Results.NotFound(),
             _ => Results.Problem(statusCode: 503,
                 title: "No se pudo consultar las cotizaciones del prospecto")
