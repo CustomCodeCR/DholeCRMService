@@ -18,6 +18,7 @@ internal static class CreditEndpoints
     {
         g.MapGet("/accounts/{accountId:guid}/credit-profiles",List);
         g.MapPost("/accounts/{accountId:guid}/credit-profiles",Propose);
+        g.MapGet("/credit-currencies", ActiveCurrencies);
         g.MapGet("/credit-profiles/{id:guid}",Get);
         g.MapGet("/credit-profiles/{id:guid}/history",History);
         g.MapGet("/credit-profiles/{id:guid}/coverages",Coverages);
@@ -33,6 +34,20 @@ internal static class CreditEndpoints
     // Sales staff may request credit for a visible account without being allowed to approve it.
     private static bool CanRequest(HttpContext h)=>Manage(h)||FinanceAccess.Has(h,"crm.account.update");
     private static bool Approver(HttpContext h)=>FinanceAccess.Has(h,"crm.credit.approve");
+    private static async Task<IResult> ActiveCurrencies(
+        HttpContext h, IConfigReferenceService config, CancellationToken ct)
+    {
+        if (!Read(h) && !CanRequest(h)) return CrmAccess.Denied();
+        try
+        {
+            return Results.Ok(await config.GetActiveCurrencyOptionsAsync(ct));
+        }
+        catch (Exception) when (!ct.IsCancellationRequested)
+        {
+            return CrmDataEndpoints.Unavailable();
+        }
+    }
+
     private static bool Valid(CreditTermsRequest r)=>
         r.CreditDays is >=0 and <=3650 &&
         r.CreditLimit is >=0m and <=9999999999999999.99m &&
