@@ -23,6 +23,8 @@ internal static class AccountRouteEvidenceEndpoints
         g.MapPost("/accounts/{id:guid}/route-history", Add);
         g.MapGet("/accounts/{id:guid}/quote-route-snapshots", QuoteRoutes);
         g.MapGet("/accounts/{id:guid}/pricing-quotations", AccountQuotes);
+        g.MapGet("/accounts/{id:guid}/pricing-quotation-candidates", LegacyCandidates);
+        g.MapPost("/accounts/{id:guid}/pricing-quotations/reconcile", ReconcileLegacyQuotes);
         g.MapGet("/leads/{id:guid}/pricing-quotations", LeadQuotes);
         return g;
     }
@@ -118,6 +120,83 @@ internal static class AccountRouteEvidenceEndpoints
             _ => Results.Problem(statusCode: 503,
                 title: "No se pudo consultar el historial de Pricing")
         };
+    }
+
+    public sealed record ReconcileLegacyQuotesRequest(Guid[] QuoteIds);
+
+    private static async Task<(string? LegalName, IResult? Error)> GetVerifiedLegacyAccountName(
+        Guid id, CrmDbContext db, HttpContext h, CancellationToken ct)
+    {
+        if (!CrmDataEndpoints.HasRead(h, "account"))
+            return (null, CrmAccess.Denied());
+        var account = await CrmAccess.VisibleAccounts(db, h).AsNoTracking()
+            .Where(x => x.Id == id)
+            .Select(x => new { x.LegalName }).SingleOrDefaultAsync(ct);
+        if (account is null) return (null, Results.NotFound());
+        var legalName = account.LegalName.Trim();
+        if (legalName.Length is < 3 or > 220)
+            return (null, Results.Problem(statusCode: 409, title: "La razón social no es válida."));
+        // Refuse to reconcile a shared corporate name automatically to different CRM accounts.
+        var duplicates = await db.Accounts.AsNoTracking()
+            .CountAsync(x => x.ArchivedAt == null &&
+                x.LegalName.Trim().ToUpper() == legalName.ToUpperInvariant(), ct);
+        if (duplicates != 1)
+            return (null, Results.Problem(statusCode: 409,
+                title: "Hay varias cuentas con esta razón social; primero se deben resolver los duplicados."));
+        return (legalName, null);
+    }
+
+    private static string? Bearer(HttpContext h)
+    {
+        var token = h.Request.Headers.Authorization.ToString();
+        return token.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase)
+            ? token["Bearer ".Length..].Trim() : null;
+    }
+
+    private static IResult PricingFailure(HttpStatusCode status, string action) => status switch
+    {
+        HttpStatusCode.Unauthorized => Results.Unauthorized(),
+        HttpStatusCode.Forbidden => Results.Problem(statusCode: 403,
+            title: "Pricing requiere permiso para " + action),
+        HttpStatusCode.Conflict => Results.Problem(statusCode: 409,
+            title: "La conciliación de cotizaciones fue rechazada por Pricing."),
+        _ => Results.Problem(statusCode: 503,
+            title: "No fue posible " + action + " en Pricing.")
+    };
+
+    // Candidates are suggestions only. No relationship is written without explicit
+    // confirmation by an account editor and an independent Pricing update grant.
+    private static async Task<IResult> LegacyCandidates(Guid id, CrmDbContext db,
+        HttpContext h, IPricingCommercialClient pricing, int? page, int? pageSize,
+        CancellationToken ct)
+    {
+        if (!CrmAccess.Scope(h, "crm.account.update")) return CrmAccess.Denied();
+        var (name, error) = await GetVerifiedLegacyAccountName(id, db, h, ct);
+        if (error is not null) return error;
+        var bearer = Bearer(h);
+        if (string.IsNullOrWhiteSpace(bearer)) return Results.Unauthorized();
+        var result = await pricing.GetLegacyCandidates(name!, bearer,
+            Math.Clamp(page ?? 1, 1, 100000), Math.Clamp(pageSize ?? 30, 1, 100), ct);
+        return result.Success ? Results.Ok(result.Value) :
+            PricingFailure(result.Status, "buscar cotizaciones anteriores");
+    }
+
+    private static async Task<IResult> ReconcileLegacyQuotes(Guid id,
+        ReconcileLegacyQuotesRequest request, CrmDbContext db,
+        HttpContext h, IPricingCommercialClient pricing, CancellationToken ct)
+    {
+        if (!CrmAccess.Scope(h, "crm.account.update")) return CrmAccess.Denied();
+        if (request.QuoteIds is not { Length: > 0 and <= 100 } ||
+            request.QuoteIds.Any(x => x == Guid.Empty))
+            return Results.BadRequest(new { message = "Seleccione de 1 a 100 cotizaciones." });
+        var (name, error) = await GetVerifiedLegacyAccountName(id, db, h, ct);
+        if (error is not null) return error;
+        var bearer = Bearer(h);
+        if (string.IsNullOrWhiteSpace(bearer)) return Results.Unauthorized();
+        var result = await pricing.ReconcileLegacyQuotes(id, name!,
+            request.QuoteIds.Distinct().ToArray(), bearer, ct);
+        return result.Success ? Results.Ok(result.Value) :
+            PricingFailure(result.Status, "vincular las cotizaciones históricas");
     }
 
     private static async Task<IResult> LeadQuotes(Guid id, CrmDbContext db,

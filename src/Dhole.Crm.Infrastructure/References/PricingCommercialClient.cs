@@ -18,9 +18,10 @@ public sealed record PricingAccountQuote(
     Guid PricingQuoteId, string? QuoteNumberSnapshot, string? ShipmentModeSnapshot,
     string? CommercialStatusSnapshot, DateTime LinkedAt,
     string? PolName, string? PoeName, string? PodName, int RevisionNumber, bool Available,
-    Guid? ClientLeadId);
+    Guid? ClientLeadId, string? ClientName = null);
 public sealed record PricingAccountQuotePage(
     IReadOnlyList<PricingAccountQuote> Items, int Total, int Page, int PageSize);
+public sealed record LegacyPricingReconciliationResult(int Linked, int Total);
 public sealed record PricingCreateRequest(
     string Priority, string? ClientName, string? ExecutiveName,
     string? ShipmentMode, string? OriginName, string? DestinationName,
@@ -40,6 +41,10 @@ public interface IPricingCommercialClient
         string bearer, int page, int pageSize, CancellationToken ct);
     Task<PricingResult<PricingAccountQuotePage>> GetLeadQuotes(
         Guid leadId, string bearer, int page, int pageSize, CancellationToken ct);
+    Task<PricingResult<PricingAccountQuotePage>> GetLegacyCandidates(
+        string legalName, string bearer, int page, int pageSize, CancellationToken ct);
+    Task<PricingResult<LegacyPricingReconciliationResult>> ReconcileLegacyQuotes(
+        Guid accountId, string legalName, Guid[] quoteIds, string bearer, CancellationToken ct);
     Task<PricingResult<Guid>> CreateRequest(PricingCreateRequest body,
         string bearer,string idempotencyKey,string correlationId,CancellationToken ct);
 }
@@ -109,6 +114,29 @@ public sealed class PricingCommercialClient(HttpClient client,IConfiguration cfg
         SetBearer(req, bearer);
         return Send<PricingAccountQuotePage>(req, ct);
     }
+    public Task<PricingResult<PricingAccountQuotePage>> GetLegacyCandidates(
+        string legalName, string bearer, int page, int pageSize, CancellationToken ct)
+    {
+        var url = "api/pricing/rates/crm-legacy-candidates?clientName=" +
+            Uri.EscapeDataString(legalName) + $"&page={page}&pageSize={pageSize}";
+        var req = new HttpRequestMessage(HttpMethod.Get, GetUrl(url));
+        SetBearer(req, bearer);
+        return Send<PricingAccountQuotePage>(req, ct);
+    }
+
+    public Task<PricingResult<LegacyPricingReconciliationResult>> ReconcileLegacyQuotes(
+        Guid accountId, string legalName, Guid[] quoteIds, string bearer, CancellationToken ct)
+    {
+        var req = new HttpRequestMessage(HttpMethod.Post, GetUrl("api/pricing/rates/crm-legacy-reconcile"))
+        {
+            Content = JsonContent.Create(new {
+                accountId, clientName = legalName, rateIds = quoteIds
+            }, options: JsonOptions)
+        };
+        SetBearer(req, bearer);
+        return Send<LegacyPricingReconciliationResult>(req, ct);
+    }
+
     public Task<PricingResult<PricingRequestSnapshot>> GetRequest(Guid id,string bearer,CancellationToken ct)
     {
         var req=new HttpRequestMessage(HttpMethod.Get,GetUrl("api/pricing/crm/requests/"+id));
