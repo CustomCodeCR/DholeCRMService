@@ -85,7 +85,7 @@ internal static class CreditEndpoints
             .OrderBy(x=>x.ServiceCode).ToArrayAsync(ct));
     }
     private static async Task<bool> Currency(IConfigReferenceService config,string code,CancellationToken ct)=>
-        await config.IsActiveCodeAsync("currencies",code.ToUpperInvariant(),ct);
+        await config.IsActiveCurrencyIsoAsync(code,ct);
     private static async Task<IResult> Propose(Guid accountId,CreditTermsRequest req,CrmDbContext db,
         HttpContext h,IConfigReferenceService config,ILoggerFactory loggerFactory,CancellationToken ct)
     {
