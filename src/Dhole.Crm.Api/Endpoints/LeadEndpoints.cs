@@ -121,6 +121,8 @@ internal static class LeadEndpoints
         CancellationToken ct)
     {
         if (!CrmAccess.Scope(http, "crm.lead.archive")) return CrmAccess.Denied();
+        if (string.IsNullOrWhiteSpace(request.Reason) || request.Reason.Length > 1000)
+            return CrmDataEndpoints.Bad("Archive reason required");
         var lead = await db.Leads.FindAsync([id], ct);
         if (lead is null) return Results.NotFound();
         if (lead.ExecutiveUserId != CrmAccess.UserId(http) && !CrmAccess.Scope(http, "crm.lead.read-all"))
