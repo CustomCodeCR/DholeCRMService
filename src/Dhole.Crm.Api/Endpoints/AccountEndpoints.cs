@@ -92,10 +92,14 @@ internal static class AccountEndpoints
                 return CrmAccess.Denied();
             var allowed = (visibility.Sellers ?? Array.Empty<SellerOption>())
                 .Select(x => x.UserId).Where(x => x != Guid.Empty).Distinct().ToArray();
-            var selected = sellerUserId ?? visibility.ViewerUserId;
-            if (!allowed.Contains(selected)) return CrmAccess.Denied();
+            if (sellerUserId.HasValue && !allowed.Contains(sellerUserId.Value))
+                return CrmAccess.Denied();
             var actor = CrmAccess.UserId(http);
-            query = query.Where(x => x.ExecutiveUserId == selected &&
+            // When the user manages multiple sellers, search all their portfolios.
+            // Optional seller filtering is always intersected with server-verified access.
+            query = query.Where(x =>
+                (sellerUserId.HasValue ? x.ExecutiveUserId == sellerUserId.Value
+                                       : allowed.Contains(x.ExecutiveUserId)) &&
                 (!x.IsCastroFallasExecutive ||
                   CrmAccess.Scope(http,"crm.account.read-all") ||
                   db.CastroFallasViewerGrants.Any(g=>g.UserId==actor&&g.RevokedAt==null)));
