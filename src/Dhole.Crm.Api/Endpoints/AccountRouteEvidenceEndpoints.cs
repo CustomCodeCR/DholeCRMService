@@ -170,7 +170,10 @@ internal static class AccountRouteEvidenceEndpoints
         HttpContext h, IPricingCommercialClient pricing, int? page, int? pageSize,
         CancellationToken ct)
     {
-        if (!CrmAccess.Scope(h, "crm.account.update")) return CrmAccess.Denied();
+        // This endpoint only PREVIEWS suggestions: it never writes a quote link.
+        // Account readers may inspect possible historical matches, while POST
+        // reconciliation still requires both CRM and Pricing update permissions.
+        if (!CrmDataEndpoints.HasRead(h, "account")) return CrmAccess.Denied();
         var (name, error) = await GetVerifiedLegacyAccountName(id, db, h, ct);
         if (error is not null) return error;
         var bearer = Bearer(h);
