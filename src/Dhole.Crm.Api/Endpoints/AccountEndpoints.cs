@@ -29,7 +29,7 @@ internal static class AccountEndpoints
         group.MapPost("/accounts", Create);
         group.MapPatch("/accounts/{id:guid}", Patch);
         group.MapPost("/accounts/{id:guid}/archive", Archive);
-        group.MapPost("/accounts/{id:guid}/delete", DeletePermanently);
+
         group.MapPost("/accounts/{id:guid}/assign", Assign);
         group.MapPatch("/accounts/{id:guid}/logo", SetLogo);
         group.MapGet("/accounts/{id:guid}/assignments", Assignments);
@@ -335,34 +335,6 @@ internal static class AccountEndpoints
         account.RowVersion++;
         var committed = await CrmDataEndpoints.Commit(db, ct);
         return committed is Microsoft.AspNetCore.Http.HttpResults.Ok ? Results.Ok(account) : committed;
-    }
-    private static async Task<IResult> DeletePermanently(Guid id,ArchiveAccountRequest r,
-        CrmDbContext db,HttpContext http,CancellationToken ct)
-    {
-        if(!CrmAccess.Scope(http,"crm.account.archive"))return CrmAccess.Denied();
-        var account=await db.Accounts.FindAsync([id],ct);
-        if(account is null || account.ArchivedAt!=null)return Results.NotFound();
-        if(!await CrmAccess.CanSeeAccount(db,http,id,ct))return CrmAccess.Denied();
-        if(account.RowVersion!=r.ExpectedVersion)return CrmDataEndpoints.Conflict("Stale row version");
-        if(string.IsNullOrWhiteSpace(r.Reason)||r.Reason.Length>1000)
-            return CrmDataEndpoints.Bad("Delete reason required");
-        // Accounts with business, financial or commercial history must not be erased.
-        if(await db.CreditProfiles.AnyAsync(x=>x.AccountId==id,ct) ||
-           await db.AccountContacts.AnyAsync(x=>x.AccountId==id,ct) ||
-           await db.Activities.AnyAsync(x=>x.AccountId==id,ct) ||
-           await db.Followups.AnyAsync(x=>x.AccountId==id,ct) ||
-           await db.LeadConversions.AnyAsync(x=>x.AccountId==id,ct))
-            return CrmDataEndpoints.Conflict("El cliente tiene crédito o registros vinculados. No se puede eliminar permanentemente.");
-        db.Accounts.Remove(account);
-        try
-        {
-            await db.SaveChangesAsync(ct);
-            return Results.NoContent();
-        }
-        catch(DbUpdateException)
-        {
-            return CrmDataEndpoints.Conflict("La cuenta tiene información comercial o histórica vinculada; no puede eliminarse permanentemente.");
-        }
     }
     private static async Task<IResult> Assign(Guid id, AssignAccountRequest request, CrmDbContext db,
         HttpContext http, IAuthReferenceService auth, CancellationToken ct)
