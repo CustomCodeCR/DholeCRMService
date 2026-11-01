@@ -104,7 +104,7 @@ internal static class ContactEndpoints
         var items = await rows.OrderBy(x => x.contact.Name).ThenBy(x => x.account.DisplayName)
             .ThenBy(x => x.contact.Id).Skip((number - 1) * size).Take(size)
             .Select(x => new {
-                id = x.contact.Id, name = x.contact.Name, firstName = x.contact.FirstName,
+                id = x.contact.Id, rowVersion = x.contact.RowVersion, name = x.contact.Name, firstName = x.contact.FirstName,
                 lastName = x.contact.LastName, jobTitle = x.contact.JobTitle,
                 email = x.contact.Email, phone = x.contact.Phone, status = x.contact.Status,
                 accountId = x.account.Id, accountName = x.account.DisplayName,
