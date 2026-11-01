@@ -216,6 +216,8 @@ internal static class ContactEndpoints
         HttpContext h, CancellationToken ct)
     {
         if (!CrmAccess.Scope(h, "crm.contact.archive")) return CrmAccess.Denied();
+        if (string.IsNullOrWhiteSpace(r.Reason) || r.Reason.Length > 1000)
+            return CrmDataEndpoints.Bad("Archive reason required");
         if (!await CanSeeContact(id, db, h, ct)) return CrmAccess.Denied();
         var item = await db.Contacts.FindAsync([id], ct);
         if (item is null) return Results.NotFound();
