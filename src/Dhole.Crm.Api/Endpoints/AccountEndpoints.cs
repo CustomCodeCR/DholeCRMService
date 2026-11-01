@@ -283,6 +283,11 @@ internal static class AccountEndpoints
             return CrmDataEndpoints.Bad("Invalid commercial relationship types");
         account.DisplayName = request.DisplayName.Trim();
         account.LegalName = request.LegalName.Trim();
+        // Credit-backed accounts cannot be silently reset to cash while an
+        // approved facility exists; the credit lifecycle owns this transition.
+        if (request.CustomerTypeCode == "cash" && await db.CreditProfiles.AsNoTracking()
+            .AnyAsync(p => p.AccountId == id && p.Status == "Approved", ct))
+            return CrmDataEndpoints.Conflict("El cliente tiene un crédito aprobado; no puede pasarse a contado.");
         account.CustomerTypeCode = request.CustomerTypeCode;
         account.SourceCode = request.SourceCode?.Trim();
         account.RelationshipTypeCode = request.RelationshipTypeCode?.Trim();
