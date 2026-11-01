@@ -30,12 +30,14 @@ public sealed class AuthReferenceService(HttpClient http, IConfiguration configu
         return result is { Active: true } && result.Id == userId ? result : null;
     }
 }
+public sealed record ActiveCurrencyOption(string Code, string Label);
 public interface IConfigReferenceService
 {
     Task<bool> IsActiveCountryAsync(Guid countryId, CancellationToken ct);
     Task<bool> IsCostaRicaCountryAsync(Guid countryId, CancellationToken ct);
     Task<bool> IsActiveCodeAsync(string catalogGroupSlug, string itemCode, CancellationToken ct);
     Task<bool> IsActiveCurrencyIsoAsync(string currencyIsoCode, CancellationToken ct);
+    Task<IReadOnlyList<ActiveCurrencyOption>> GetActiveCurrencyOptionsAsync(CancellationToken ct);
 }
 public sealed class ConfigReferenceService(IConfiguration configuration) : IConfigReferenceService
 {
@@ -56,31 +58,51 @@ public sealed class ConfigReferenceService(IConfiguration configuration) : IConf
                string.Equals(result.Item.CatalogGroupSlug,catalogGroupSlug,StringComparison.OrdinalIgnoreCase);
     }
 
-    // Currency catalog item.Code is often an internal Config identifier rather than
-    // the ISO 4217 value used in financial documents (e.g. USD/CRC).
-    // Resolve exact ISO matches ONLY among ACTIVE Config items.
-    public async Task<bool> IsActiveCurrencyIsoAsync(string currencyIsoCode, CancellationToken ct)
+    // Config uses separate internal codes, names, slugs and ISO values.
+    // Only explicitly represented, active ISO-4217 values may be selected.
+    public async Task<IReadOnlyList<ActiveCurrencyOption>> GetActiveCurrencyOptionsAsync(CancellationToken ct)
     {
-        var iso = currencyIsoCode?.Trim().ToUpperInvariant() ?? "";
-        if (iso.Length != 3 || !iso.All(char.IsAsciiLetter))
-            return false;
-
         var url = configuration["Grpc:Clients:Config:Address"];
         if (string.IsNullOrWhiteSpace(url))
             throw new InvalidOperationException("Config gRPC endpoint is not configured.");
+
         using var channel = GrpcChannel.ForAddress(url);
         var client = new ConfigCatalogGrpc.ConfigCatalogGrpcClient(channel);
         var response = await client.GetActiveCatalogItemsByGroupAsync(
             new GetActiveCatalogItemsByGroupGrpcRequest { CatalogGroupSlug = "currencies" },
             deadline: DateTime.UtcNow.AddSeconds(5), cancellationToken: ct);
 
-        static bool Matches(string? candidate, string isoCode) =>
-            string.Equals(candidate?.Trim(), isoCode, StringComparison.OrdinalIgnoreCase);
+        static string? IsoCode(CatalogItemGrpcModel item)
+        {
+            foreach (var candidate in new[] { item.Value, item.Slug, item.Code })
+            {
+                var code = candidate?.Trim();
+                if (code is { Length: 3 } && code.All(char.IsAsciiLetter))
+                    return code.ToUpperInvariant();
+            }
+            return null;
+        }
 
-        return response.Items.Any(item =>
-            item.IsActive &&
-            string.Equals(item.CatalogGroupSlug, "currencies", StringComparison.OrdinalIgnoreCase) &&
-            (Matches(item.Value, iso) || Matches(item.Code, iso) || Matches(item.Slug, iso)));
+        return response.Items
+            .Where(item => item.IsActive && string.Equals(item.CatalogGroupSlug,
+                "currencies", StringComparison.OrdinalIgnoreCase))
+            .Select(item => new { Code = IsoCode(item), Item = item })
+            .Where(x => x.Code is not null)
+            .GroupBy(x => x.Code!, StringComparer.OrdinalIgnoreCase)
+            .Select(group => new ActiveCurrencyOption(group.Key,
+                string.IsNullOrWhiteSpace(group.First().Item.Name)
+                    ? group.Key : group.First().Item.Name.Trim()))
+            .OrderBy(x => x.Code)
+            .ToArray();
+    }
+
+    public async Task<bool> IsActiveCurrencyIsoAsync(string currencyIsoCode, CancellationToken ct)
+    {
+        var iso = currencyIsoCode?.Trim().ToUpperInvariant() ?? "";
+        if (iso.Length != 3 || !iso.All(char.IsAsciiLetter))
+            return false;
+        var options = await GetActiveCurrencyOptionsAsync(ct);
+        return options.Any(item => string.Equals(item.Code, iso, StringComparison.OrdinalIgnoreCase));
     }
 
     public async Task<bool> IsCostaRicaCountryAsync(Guid countryId, CancellationToken ct)
