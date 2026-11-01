@@ -14,6 +14,7 @@ public sealed class AccountFollowupPolicy : CrmRecord
 }
 public sealed class Followup : CrmRecord
 {
+    public DateTime? ArchivedAt { get; set; }
     public Guid? AccountId { get; set; }
     public Guid? LeadId { get; set; }
     public Guid? OpportunityId { get; set; }
