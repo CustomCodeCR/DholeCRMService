@@ -11,7 +11,8 @@ public sealed record CreditTermsRequest(bool CreditEnabled,int CreditDays,decima
     DateTime EffectiveFrom,DateTime? ReviewAt,decimal LateInterestMonthlyPct = 0m);
 public sealed record CreditApprovalCoverage(string ServiceCode,string CoverageType,string Description);
 public sealed record CreditApprovalRequest(long ExpectedVersion,string Reason,
-    IReadOnlyList<CreditApprovalCoverage>? Coverages = null);
+    IReadOnlyList<CreditApprovalCoverage>? Coverages = null,
+    bool ConfirmEmptyCoverages = false);
 public sealed record CreditCoverageRequest(long ExpectedVersion,string ServiceCode,string CoverageType,string Description);
 public sealed record CreditChangeRequest(long ExpectedVersion,CreditTermsRequest Terms,string Reason);
 internal static class CreditEndpoints
@@ -257,6 +258,16 @@ internal static class CreditEndpoints
         if(!await Can(p,db,h,ct))return CrmAccess.Denied();
         if(p.Status!="PendingApproval"||p.RowVersion!=req.ExpectedVersion)
             return FinanceAccess.Conflict("Credit approval conflicts with current version");
+        // An empty approval is an explicit business decision, never the result of
+        // forgetting to save a form's selections. Protect older API clients too.
+        if (!req.ConfirmEmptyCoverages)
+        {
+            var hasCoverage = req.Coverages is not null
+                ? coverageSnapshot.Count > 0
+                : await db.CreditCoverages.AnyAsync(x => x.CreditProfileId == id && x.IsActive, ct);
+            if (!hasCoverage)
+                return FinanceAccess.Bad("ConfirmEmptyCoverages is required to approve credit without covered services");
+        }
         var actor=FinanceAccess.Actor(h);var now=DateTime.UtcNow;
         foreach(var x in await db.CreditProfiles.Where(x=>x.AccountId==p.AccountId&&x.Status=="Approved").ToListAsync(ct))
         {
