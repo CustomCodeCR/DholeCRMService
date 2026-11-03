@@ -71,7 +71,8 @@ internal static class CrmCommitmentNotifications
             foreach (var lead in ReminderLeads.Append(item.LeadMinutes).Distinct())
             {
                 var fireAt = item.Start.AddMinutes(-lead);
-                if (fireAt < now.AddMinutes(-5)) continue;
+                // Never backfill old pre-event stages after a restart or a status transition.
+                if (fireAt < now) continue;
                 var phase = lead == item.LeadMinutes ? "lead" :
                     lead == 1440 ? "day" : lead == 60 ? "hour" : "start";
                 QueuePair(db, existing, item, item.OwnerUserId, phase,
