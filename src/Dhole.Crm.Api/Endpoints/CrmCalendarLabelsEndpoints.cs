@@ -58,18 +58,20 @@ internal static class CrmCalendarLabelsEndpoints
         var validAccounts=accounts.Select(a=>a.Id).ToArray();
         var validLeads=leads.Select(l=>l.Id).ToArray();
         // Resolve only owners who have an event linked to a visible client/lead.
+        var allActivities=CrmAccess.Scope(http,"crm.activity.read-all");
+        var allAccounts=CrmAccess.Scope(http,"crm.account.read-all");
+        var allLeads=CrmAccess.Scope(http,"crm.lead.read-all");
         var ownersFromActivities=await db.Activities.AsNoTracking()
             .Where(a=>a.ArchivedAt==null && wantedOwners.Contains(a.OwnerUserId) &&
                 ((a.AccountId.HasValue&&validAccounts.Contains(a.AccountId.Value))||
                  (a.LeadId.HasValue&&validLeads.Contains(a.LeadId.Value))) &&
-                (a.OwnerUserId==actor||CrmAccess.Scope(http,"crm.activity.read-all")))
+                (a.OwnerUserId==actor||allActivities))
             .Select(a=>a.OwnerUserId).Distinct().ToListAsync(ct);
         var ownersFromFollowups=await db.Followups.AsNoTracking()
             .Where(f=>f.ArchivedAt==null && wantedOwners.Contains(f.AssignedUserId) &&
                 ((f.AccountId.HasValue&&validAccounts.Contains(f.AccountId.Value))||
                  (f.LeadId.HasValue&&validLeads.Contains(f.LeadId.Value))) &&
-                (f.AssignedUserId==actor||CrmAccess.Scope(http,"crm.account.read-all")||
-                 CrmAccess.Scope(http,"crm.lead.read-all")))
+                (f.AssignedUserId==actor||allAccounts||allLeads))
             .Select(f=>f.AssignedUserId).Distinct().ToListAsync(ct);
         var permitted=ownersFromActivities.Concat(ownersFromFollowups)
             .Append(actor).Distinct().ToArray();
