@@ -22,7 +22,9 @@ internal static class CrmReminderEnqueue
             return;
 
         var advanceMinutes = Math.Clamp(leadMinutes ?? policy?.ReminderLeadMinutes ?? 60, 0, 10080);
-        var strategy = channelStrategy ?? policy?.ChannelStrategy ?? "BOTH";
+        // Calendar commitments always notify by both email and in-app inbox.
+        var strategy = entityType is "Activity" or "Followup"
+            ? "BOTH" : channelStrategy ?? policy?.ChannelStrategy ?? "BOTH";
         var now = DateTime.UtcNow;
 
         foreach (var channel in strategy switch
