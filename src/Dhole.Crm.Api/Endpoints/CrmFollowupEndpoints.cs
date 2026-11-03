@@ -36,6 +36,7 @@ internal static class CrmFollowupEndpoints
     private static bool Manage(HttpContext h)=>CrmAccess.Scope(h,"crm.followup.manage");
     private static bool Tasks(HttpContext h)=>CrmAccess.Scope(h,"crm.task.manage");
     private static bool CanReadCalendar(HttpContext h)=>Manage(h)||Tasks(h)||
+        CrmDataEndpoints.HasRead(h,"activity")||
         CrmAccess.Scope(h,"crm.activity.read-all")||
         CrmAccess.Scope(h,"crm.account.read-all");
     private static bool Utc(DateTime dt)=>dt.Kind==DateTimeKind.Utc;
