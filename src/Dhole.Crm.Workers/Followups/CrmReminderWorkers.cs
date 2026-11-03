@@ -26,7 +26,8 @@ internal sealed class CrmFollowupSchedulerWorker(IServiceScopeFactory scopes,
                     var now=DateTime.UtcNow;
                     await CrmReminderEngine.GenerateAsync(db,now,stoppingToken);
                     await CrmReminderEngine.PlanRemindersAsync(db,now,stoppingToken);
-                    await CrmReminderEngine.MarkOverdueActivitiesAsync(db,now,stoppingToken);
+                    var auth=scope.ServiceProvider.GetRequiredService<IAuthReferenceService>();
+                    await CrmCommitmentNotifications.PlanAsync(db,auth,now,logger,stoppingToken);
                 }
                 catch(OperationCanceledException) when(stoppingToken.IsCancellationRequested){break;}
                 catch(Exception ex){logger.LogError(ex,"CRM followup scheduler failed; database state retained for retry");}
