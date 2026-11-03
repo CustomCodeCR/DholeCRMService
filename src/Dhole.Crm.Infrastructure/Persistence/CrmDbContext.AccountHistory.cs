@@ -13,6 +13,7 @@ public sealed partial class CrmDbContext
     {
         "Id", "AccountId", "CreatedByUserId", "UpdatedByUserId",
         "CreatedAt", "UpdatedAt", "RowVersion", "NormalizedTaxId",
+        "CreationKeyHash", "CreationPayloadHash",
     };
 
     private static string? AccountAuditValue(object? value) => value switch
@@ -31,7 +32,7 @@ public sealed partial class CrmDbContext
     {
         ChangeTracker.DetectChanges();
         var entries = ChangeTracker.Entries()
-            .Where(e => (e.Entity is Account || e.Entity is AccountBusinessProfile) &&
+            .Where(e => (e.Entity is Account || e.Entity is AccountBusinessProfile || e.Entity is CreditContract) &&
                         (e.State == EntityState.Added || e.State == EntityState.Modified))
             .ToList();
 
@@ -40,8 +41,10 @@ public sealed partial class CrmDbContext
             var added = entry.State == EntityState.Added;
             var record = (CrmRecord)entry.Entity;
             var isAccount = entry.Entity is Account;
+            var isContract = entry.Entity is CreditContract;
             var accountId = isAccount
                 ? ((Account)entry.Entity).Id
+                : isContract ? ((CreditContract)entry.Entity).AccountId
                 : ((AccountBusinessProfile)entry.Entity).AccountId;
             var changes = entry.Properties
                 .Where(p => !AccountAuditExcludedFields.Contains(p.Metadata.Name) &&
@@ -58,7 +61,8 @@ public sealed partial class CrmDbContext
             var occurredAt = added ? record.CreatedAt : record.UpdatedAt;
             if (occurredAt.Kind != DateTimeKind.Utc) occurredAt = occurredAt.ToUniversalTime();
             var fields = changes.Select(c => c.Field).ToHashSet(StringComparer.Ordinal);
-            var action = added ? (isAccount ? "CREATED" : "PROFILE_CREATED")
+            var action = added ? (isAccount ? "CREATED" : isContract ? "CONTRACT_CREATED" : "PROFILE_CREATED")
+                : isContract ? "CONTRACT_UPDATED"
                 : !isAccount ? "PROFILE_UPDATED"
                 : fields.Contains("ArchivedAt") ? "ARCHIVED"
                 : fields.Contains("ExecutiveUserId") || fields.Contains("IsCastroFallasExecutive") ? "ASSIGNED"
@@ -72,7 +76,7 @@ public sealed partial class CrmDbContext
                 CreatedByUserId = actor ?? Guid.Empty,
                 CreatedAt = occurredAt,
                 UpdatedAt = occurredAt,
-                AreaCode = isAccount ? "ACCOUNT" : "BUSINESS_PROFILE",
+                AreaCode = isAccount ? "ACCOUNT" : isContract ? "CREDIT_CONTRACT" : "BUSINESS_PROFILE",
                 ActionCode = action,
                 ChangesJson = JsonSerializer.Serialize(changes,
                     new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase }),
