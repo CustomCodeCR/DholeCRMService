@@ -14,7 +14,68 @@ internal static class AccountCommercialOverviewEndpoints
     public static RouteGroupBuilder MapAccountCommercialOverview(this RouteGroupBuilder group)
     {
         group.MapGet("/accounts/{id:guid}/commercial-overview", Get);
+        group.MapGet("/accounts/{id:guid}/quote-dashboard", GetQuoteDashboard);
         return group;
+    }
+
+    /// <summary>
+    /// Aggregates every distinct, explicitly linked Pricing quote for this account.
+    /// Counts are not limited by the commercial-overview preview's 100-row cap.
+    /// Never attribute a quote to an account by comparing customer names.
+    /// Statuses reflect the most recent synchronized Pricing snapshot.
+    /// </summary>
+    private static async Task<IResult> GetQuoteDashboard(Guid id, CrmDbContext db,
+        HttpContext http, CancellationToken ct)
+    {
+        if (!CrmDataEndpoints.HasRead(http, "account") ||
+            !CrmDataEndpoints.HasRead(http, "opportunity") ||
+            !CrmAccess.Scope(http, "crm.quote.read"))
+            return CrmAccess.Denied();
+
+        var account = await CrmAccess.VisibleAccounts(db, http).AsNoTracking()
+            .Where(x => x.Id == id)
+            .Select(x => new { x.IsCastroFallasExecutive })
+            .SingleOrDefaultAsync(ct);
+        if (account is null) return Results.NotFound();
+
+        var actor = CrmAccess.UserId(http);
+        var allOpportunities = CrmAccess.Scope(http, "crm.opportunity.read-all") ||
+            account.IsCastroFallasExecutive;
+        var visible = db.Opportunities.AsNoTracking()
+            .Where(x => x.AccountId == id && x.ArchivedAt == null &&
+                (allOpportunities || x.ExecutiveUserId == actor));
+
+        var linked = await (
+            from quote in db.OpportunityQuotes.AsNoTracking()
+            join opportunity in visible on quote.OpportunityId equals opportunity.Id
+            select new {
+                quote.PricingQuoteId, quote.CommercialStatusSnapshot,
+                quote.LinkedAt, quote.LastSyncAt, quote.PendingRefreshAt
+            }).ToListAsync(ct);
+
+        // A Pricing quote linked to multiple opportunities of this same client
+        // must never inflate the count.
+        var quotes = linked
+            .GroupBy(x => x.PricingQuoteId)
+            .Select(g => g.OrderByDescending(x => x.LastSyncAt).First())
+            .ToArray();
+        static bool Is(string? status, string expected) =>
+            string.Equals(status, expected, StringComparison.OrdinalIgnoreCase);
+        var sent = quotes.Count(q => Is(q.CommercialStatusSnapshot, "Sent") ||
+            Is(q.CommercialStatusSnapshot, "RequestedByClient") ||
+            Is(q.CommercialStatusSnapshot, "Expired"));
+        var approved = quotes.Count(q => Is(q.CommercialStatusSnapshot, "AcceptedByClient"));
+        var rejected = quotes.Count(q => Is(q.CommercialStatusSnapshot, "RejectedByClient"));
+        var cancelled = quotes.Count(q => Is(q.CommercialStatusSnapshot, "Cancelled"));
+        var other = quotes.Length - sent - approved - rejected - cancelled;
+
+        return Results.Ok(new {
+            total = quotes.Length, sent, approved, rejected, cancelled, other,
+            pendingSync = quotes.Count(q => q.PendingRefreshAt.HasValue &&
+                q.PendingRefreshAt.Value > q.LastSyncAt),
+            lastSyncAt = quotes.Length == 0 ? (DateTime?)null : quotes.Max(q => q.LastSyncAt),
+            linkedOnly = true
+        });
     }
 
     private static async Task<IResult> Get(Guid id, CrmDbContext db, HttpContext http,
