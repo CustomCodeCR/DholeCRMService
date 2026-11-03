@@ -7,6 +7,7 @@ namespace Dhole.Crm.Infrastructure.Persistence;
 public sealed partial class CrmDbContext(DbContextOptions<CrmDbContext> options) : DbContext(options)
 {
     public DbSet<Account> Accounts => Set<Account>();
+    public DbSet<AccountChangeHistory> AccountChangeHistories => Set<AccountChangeHistory>();
     public DbSet<Lead> Leads => Set<Lead>();
     public DbSet<LeadConversion> LeadConversions => Set<LeadConversion>();
     public DbSet<AccountAssignment> AccountAssignments => Set<AccountAssignment>();
@@ -55,6 +56,15 @@ public sealed partial class CrmDbContext(DbContextOptions<CrmDbContext> options)
     {
         b.HasDefaultSchema("crm");
         ConfigureRecord<Account>(b, "crm_accounts");
+        ConfigureRecord<AccountChangeHistory>(b, "crm_account_change_history");
+        b.Entity<AccountChangeHistory>(e =>
+        {
+            e.HasOne<Account>().WithMany().HasForeignKey(x => x.AccountId).OnDelete(DeleteBehavior.Restrict);
+            e.HasIndex(x => new { x.AccountId, x.CreatedAt });
+            e.Property(x => x.ActionCode).HasMaxLength(24).IsRequired();
+            e.Property(x => x.AreaCode).HasMaxLength(24).IsRequired();
+            e.Property(x => x.ChangesJson).HasColumnType("jsonb").IsRequired();
+        });
         ConfigureRecord<Lead>(b, "crm_leads");
         ConfigureRecord<LeadConversion>(b, "crm_lead_conversions");
         ConfigureRecord<AccountAssignment>(b, "crm_account_assignments");

@@ -26,6 +26,7 @@ internal static class AccountEndpoints
     {
         group.MapGet("/accounts", List);
         group.MapGet("/accounts/{id:guid}", Get);
+        group.MapGet("/accounts/{id:guid}/change-history", ChangeHistory);
         group.MapPost("/accounts", Create);
         group.MapPatch("/accounts/{id:guid}", Patch);
         group.MapPost("/accounts/{id:guid}/archive", Archive);
@@ -372,6 +373,59 @@ internal static class AccountEndpoints
         var committed = await CrmDataEndpoints.Commit(db, ct);
         return committed is Microsoft.AspNetCore.Http.HttpResults.Ok ? Results.Ok(account) : committed;
     }
+    private static async Task<IResult> ChangeHistory(Guid id, CrmDbContext db,
+        HttpContext http, IAuthReferenceService auth, IMemoryCache cache,
+        int? page, int? pageSize, CancellationToken ct)
+    {
+        if (!CrmDataEndpoints.HasRead(http, "account")) return CrmAccess.Denied();
+        if (!await CrmAccess.CanSeeAccount(db, http, id, ct)) return Results.NotFound();
+
+        var currentPage = Math.Max(1, page ?? 1);
+        var size = Math.Clamp(pageSize ?? 15, 1, 50);
+        var query = db.AccountChangeHistories.AsNoTracking().Where(x => x.AccountId == id);
+        var total = await query.CountAsync(ct);
+        var entries = await query.OrderByDescending(x => x.CreatedAt)
+            .ThenByDescending(x => x.Id).Skip((currentPage - 1) * size)
+            .Take(size).ToListAsync(ct);
+
+        // User names are resolved from Auth only for actors on this visible page.
+        // Inactive/deleted users retain their stable identifier as fallback.
+        var actors = entries.Where(x => x.ActorUserId.HasValue)
+            .Select(x => x.ActorUserId!.Value).Distinct().ToArray();
+        var actorNames = await Task.WhenAll(actors.Select(async userId =>
+        {
+            var cacheKey = "crm:account-audit-actor:" + userId.ToString("N");
+            if (!cache.TryGetValue(cacheKey, out string? displayName))
+            {
+                try
+                {
+                    var user = await auth.GetActiveAsync(userId, ct);
+                    displayName = user?.DisplayName ?? user?.Email ?? "";
+                }
+                catch (Exception) when (!ct.IsCancellationRequested)
+                {
+                    displayName = "";
+                }
+                cache.Set(cacheKey, displayName, TimeSpan.FromMinutes(10));
+            }
+            return (Id: userId, Name: displayName);
+        }));
+        var namesById = actorNames.ToDictionary(x => x.Id, x => x.Name);
+
+        return Results.Ok(new
+        {
+            total, page = currentPage, pageSize = size,
+            items = entries.Select(x => new
+            {
+                x.Id, x.ActionCode, x.AreaCode, x.ChangesJson, x.CreatedAt,
+                x.ActorUserId,
+                actorDisplayName = x.ActorUserId.HasValue &&
+                    namesById.TryGetValue(x.ActorUserId.Value, out var displayName) &&
+                    !string.IsNullOrWhiteSpace(displayName) ? displayName : null
+            })
+        });
+    }
+
     private static async Task<IResult> Assignments(Guid id, CrmDbContext db, HttpContext http, CancellationToken ct)
     {
         if (!CrmDataEndpoints.HasRead(http, "account")) return CrmAccess.Denied();
