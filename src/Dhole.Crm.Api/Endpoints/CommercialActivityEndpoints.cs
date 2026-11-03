@@ -8,7 +8,9 @@ namespace Dhole.Crm.Api.Endpoints;
 public sealed record ActivityCreateRequest(Guid? AccountId,Guid? LeadId,Guid? OpportunityId,
     Guid? ContactId,Guid? OwnerUserId,string Type,string Subject,DateTime? ScheduledStartAt,
     DateTime? ScheduledEndAt,DateTime? OccurredAt,string? LocationText,
-    int? ReminderLeadMinutes = null,string? ReminderChannelStrategy = null);
+    int? ReminderLeadMinutes = null,string? ReminderChannelStrategy = null,
+    string? Involved = null,string? Agreements = null,
+    string? NextCommitment = null,DateTime? CommitmentDueAt = null);
 public sealed record ActivityPatchRequest(long ExpectedVersion,string Subject,string? LocationText);
 public sealed record ActivityCompleteRequest(long ExpectedVersion,string Outcome,DateTime OccurredAt,string? Note);
 public sealed record ActivityRescheduleRequest(long ExpectedVersion,DateTime ScheduledStartAt,
@@ -94,6 +96,14 @@ internal static class CommercialActivityEndpoints
             return CommercialAccess.Invalid("Unknown activity type in Config");
         if(r.OccurredAt is not null&&r.OccurredAt>DateTime.UtcNow)
             return CommercialAccess.Invalid("Cannot record future actual occurrence");
+        if(r.Involved?.Length>1500 || r.Agreements?.Length>6000 ||
+            r.NextCommitment?.Length>250 ||
+            (string.IsNullOrWhiteSpace(r.NextCommitment) != !r.CommitmentDueAt.HasValue) ||
+            (r.CommitmentDueAt is { } commitmentDue &&
+                (commitmentDue.Kind!=DateTimeKind.Utc ||
+                 commitmentDue<=DateTime.UtcNow ||
+                 (r.ScheduledEndAt is { } scheduledEnd && commitmentDue<scheduledEnd))))
+            return CommercialAccess.Invalid("Invalid meeting recap or next commitment deadline");
         var activity=new Activity {
             AccountId=r.AccountId,LeadId=r.LeadId,OpportunityId=r.OpportunityId,ContactId=r.ContactId,
             OwnerUserId=owner,Type=r.Type,Subject=r.Subject.Trim(),
@@ -104,6 +114,33 @@ internal static class CommercialActivityEndpoints
             ReminderLeadMinutes=r.ReminderLeadMinutes,ReminderChannelStrategy=r.ReminderChannelStrategy
         };
         db.Activities.Add(activity);
+        // Reuse the existing notes/participants and followup models rather than
+        // storing agreements only in the browser. Save everything atomically.
+        var summary=string.Join("\n\n",new[] {
+            string.IsNullOrWhiteSpace(r.Involved)?null:"Involucrados: "+r.Involved.Trim(),
+            string.IsNullOrWhiteSpace(r.Agreements)?null:"Acuerdos: "+r.Agreements.Trim(),
+            string.IsNullOrWhiteSpace(r.NextCommitment)?null:
+                "Próximo compromiso: "+r.NextCommitment.Trim()+
+                " (vencimiento UTC: "+r.CommitmentDueAt!.Value.ToString("O")+")"
+        }.Where(x=>x is not null));
+        if(summary.Length>0)
+            db.ActivityNotes.Add(new ActivityNote {
+                ActivityId=activity.Id,AuthorUserId=current,
+                CreatedByUserId=current,NoteText=summary
+            });
+        Followup? nextCommitment=null;
+        if(!string.IsNullOrWhiteSpace(r.NextCommitment) && r.CommitmentDueAt.HasValue)
+        {
+            nextCommitment=new Followup {
+                AccountId=activity.AccountId,LeadId=activity.LeadId,
+                OpportunityId=activity.OpportunityId,
+                AssignedUserId=owner,Channel="SYSTEM",
+                Subject=r.NextCommitment.Trim(),DueAt=r.CommitmentDueAt.Value,
+                ReminderLeadMinutes=r.ReminderLeadMinutes,
+                ReminderChannelStrategy="BOTH",CreatedByUserId=current
+            };
+            db.Followups.Add(nextCommitment);
+        }
         try
         {
             if(activity.Status=="Scheduled" && activity.ScheduledStartAt is { } scheduled)
@@ -114,6 +151,12 @@ internal static class CommercialActivityEndpoints
                     activity.Type=="VISIT"?"crm.visit.reminder.v1":
                     activity.Type=="MEETING"?"crm.meeting.reminder.v1":"crm.activity.reminder.v1",
                     activity.CreatedByUserId,ct);
+            if(nextCommitment is not null)
+                await CrmReminderEnqueue.QueueAsync(db,"Followup",nextCommitment.Id,
+                    nextCommitment.AccountId,nextCommitment.AssignedUserId,
+                    nextCommitment.RowVersion,nextCommitment.DueAt,
+                    nextCommitment.ReminderLeadMinutes,"BOTH",
+                    "crm.followup.reminder.v1",nextCommitment.CreatedByUserId,ct);
             await db.SaveChangesAsync(ct);
             return Results.Created("/api/crm/activities/"+activity.Id,activity);
         }
