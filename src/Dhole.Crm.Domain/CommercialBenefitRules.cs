@@ -65,8 +65,10 @@ public static class CommercialBenefitRules
             !(Charges.Contains(rule.ChargeCode, StringComparer.Ordinal) ||
               LegacyCharges.Contains(rule.ChargeCode, StringComparer.Ordinal)) ||
             !RateTypes.Contains(rule.RateType, StringComparer.Ordinal) ||
-            rule.LaneCode is not (null or "MIAMI") ||
+            rule.LaneCode is not (null or "MIAMI" or "OWN") ||
             (rule.LaneCode == "MIAMI" && rule.Modality != "LCL") ||
+            (rule.LaneCode == "OWN" && rule.Modality is not ("LCL" or "LTL")) ||
+            (rule.SourceCostId == Guid.Empty) ||
             (CanonicalCharge(rule.ChargeCode) == "Other" && string.IsNullOrWhiteSpace(rule.CustomChargeName)) ||
             rule.CustomChargeName?.Length > 120 ||
             rule.EquipmentCode?.Length > 80 ||
@@ -140,9 +142,12 @@ public static class CommercialBenefitRules
 
     public static bool Overlap(AccountPreferentialRate one, AccountPreferentialRate other) =>
         one.Modality == other.Modality && one.LaneCode == other.LaneCode &&
-        CanonicalCharge(one.ChargeCode) == CanonicalCharge(other.ChargeCode) &&
-        string.Equals(one.CustomChargeName, other.CustomChargeName,
-            StringComparison.OrdinalIgnoreCase) &&
+        // Two sourced costs with distinct IDs are separate items, even if labels coincide.
+        (one.SourceCostId.HasValue && other.SourceCostId.HasValue
+            ? one.SourceCostId == other.SourceCostId
+            : CanonicalCharge(one.ChargeCode) == CanonicalCharge(other.ChargeCode) &&
+              string.Equals(one.CustomChargeName, other.CustomChargeName,
+                  StringComparison.OrdinalIgnoreCase)) &&
         MatchesScope(one.EquipmentCodes, one.EquipmentCode, other.EquipmentCodes, other.EquipmentCode) &&
         MatchesScope(one.PolCodes, one.OriginCode, other.PolCodes, other.OriginCode) &&
         MatchesScope(one.PoeCodes, one.DestinationCode, other.PoeCodes, other.DestinationCode) &&

@@ -17,6 +17,8 @@ public sealed class AccountPreferentialRate : CrmRecord
     public string Modality { get; set; } = "FCL";
     // Optional lane qualifier, e.g. MIAMI for the LCL Miami product.
     public string? LaneCode { get; set; }
+    // Stable identity of the original Pricing cost / surcharge. Never copy or overwrite its cost.
+    public Guid? SourceCostId { get; set; }
     public string ChargeCode { get; set; } = "FREIGHT";
     public string? CustomChargeName { get; set; }
     public string RateType { get; set; } = "FIXED_AMOUNT";
