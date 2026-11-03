@@ -1,3 +1,5 @@
+using System.Text.Json;
+
 namespace Dhole.Crm.Domain;
 
 /// <summary>CRM-only negotiated benefits. Pricing is not automatically modified.</summary>
@@ -17,7 +19,7 @@ public static class CommercialBenefitRules
     ];
     public static readonly string[] RateTypes = [
         "FIXED_AMOUNT", "DISCOUNT_AMOUNT", "DISCOUNT_PERCENT",
-        "INSURANCE_PERCENT", "WAIVE", "NEGOTIATED"
+        "INSURANCE_PERCENT", "WAIVE", "NEGOTIATED", "TIERED_SALE"
     ];
 
     public static string CanonicalCharge(string? source) => source switch
@@ -85,6 +87,15 @@ public static class CommercialBenefitRules
             (rule.InsuranceSalePercent.HasValue && (rule.InsuranceSalePercent < 0m || rule.InsuranceSalePercent > 100m)))
             return false;
 
+        if (rule.RateType == "TIERED_SALE")
+        {
+            if (!rule.SourceCostId.HasValue || rule.Value.HasValue ||
+                rule.MinimumCharge.HasValue || rule.UnitCode is not null ||
+                rule.CurrencyCode is not ("USD" or "CRC") ||
+                !ValidTierSalesJson(rule.TierSalesJson)) return false;
+        }
+        else if (rule.TierSalesJson is not null) return false;
+
         if (rule.RateType == "INSURANCE_PERCENT")
         {
             if (CanonicalCharge(rule.ChargeCode) != "Insurance" || !rule.Value.HasValue ||
@@ -115,7 +126,7 @@ public static class CommercialBenefitRules
             rule.MinimumCharge is not null)
             return false;
 
-        var money = rule.RateType is "FIXED_AMOUNT" or "DISCOUNT_AMOUNT" ||
+        var money = rule.RateType is "FIXED_AMOUNT" or "DISCOUNT_AMOUNT" or "TIERED_SALE" ||
             rule.MinimumCharge.HasValue;
         if (money && rule.CurrencyCode is not ("USD" or "CRC")) return false;
         if (!money && rule.CurrencyCode is not null) return false;
@@ -125,6 +136,74 @@ public static class CommercialBenefitRules
         if (rule.RateType != "FIXED_AMOUNT" && rule.UnitCode is not null)
             return false;
         return true;
+    }
+
+
+    // Each entry identifies a Pricing bracket and changes its sale only.
+    // Never accept costAmount or a replacement rule definition from CRM.
+    public static bool ValidTierSalesJson(string? raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw) || raw.Length > 32768) return false;
+        try
+        {
+            using var document = JsonDocument.Parse(raw);
+            var root = document.RootElement;
+            if (root.ValueKind != JsonValueKind.Array || root.GetArrayLength() is < 1 or > 100)
+                return false;
+            var signatures = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var row in root.EnumerateArray())
+            {
+                if (row.ValueKind != JsonValueKind.Object ||
+                    row.EnumerateObject().Any(p => !new[] {
+                        "dimension", "minValue", "maxValue", "containerTypeId",
+                        "calculationMode", "includedStorageDays", "saleAmount"
+                    }.Contains(p.Name, StringComparer.Ordinal))) return false;
+                if (!row.TryGetProperty("dimension", out var dimensionValue) ||
+                    dimensionValue.ValueKind != JsonValueKind.String) return false;
+                var dimension = dimensionValue.GetString();
+                if (dimension is not ("WeightKg" or "Packages" or "ContainerType")) return false;
+
+                if (!row.TryGetProperty("saleAmount", out var sale) ||
+                    sale.ValueKind != JsonValueKind.Number || !sale.TryGetDecimal(out var price) ||
+                    price < 0m || price > 999999999999m) return false;
+                var mode = row.TryGetProperty("calculationMode", out var modeValue) &&
+                    modeValue.ValueKind == JsonValueKind.String ? modeValue.GetString() : "Flat";
+                if (mode is not ("Flat" or "PerKg" or "PerExtraDay") ||
+                    (mode == "PerKg" && dimension != "WeightKg")) return false;
+
+                decimal? Number(string key)
+                {
+                    if (!row.TryGetProperty(key, out var element) ||
+                        element.ValueKind == JsonValueKind.Null) return null;
+                    return element.ValueKind == JsonValueKind.Number &&
+                           element.TryGetDecimal(out var result) ? result : decimal.MinValue;
+                }
+                string? Str(string key)
+                {
+                    if (!row.TryGetProperty(key, out var element) ||
+                        element.ValueKind == JsonValueKind.Null) return null;
+                    return element.ValueKind == JsonValueKind.String ? element.GetString() : "";
+                }
+                var min = Number("minValue");
+                var max = Number("maxValue");
+                var included = Number("includedStorageDays");
+                var container = Str("containerTypeId");
+                if (min < 0m || max < 0m || min > max ||
+                    (dimension == "Packages" &&
+                     ((min.HasValue && decimal.Truncate(min.Value) != min.Value) ||
+                      (max.HasValue && decimal.Truncate(max.Value) != max.Value)))) return false;
+                if (dimension == "ContainerType" && string.IsNullOrWhiteSpace(container)) return false;
+                if (dimension != "ContainerType" && min is null && max is null) return false;
+                if (mode == "PerExtraDay"
+                    ? included is null || included < 0m || decimal.Truncate(included.Value) != included.Value
+                    : included is not null) return false;
+                var signature = $"{dimension}|{min}|{max}|{container}|{mode}|{included}";
+                if (!signatures.Add(signature)) return false;
+            }
+            return true;
+        }
+        catch (JsonException) { return false; }
+        catch (InvalidOperationException) { return false; }
     }
 
     private static string[] Scope(string[]? values, string? legacy) =>

@@ -141,6 +141,7 @@ public sealed partial class CrmDbContext(DbContextOptions<CrmDbContext> options)
             e.Property(x => x.ChargeCode).HasMaxLength(32);
             e.Property(x => x.CustomChargeName).HasMaxLength(120);
             e.Property(x => x.RateType).HasMaxLength(24);
+            e.Property(x => x.TierSalesJson).HasColumnType("jsonb");
             e.Property(x => x.Value).HasPrecision(18, 6);
             e.Property(x => x.MinimumCharge).HasPrecision(18, 6);
             e.Property(x => x.InsuranceCostPercent).HasPrecision(9, 6);
