@@ -35,6 +35,9 @@ internal static class CrmFollowupEndpoints
     }
     private static bool Manage(HttpContext h)=>CrmAccess.Scope(h,"crm.followup.manage");
     private static bool Tasks(HttpContext h)=>CrmAccess.Scope(h,"crm.task.manage");
+    private static bool CanReadCalendar(HttpContext h)=>Manage(h)||Tasks(h)||
+        CrmAccess.Scope(h,"crm.activity.read-all")||
+        CrmAccess.Scope(h,"crm.account.read-all");
     private static bool Utc(DateTime dt)=>dt.Kind==DateTimeKind.Utc;
     private static async Task<bool> AccountVisible(Guid id,CrmDbContext db,HttpContext h,CancellationToken ct)=>
         await CrmAccess.CanSeeAccount(db,h,id,ct);
@@ -86,7 +89,7 @@ internal static class CrmFollowupEndpoints
     private static async Task<IResult> List(CrmDbContext db,HttpContext h,Guid? accountId,Guid? leadId,string? status,
         DateTime? from,DateTime? to,int? page,int? pageSize,CancellationToken ct)
     {
-        if(!Manage(h)&&!Tasks(h))return CrmAccess.Denied();
+        if(!CanReadCalendar(h))return CrmAccess.Denied();
         var visibleAccountIds = CrmAccess.VisibleAccounts(db,h).Select(a=>a.Id);
         var query=db.Followups.AsNoTracking().Where(x => x.ArchivedAt == null &&
             (!x.AccountId.HasValue || visibleAccountIds.Contains(x.AccountId.Value)));
@@ -110,7 +113,7 @@ internal static class CrmFollowupEndpoints
     }
     private static async Task<IResult> Get(Guid id,CrmDbContext db,HttpContext h,CancellationToken ct)
     {
-        if(!Manage(h)&&!Tasks(h))return CrmAccess.Denied();
+        if(!CanReadCalendar(h))return CrmAccess.Denied();
         var x=await db.Followups.AsNoTracking().FirstOrDefaultAsync(x=>x.Id==id && x.ArchivedAt==null,ct);
         return x is null?Results.NotFound():await HasAccess(x,db,h,ct)?Results.Ok(x):CrmAccess.Denied();
     }
