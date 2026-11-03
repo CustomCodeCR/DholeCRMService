@@ -115,12 +115,8 @@ public static class CrmReminderEngine
         string strategy,string type,Guid createdBy,CancellationToken ct)
     {
         // No customer-directed notifications: these reminders are addressed to the owner only.
-        foreach(var channel in strategy switch
-        {
-            "EMAIL"=>new[]{"Email"},
-            "SYSTEM"=>new[]{"System"},
-            _=>new[]{"Email","System"}
-        })
+        // Calendar tasks require both channels even when a legacy policy says otherwise.
+        foreach(var channel in new[]{"Email","System"})
         {
             var key=$"{entityType}:{entityId:N}:{version}:{channel}";
             // Re-read dedupe across restarts; PostgreSQL unique index is the final arbiter.
