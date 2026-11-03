@@ -14,7 +14,8 @@ public sealed record AccountPreferentialRateRequest(
     DateTime? ValidFrom, DateTime? ValidUntil, string? Notes, bool IsActive,
     decimal? InsuranceCostPercent = null, decimal? InsuranceSalePercent = null,
     string[]? EquipmentCodes = null, string[]? PolCodes = null,
-    string[]? PoeCodes = null, string[]? PodCodes = null, Guid? SourceCostId = null);
+    string[]? PoeCodes = null, string[]? PodCodes = null, Guid? SourceCostId = null,
+    string? TierSalesJson = null);
 
 internal static class AccountCommercialBenefitsEndpoints
 {
@@ -153,6 +154,7 @@ internal static class AccountCommercialBenefitsEndpoints
         record.Modality = r.Modality?.Trim().ToUpperInvariant() ?? "";
         record.LaneCode = Clean(r.LaneCode)?.ToUpperInvariant();
         record.SourceCostId = r.SourceCostId;
+        record.TierSalesJson = Clean(r.TierSalesJson);
         var incomingCharge = Clean(r.ChargeCode);
         record.ChargeCode = CommercialBenefitRules.CanonicalCharge(incomingCharge);
         record.CustomChargeName = Clean(r.CustomChargeName) ??

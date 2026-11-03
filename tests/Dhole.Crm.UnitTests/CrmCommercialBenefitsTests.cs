@@ -146,4 +146,36 @@ public sealed class CrmCommercialBenefitsTests
         Assert.IsTrue(CommercialBenefitRules.Overlap(one, same), "Empty selection means all PODs.");
     }
 
+
+
+    [TestMethod]
+    public void Tiered_preferential_sale_preserves_original_cost_and_validates_each_band()
+    {
+        var rule = new AccountPreferentialRate {
+            Modality = "FCL", ChargeCode = "DestinationCharge",
+            SourceCostId = Guid.NewGuid(), RateType = "TIERED_SALE",
+            CurrencyCode = "USD", TierSalesJson = """
+            [
+              {"dimension":"WeightKg","minValue":0,"maxValue":100,
+               "containerTypeId":null,"calculationMode":"Flat","includedStorageDays":null,"saleAmount":15},
+              {"dimension":"WeightKg","minValue":101,"maxValue":200,
+               "containerTypeId":null,"calculationMode":"PerKg","includedStorageDays":null,"saleAmount":0.75}
+            ]
+            """
+        };
+        Assert.IsTrue(CommercialBenefitRules.ValidRate(rule));
+        rule.TierSalesJson = rule.TierSalesJson.Replace("\"saleAmount\":15", "\"costAmount\":2,\"saleAmount\":15");
+        Assert.IsFalse(CommercialBenefitRules.ValidRate(rule), "CRM must not accept edits to supplier cost.");
+        rule.TierSalesJson = """
+            [{"dimension":"Packages","minValue":1,"maxValue":2,"containerTypeId":null,
+              "calculationMode":"Flat","includedStorageDays":null,"saleAmount":-1}]
+            """;
+        Assert.IsFalse(CommercialBenefitRules.ValidRate(rule));
+        rule.TierSalesJson = """[{"dimension":"ContainerType","minValue":null,"maxValue":null,
+          "containerTypeId":"40HC","calculationMode":"Flat","includedStorageDays":null,"saleAmount":25}]""";
+        Assert.IsTrue(CommercialBenefitRules.ValidRate(rule));
+        rule.SourceCostId = null;
+        Assert.IsFalse(CommercialBenefitRules.ValidRate(rule));
+    }
+
 }
