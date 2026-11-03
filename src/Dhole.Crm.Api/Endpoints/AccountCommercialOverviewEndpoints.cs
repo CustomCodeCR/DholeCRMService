@@ -27,9 +27,11 @@ internal static class AccountCommercialOverviewEndpoints
     private static async Task<IResult> GetQuoteDashboard(Guid id, CrmDbContext db,
         HttpContext http, CancellationToken ct)
     {
-        if (!CrmDataEndpoints.HasRead(http, "account") ||
-            !CrmDataEndpoints.HasRead(http, "opportunity") ||
-            !CrmAccess.Scope(http, "crm.quote.read"))
+        // The dashboard is part of an account the user is already allowed to read.
+        // Quote/opportunity scopes protect their management endpoints, not this
+        // account-level aggregate. Mirror the CRM account-quotations access policy
+        // on develop without granting any additional scopes.
+        if (!CrmDataEndpoints.HasRead(http, "account"))
             return CrmAccess.Denied();
 
         var account = await CrmAccess.VisibleAccounts(db, http).AsNoTracking()
