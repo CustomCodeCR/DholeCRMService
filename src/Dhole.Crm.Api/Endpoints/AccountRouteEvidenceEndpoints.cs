@@ -30,6 +30,7 @@ internal static class AccountRouteEvidenceEndpoints
         g.MapPost("/accounts/{id:guid}/route-history/bulk", AddBatch);
         g.MapGet("/accounts/{id:guid}/quote-route-snapshots", QuoteRoutes);
         g.MapGet("/accounts/{id:guid}/pricing-quotations", AccountQuotes);
+        g.MapGet("/accounts/{id:guid}/quote-dashboard", AccountQuoteDashboard);
         g.MapGet("/accounts/{id:guid}/pricing-quotation-candidates", LegacyCandidates);
         g.MapPost("/accounts/{id:guid}/pricing-quotations/reconcile", ReconcileLegacyQuotes);
         g.MapGet("/leads/{id:guid}/pricing-quotations", LeadQuotes);
@@ -93,6 +94,61 @@ internal static class AccountRouteEvidenceEndpoints
                 x.PodCode, x.ServiceCode, x.Notes, x.ObservedAt, x.CreatedAt
             }).ToListAsync(ct);
         return Results.Ok(new { items = records, total, page = number, pageSize = size, popularRoutes });
+    }
+
+    /// <summary>
+    /// Current Pricing status totals for quotes explicitly associated with this CRM
+    /// account or its converted leads. Every page is independently authorized by
+    /// Pricing with the caller's token; no customer-name matching is performed.
+    /// </summary>
+    private static async Task<IResult> AccountQuoteDashboard(Guid id, CrmDbContext db,
+        HttpContext h, IPricingCommercialClient pricing, CancellationToken ct)
+    {
+        if (!CrmDataEndpoints.HasRead(h, "account")) return CrmAccess.Denied();
+        if (!await CanSeeAccount(db, h, id, ct)) return Results.NotFound();
+        var bearer = Bearer(h);
+        if (string.IsNullOrWhiteSpace(bearer)) return Results.Unauthorized();
+
+        var convertedLeads = await db.Leads.AsNoTracking()
+            .Where(x => x.ConvertedAccountId == id && x.ConvertedAt != null)
+            .Select(x => x.Id).Distinct().Take(100).ToArrayAsync(ct);
+        var quotes = new Dictionary<Guid, PricingAccountQuote>();
+        var remoteTotal = 0;
+        const int pageSize = 100;
+        const int maxPages = 50;
+        for (var page = 1; page <= maxPages; page++)
+        {
+            var response = await pricing.GetAccountQuotes(
+                id, convertedLeads, bearer, page, pageSize, ct);
+            if (!response.Success)
+                return PricingFailure(response.Status, "consultar indicadores de cotizaciones");
+            var data = response.Value!;
+            remoteTotal = data.Total;
+            foreach (var quote in data.Items)
+            {
+                if (quote.PricingQuoteId != Guid.Empty)
+                    quotes[quote.PricingQuoteId] = quote;
+            }
+            if (page * pageSize >= data.Total || data.Items.Count == 0) break;
+        }
+
+        static bool Is(string? status, string expected) =>
+            string.Equals(status, expected, StringComparison.OrdinalIgnoreCase);
+        var values = quotes.Values.ToArray();
+        var sent = values.Count(q => Is(q.CommercialStatusSnapshot, "Sent") ||
+            Is(q.CommercialStatusSnapshot, "RequestedByClient") ||
+            Is(q.CommercialStatusSnapshot, "Expired"));
+        var approved = values.Count(q => Is(q.CommercialStatusSnapshot, "AcceptedByClient"));
+        var rejected = values.Count(q => Is(q.CommercialStatusSnapshot, "RejectedByClient"));
+        var cancelled = values.Count(q => Is(q.CommercialStatusSnapshot, "Cancelled"));
+        return Results.Ok(new {
+            total = values.Length, sent, approved, rejected, cancelled,
+            other = values.Length - sent - approved - rejected - cancelled,
+            pendingSync = 0,
+            lastSyncAt = DateTime.UtcNow,
+            linkedOnly = false,
+            truncated = remoteTotal > values.Length
+        });
     }
 
     // Only account-scoped quotes verified by Pricing using the caller's JWT.
