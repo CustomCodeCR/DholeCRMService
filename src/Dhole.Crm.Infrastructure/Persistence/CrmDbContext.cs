@@ -134,6 +134,7 @@ public sealed partial class CrmDbContext(DbContextOptions<CrmDbContext> options)
         {
             e.HasOne<Account>().WithMany().HasForeignKey(x => x.AccountId).OnDelete(DeleteBehavior.Restrict);
             e.HasIndex(x => new { x.AccountId, x.Modality, x.IsActive });
+            e.HasIndex(x => new { x.AccountId, x.SourceCostId });
             e.HasIndex(x => new { x.AccountId, x.ValidFrom, x.ValidUntil });
             e.Property(x => x.Modality).HasMaxLength(12);
             e.Property(x => x.LaneCode).HasMaxLength(32);
