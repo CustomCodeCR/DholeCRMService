@@ -24,6 +24,7 @@ public static class CrmDataEndpoints
         group.MapCommercialPipeline();
         group.MapCommercialOpportunities();
         group.MapCommercialActivities();
+        group.MapCalendarLabels();
         group.MapCommercialAnalyses();
         group.MapCommercialPricing();
         group.MapFollowups();
