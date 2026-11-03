@@ -383,6 +383,10 @@ internal static class AccountEndpoints
         var currentPage = Math.Max(1, page ?? 1);
         var size = Math.Clamp(pageSize ?? 15, 1, 50);
         var query = db.AccountChangeHistories.AsNoTracking().Where(x => x.AccountId == id);
+        // Account viewers without credit-read permissions cannot inspect financing
+        // amounts, payment terms or approval history through the account timeline.
+        if (!CrmAccess.Scope(http, "crm.credit.read"))
+            query = query.Where(x => x.AreaCode != "CREDIT" && x.AreaCode != "CREDIT_CONTRACT");
         var total = await query.CountAsync(ct);
         var entries = await query.OrderByDescending(x => x.CreatedAt)
             .ThenByDescending(x => x.Id).Skip((currentPage - 1) * size)
