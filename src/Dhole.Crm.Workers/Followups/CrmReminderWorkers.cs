@@ -98,6 +98,10 @@ internal sealed class CrmReminderDispatcherWorker(IServiceScopeFactory scopes,IC
                     "crm.meeting.reminder.v1"=>"Próxima reunión comercial",
                     "crm.activity.reminder.v1"=>"Actividad comercial programada",
                     "crm.activity.overdue.v1"=>"Actividad comercial vencida",
+                    "crm.commitment.upcoming.v1"=>"Recordatorio de compromiso comercial",
+                    "crm.commitment.start.v1"=>"Compromiso comercial programado para ahora",
+                    "crm.commitment.overdue.v1"=>"Compromiso comercial sin atender",
+                    "crm.commitment.escalated.v1"=>"Alerta a supervisión: compromiso comercial sin atender",
                     "crm.credit.review.v1"=>"Revisión de crédito comercial pendiente",
                     "crm.contract.renewal.v1"=>"Renovación de contrato comercial próxima",
                     _=>"Seguimiento comercial pendiente"
@@ -106,13 +110,33 @@ internal sealed class CrmReminderDispatcherWorker(IServiceScopeFactory scopes,IC
                     ? await db.Activities.AsNoTracking().FirstOrDefaultAsync(x=>x.Id==reminder.EntityId,ct) : null;
                 var relatedFollowup=reminder.EntityType=="Followup"
                     ? await db.Followups.AsNoTracking().FirstOrDefaultAsync(x=>x.Id==reminder.EntityId,ct) : null;
-                var dueAt=relatedActivity?.ScheduledStartAt??relatedFollowup?.DueAt;
+                var overdueNotice=reminder.NotificationType is
+                    "crm.activity.overdue.v1" or "crm.commitment.overdue.v1" or
+                    "crm.commitment.escalated.v1";
+                var dueAt=overdueNotice
+                    ? relatedActivity?.ScheduledEndAt??relatedActivity?.ScheduledStartAt??relatedFollowup?.DueAt
+                    : relatedActivity?.ScheduledStartAt??relatedFollowup?.DueAt;
                 var title=relatedActivity?.Subject??relatedFollowup?.Subject??subject;
                 var localDate=dueAt.HasValue?TimeZoneInfo.ConvertTimeFromUtc(dueAt.Value,
                     TimeZoneInfo.FindSystemTimeZoneById("America/Costa_Rica")).ToString("dd/MM/yyyy HH:mm"):null;
-                var body=reminder.NotificationType=="crm.activity.overdue.v1"?
-                    "Existe una actividad vencida. Revise su agenda CRM; no se registra una ejecución automática.":
-                    $"Recordatorio: {title}. {(localDate is null?"":$"Fecha: {localDate} (Costa Rica). ")}Revise su agenda CRM en Dhole.";
+                var ownerId=relatedActivity?.OwnerUserId??relatedFollowup?.AssignedUserId;
+                var owner=reminder.NotificationType=="crm.commitment.escalated.v1" && ownerId.HasValue
+                    ? await auth.GetActiveAsync(ownerId.Value,ct) : null;
+                var ownerName=owner?.DisplayName??"Vendedor asignado";
+                var body=reminder.NotificationType switch
+                {
+                    "crm.commitment.escalated.v1" =>
+                        $"El vendedor {ownerName} no registró la atención del compromiso \"{title}\" dentro del plazo. " +
+                        $"Vencimiento: {localDate??"sin fecha"} (Costa Rica). Revise la agenda CRM y dé seguimiento.",
+                    "crm.commitment.overdue.v1" =>
+                        $"El compromiso \"{title}\" venció el {localDate??"plazo registrado"} (Costa Rica) " +
+                        "sin constancia de cumplimiento. Registre el resultado o reprograme la actividad en el CRM.",
+                    "crm.activity.overdue.v1" =>
+                        "Existe una actividad vencida. Revise su agenda CRM; no se registra una ejecución automática.",
+                    _ =>
+                        $"Recordatorio: {title}. {(localDate is null?"":$"Fecha: {localDate} (Costa Rica). ")}" +
+                        "Revise su agenda CRM en Dhole."
+                };
                 var payload=new {
                     eventId=reminder.Id.ToString(),
                     notificationType=reminder.NotificationType,
