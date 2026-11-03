@@ -5,12 +5,14 @@ using Dhole.Crm.Infrastructure.References;
 using Microsoft.EntityFrameworkCore;
 
 namespace Dhole.Crm.Api.Endpoints;
+public sealed record AgreementCommitmentRequest(string Subject, DateTime DueAt);
 public sealed record ActivityCreateRequest(Guid? AccountId,Guid? LeadId,Guid? OpportunityId,
     Guid? ContactId,Guid? OwnerUserId,string Type,string Subject,DateTime? ScheduledStartAt,
     DateTime? ScheduledEndAt,DateTime? OccurredAt,string? LocationText,
     int? ReminderLeadMinutes = null,string? ReminderChannelStrategy = null,
     string? Involved = null,string? Agreements = null,
-    string? NextCommitment = null,DateTime? CommitmentDueAt = null);
+    string? NextCommitment = null,DateTime? CommitmentDueAt = null,
+    IReadOnlyList<AgreementCommitmentRequest>? AgreementCommitments = null);
 public sealed record ActivityPatchRequest(long ExpectedVersion,string Subject,string? LocationText);
 public sealed record ActivityCompleteRequest(long ExpectedVersion,string Outcome,DateTime OccurredAt,string? Note);
 public sealed record ActivityRescheduleRequest(long ExpectedVersion,DateTime ScheduledStartAt,
@@ -104,6 +106,14 @@ internal static class CommercialActivityEndpoints
                  commitmentDue<=DateTime.UtcNow ||
                  (r.ScheduledEndAt is { } scheduledEnd && commitmentDue<scheduledEnd))))
             return CommercialAccess.Invalid("Invalid meeting recap or next commitment deadline");
+        var extracted = r.AgreementCommitments ?? [];
+        if(extracted.Count > 30 ||
+            extracted.Any(x => string.IsNullOrWhiteSpace(x.Subject) ||
+                x.Subject.Length > 250 ||
+                x.DueAt.Kind != DateTimeKind.Utc ||
+                x.DueAt < DateTime.UtcNow ||
+                (r.ScheduledStartAt.HasValue && x.DueAt < r.ScheduledStartAt.Value)))
+            return CommercialAccess.Invalid("Agreement commitments require a title and a valid future date.");
         var activity=new Activity {
             AccountId=r.AccountId,LeadId=r.LeadId,OpportunityId=r.OpportunityId,ContactId=r.ContactId,
             OwnerUserId=owner,Type=r.Type,Subject=r.Subject.Trim(),
@@ -128,18 +138,32 @@ internal static class CommercialActivityEndpoints
                 ActivityId=activity.Id,AuthorUserId=current,
                 CreatedByUserId=current,NoteText=summary
             });
-        Followup? nextCommitment=null;
+        // Every confirmed agreement is a separate, account-linked calendar
+        // commitment. Preserve original meeting notes as the audit context.
+        var commitments = extracted
+            .Select(x => (Subject:x.Subject.Trim(), x.DueAt))
+            .ToList();
         if(!string.IsNullOrWhiteSpace(r.NextCommitment) && r.CommitmentDueAt.HasValue)
+            commitments.Add((r.NextCommitment.Trim(), r.CommitmentDueAt.Value));
+
+        var nextCommitments = new List<Followup>();
+        foreach(var item in commitments.DistinctBy(x =>
+            (x.Subject.ToUpperInvariant(), x.DueAt)))
         {
-            nextCommitment=new Followup {
+            var followup = new Followup {
                 AccountId=activity.AccountId,LeadId=activity.LeadId,
-                OpportunityId=activity.OpportunityId,
-                AssignedUserId=owner,Channel="SYSTEM",
-                Subject=r.NextCommitment.Trim(),DueAt=r.CommitmentDueAt.Value,
+                OpportunityId=activity.OpportunityId,AssignedUserId=owner,
+                Channel="SYSTEM", Subject=item.Subject,DueAt=item.DueAt,
                 ReminderLeadMinutes=r.ReminderLeadMinutes,
                 ReminderChannelStrategy="BOTH",CreatedByUserId=current
             };
-            db.Followups.Add(nextCommitment);
+            nextCommitments.Add(followup);
+            db.Followups.Add(followup);
+            db.FollowupHistories.Add(new FollowupHistory {
+                FollowupId=followup.Id, ActorUserId=current,
+                Action="Created", Reason="Acuerdo registrado en actividad comercial "+activity.Id,
+                NewDueAt=followup.DueAt,CreatedByUserId=current
+            });
         }
         try
         {
@@ -151,12 +175,12 @@ internal static class CommercialActivityEndpoints
                     activity.Type=="VISIT"?"crm.visit.reminder.v1":
                     activity.Type=="MEETING"?"crm.meeting.reminder.v1":"crm.activity.reminder.v1",
                     activity.CreatedByUserId,ct);
-            if(nextCommitment is not null)
-                await CrmReminderEnqueue.QueueAsync(db,"Followup",nextCommitment.Id,
-                    nextCommitment.AccountId,nextCommitment.AssignedUserId,
-                    nextCommitment.RowVersion,nextCommitment.DueAt,
-                    nextCommitment.ReminderLeadMinutes,"BOTH",
-                    "crm.followup.reminder.v1",nextCommitment.CreatedByUserId,ct);
+            foreach(var followup in nextCommitments)
+                await CrmReminderEnqueue.QueueAsync(db,"Followup",followup.Id,
+                    followup.AccountId,followup.AssignedUserId,
+                    followup.RowVersion,followup.DueAt,
+                    followup.ReminderLeadMinutes,"BOTH",
+                    "crm.followup.reminder.v1",followup.CreatedByUserId,ct);
             await db.SaveChangesAsync(ct);
             return Results.Created("/api/crm/activities/"+activity.Id,activity);
         }
