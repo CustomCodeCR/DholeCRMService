@@ -8,10 +8,33 @@ namespace Dhole.Crm.Infrastructure.References;
 public interface IAuthReferenceService
 {
     Task<AuthUserReference?> GetActiveAsync(Guid userId, CancellationToken ct);
+    Task<AuthUserReference?> GetActiveByUsernameAsync(string username, CancellationToken ct) => Task.FromResult<AuthUserReference?>(null);
 }
 public sealed record AuthUserReference(Guid Id, bool Active, string[] Scopes, string? Email = null, string? DisplayName = null);
 public sealed class AuthReferenceService(HttpClient http, IConfiguration configuration) : IAuthReferenceService
 {
+
+    public async Task<AuthUserReference?> GetActiveByUsernameAsync(string username, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(username) || username.Length > 80)
+            return null;
+        var address = configuration["Auth:Client:BaseAddress"];
+        var key = configuration["Auth:Client:InternalServiceKey"];
+        if (string.IsNullOrWhiteSpace(address) || string.IsNullOrWhiteSpace(key))
+            throw new InvalidOperationException("Auth service lookup is not configured.");
+        using var request = new HttpRequestMessage(HttpMethod.Get,
+            address.TrimEnd('/') + "/api/internal/auth/crm-users/by-username/" +
+            Uri.EscapeDataString(username.Trim()));
+        request.Headers.TryAddWithoutValidation("X-Dhole-Service-Key", key);
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        timeout.CancelAfter(TimeSpan.FromSeconds(5));
+        using var response = await http.SendAsync(request, timeout.Token);
+        if (response.StatusCode == HttpStatusCode.NotFound) return null;
+        response.EnsureSuccessStatusCode();
+        var result = await response.Content.ReadFromJsonAsync<AuthUserReference>(cancellationToken: timeout.Token);
+        return result is { Active: true } ? result : null;
+    }
+
     public async Task<AuthUserReference?> GetActiveAsync(Guid userId, CancellationToken ct)
     {
         var address = configuration["Auth:Client:BaseAddress"];
