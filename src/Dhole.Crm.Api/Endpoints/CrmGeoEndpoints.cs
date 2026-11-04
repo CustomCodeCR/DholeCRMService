@@ -241,7 +241,7 @@ internal static class CrmGeoEndpoints
 
     private static string PostalMatchName(string value) =>
         Regex.Replace(value.Trim().ToLowerInvariant().Normalize(NormalizationForm.FormD),
-            @"\\p{Mn}", "");
+            @"\p{Mn}", "");
 
     private static async Task<GeoCountry[]> CountryList(IHttpClientFactory clients,
         IMemoryCache cache, CancellationToken ct) =>
