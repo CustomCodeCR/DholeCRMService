@@ -120,18 +120,61 @@ internal static class CrmGeoEndpoints
                 .OrderBy(x => x.Name).ToArray();
         });
 
-    private static async Task<GeoOption[]> CrOptions(IHttpClientFactory clients, IMemoryCache cache,
-        string relativePath, CancellationToken ct) =>
-        await Cached(cache, "crm:geo:cr:" + relativePath, async () =>
-        {
-            using var request = new HttpRequestMessage(HttpMethod.Get,
-                "https://ubicaciones.paginasweb.cr/" + relativePath);
-            var data = await Load(clients, request, ct, envelope: false);
-            return data.EnumerateObject()
-                .Select(x => new GeoOption(x.Name, x.Value.GetString() ?? ""))
-                .Where(x => x.Name.Length > 0 && x.Name.Length <= 3)
-                .OrderBy(x => int.TryParse(x.Code, out var code) ? code : int.MaxValue).ToArray();
-        });
+
+    // Embedded territorial registry (IGN 2026). Do not require a third-party HTTP
+    // connection to populate the 7 provinces, 84 cantons and 494 districts.
+    private static readonly Lazy<JsonDocument> CostaRicaRegistry = new(() =>
+    {
+        using var stream = typeof(CrmGeoEndpoints).Assembly.GetManifestResourceStream(
+            "Dhole.Crm.Api.Data.CostaRica2026.json")
+            ?? throw new InvalidOperationException("Missing embedded Costa Rica territorial registry");
+        return JsonDocument.Parse(stream);
+    });
+
+    private static GeoOption[] CrLocalOptions(string relativePath)
+    {
+        var provinces = CostaRicaRegistry.Value.RootElement.GetProperty("provincias");
+        if (relativePath == "provincias.json")
+            return provinces.EnumerateArray()
+                .Select(p => new GeoOption(p.GetProperty("codigo").GetString()!,
+                    p.GetProperty("nombre").GetString()!)).ToArray();
+
+        var segments = relativePath.Split('/');
+        if (segments.Length is not (3 or 5) || segments[0] != "provincia" ||
+            !int.TryParse(segments[1], out var provinceCode) || provinceCode is < 1 or > 7)
+            return [];
+        var province = provinces.EnumerateArray().FirstOrDefault(p =>
+            p.GetProperty("codigo").GetString() == provinceCode.ToString());
+        if (province.ValueKind != JsonValueKind.Object) return [];
+        var cantons = province.GetProperty("cantones");
+
+        if (segments.Length == 3 && segments[2] == "cantones.json")
+            return cantons.EnumerateArray()
+                .Select(c => new GeoOption(
+                    int.Parse(c.GetProperty("codigo").GetString()![1..]).ToString(),
+                    c.GetProperty("nombre").GetString()!)).ToArray();
+
+        if (segments.Length != 5 || segments[2] != "canton" ||
+            segments[4] != "distritos.json" ||
+            !int.TryParse(segments[3], out var cantonCode) || cantonCode is < 1 or > 99)
+            return [];
+        var fullCode = provinceCode.ToString() + cantonCode.ToString("00");
+        var canton = cantons.EnumerateArray().FirstOrDefault(c =>
+            c.GetProperty("codigo").GetString() == fullCode);
+        if (canton.ValueKind != JsonValueKind.Object) return [];
+        return canton.GetProperty("distritos").EnumerateArray()
+            .Select(d => new GeoOption(
+                int.Parse(d.GetProperty("codigo").GetString()![3..]).ToString(),
+                d.GetProperty("nombre").GetString()!)).ToArray();
+    }
+
+    private static Task<GeoOption[]> CrOptions(IHttpClientFactory clients, IMemoryCache cache,
+        string relativePath, CancellationToken ct)
+    {
+        // Sourced from IGN 2026 via ryze-cr/ubicaciones-cr (MIT).
+        // This data ships with the service and remains available during provider outages.
+        return Task.FromResult(CrLocalOptions(relativePath));
+    }
 
     private static async Task<JsonElement> Load(IHttpClientFactory clients,
         HttpRequestMessage request, CancellationToken ct, bool envelope = true)
