@@ -18,7 +18,8 @@ public sealed record ActivityCompleteRequest(long ExpectedVersion,string Outcome
 public sealed record ActivityRescheduleRequest(long ExpectedVersion,DateTime ScheduledStartAt,
     DateTime? ScheduledEndAt,string Reason);
 public sealed record ActivityCancelRequest(long ExpectedVersion,string Reason);
-public sealed record ActivityNoteRequest(string NoteText);
+public sealed record ActivityNoteRequest(string NoteText,
+    IReadOnlyList<AgreementCommitmentRequest>? AgreementCommitments = null);
 public sealed record ActivityParticipantRequest(Guid? ContactId,Guid? UserId,string? ParticipantName,string Role);
 
 internal static class CommercialActivityEndpoints
@@ -283,15 +284,50 @@ internal static class CommercialActivityEndpoints
     }
     private static async Task<IResult> AddNote(Guid id,ActivityNoteRequest r,CrmDbContext db,HttpContext h,CancellationToken ct)
     {
-        if(!CrmAccess.Scope(h,"crm.activity.update")||await FindAllowed(id,db,h,ct) is null)
-            return CrmAccess.Denied();
+        if(!CrmAccess.Scope(h,"crm.activity.update"))return CrmAccess.Denied();
+        var activity=await FindAllowed(id,db,h,ct);
+        if(activity is null)return Results.NotFound();
         if(string.IsNullOrWhiteSpace(r.NoteText)||r.NoteText.Length>8000)
             return CommercialAccess.Invalid("Empty or excessive observation");
+        var agreed=r.AgreementCommitments ?? [];
+        if(agreed.Count>30 || agreed.Any(x=>string.IsNullOrWhiteSpace(x.Subject) ||
+            x.Subject.Length>250 || x.DueAt.Kind!=DateTimeKind.Utc ||
+            x.DueAt<DateTime.UtcNow))
+            return CommercialAccess.Invalid("Each agreed commitment requires a title and future deadline.");
+        var actor=CrmAccess.UserId(h);
         var note=new ActivityNote {ActivityId=id,
-            AuthorUserId=CrmAccess.UserId(h),CreatedByUserId=CrmAccess.UserId(h),
-            NoteText=r.NoteText.Trim()};
-        db.ActivityNotes.Add(note);await db.SaveChangesAsync(ct);
-        return Results.Created("/api/crm/activities/"+id+"/notes",note);
+            AuthorUserId=actor,CreatedByUserId=actor,NoteText=r.NoteText.Trim()};
+        db.ActivityNotes.Add(note);
+        var generated=new List<Followup>();
+        foreach(var item in agreed.DistinctBy(x=>(x.Subject.Trim().ToUpperInvariant(),x.DueAt)))
+        {
+            var followup=new Followup {
+                AccountId=activity.AccountId,LeadId=activity.LeadId,
+                OpportunityId=activity.OpportunityId,
+                AssignedUserId=activity.OwnerUserId,Channel="SYSTEM",
+                Subject=item.Subject.Trim(),DueAt=item.DueAt,
+                ReminderLeadMinutes=activity.ReminderLeadMinutes,
+                ReminderChannelStrategy="BOTH",CreatedByUserId=actor
+            };
+            generated.Add(followup);
+            db.Followups.Add(followup);
+            db.FollowupHistories.Add(new FollowupHistory {
+                FollowupId=followup.Id,ActorUserId=actor,CreatedByUserId=actor,
+                Action="Created",Reason="Acuerdo de observación "+note.Id,
+                NewDueAt=item.DueAt
+            });
+            await CrmReminderEnqueue.QueueAsync(db,"Followup",followup.Id,
+                followup.AccountId,followup.AssignedUserId,followup.RowVersion,
+                followup.DueAt,followup.ReminderLeadMinutes,"BOTH",
+                "crm.followup.reminder.v1",actor,ct);
+        }
+        // Notes and their dated commitments must succeed or fail together.
+        var result=await CommercialAccess.Save(db,ct);
+        return result is Microsoft.AspNetCore.Http.HttpResults.Ok
+            ? Results.Created("/api/crm/activities/"+id+"/notes",
+                new {note.Id,note.ActivityId,note.NoteText,note.CreatedAt,
+                    createdCommitments=generated.Select(x=>new {x.Id,x.Subject,x.DueAt})})
+            : result;
     }
     private static async Task<IResult> Participants(Guid id,CrmDbContext db,HttpContext h,CancellationToken ct)
     {
