@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.RegularExpressions;
@@ -11,6 +12,10 @@ internal static class CrmGeoEndpoints
 {
     private sealed record GeoCountry(string Code, string Name);
     private sealed record GeoOption(string Code, string Name);
+    private sealed record PanamaDivision(
+        string ProvinceCode, string ProvinceName,
+        string DistrictCode, string DistrictName,
+        string CorregimientoCode, string CorregimientoName);
 
     public static RouteGroupBuilder MapGeoLocations(this RouteGroupBuilder group)
     {
@@ -60,6 +65,34 @@ internal static class CrmGeoEndpoints
                     source = "ubicaciones.paginasweb.cr" });
             }
 
+            // Panama's official administrative hierarchy is Province/Comarca -> District
+            // -> Corregimiento. CountriesNow's state/city endpoint cannot supply it.
+            if (iso == "PA")
+            {
+                var divisions = await PanamaLocations(clients, cache, ct);
+                const string source = "IGN Panamá · división territorial 2024";
+                if (string.IsNullOrWhiteSpace(parentCode))
+                    return Results.Ok(new { level = "province", options = divisions
+                        .Select(x => new GeoOption(x.ProvinceCode, x.ProvinceName))
+                        .DistinctBy(x => x.Code).OrderBy(x => x.Name).ToArray(), source });
+                if (string.IsNullOrWhiteSpace(grandparentCode))
+                {
+                    var districts = divisions.Where(x => x.ProvinceCode == parentCode).ToArray();
+                    if (districts.Length == 0) return CrmDataEndpoints.Bad("Unknown Panama province");
+                    return Results.Ok(new { level = "district", options = districts
+                        .Select(x => new GeoOption(x.DistrictCode, x.DistrictName))
+                        .DistinctBy(x => x.Code).OrderBy(x => x.Name).ToArray(), source });
+                }
+                var corregimientos = divisions
+                    .Where(x => x.ProvinceCode == grandparentCode && x.DistrictCode == parentCode)
+                    .ToArray();
+                if (corregimientos.Length == 0)
+                    return CrmDataEndpoints.Bad("Unknown Panama district");
+                return Results.Ok(new { level = "corregimiento", options = corregimientos
+                    .Select(x => new GeoOption(x.CorregimientoCode, x.CorregimientoName))
+                    .DistinctBy(x => x.Code).OrderBy(x => x.Name).ToArray(), source });
+            }
+
             var countries = await CountryList(clients, cache, ct);
             var country = countries.FirstOrDefault(x => x.Code == iso);
             if (country is null) return Results.NotFound();
@@ -89,6 +122,53 @@ internal static class CrmGeoEndpoints
             return Results.Ok(new { level = "city", options = cities, source = "countriesnow.space" });
         }
         catch (Exception e) when (IsProviderFailure(e)) { return Unavailable(); }
+    }
+
+    // Official IGN Tommy Guardia polygon attributes contain national IDs for all three
+    // levels. Cache the small attributes-only response; never expose provider URLs
+    // supplied by clients or depend on CountriesNow for Panama.
+    private static async Task<PanamaDivision[]> PanamaLocations(IHttpClientFactory clients,
+        IMemoryCache cache, CancellationToken ct) =>
+        await Cached(cache, "crm:geo:panama:ign-2024:v1", async () =>
+        {
+            const string url =
+                "https://services6.arcgis.com/LC15PAkubfypkSFO/arcgis/rest/services/" +
+                "corregimientos_panama/FeatureServer/0/query?where=1%3D1" +
+                "&outFields=cod_prov%2Cnomb_prov%2Ccod_dist%2Cnomb_dist%2Ccod_corr%2Cnomb_corr" +
+                "&returnGeometry=false&resultRecordCount=2000&f=json";
+            using var request = new HttpRequestMessage(HttpMethod.Get, url);
+            var document = await Load(clients, request, ct, envelope: false);
+            if (document.TryGetProperty("error", out _))
+                throw new InvalidOperationException("Panama geographic catalog returned an error");
+            var entries = document.GetProperty("features").EnumerateArray()
+                .Select(feature => feature.GetProperty("attributes"))
+                .Select(attributes => new PanamaDivision(
+                    PanamaValue(attributes, "cod_prov"), PanamaName(attributes, "nomb_prov"),
+                    PanamaValue(attributes, "cod_dist"), PanamaName(attributes, "nomb_dist"),
+                    PanamaValue(attributes, "cod_corr"), PanamaName(attributes, "nomb_corr")))
+                .Where(x => x.ProvinceCode.Length > 0 && x.ProvinceName.Length > 0 &&
+                    x.DistrictCode.Length > 0 && x.DistrictName.Length > 0 &&
+                    x.CorregimientoCode.Length > 0 && x.CorregimientoName.Length > 0)
+                .DistinctBy(x => x.CorregimientoCode).ToArray();
+            // A partial feature layer result must not become the definitive list.
+            if (entries.Length < 500)
+                throw new InvalidOperationException("Panama geographic catalog is incomplete");
+            return entries;
+        });
+
+    private static string PanamaValue(JsonElement data, string field) =>
+        data.TryGetProperty(field, out var value) && value.ValueKind != JsonValueKind.Null
+            ? (value.ValueKind == JsonValueKind.String
+                ? value.GetString() ?? "" : value.ToString()).Trim()
+            : "";
+
+    private static string PanamaName(JsonElement data, string field)
+    {
+        var raw = PanamaValue(data, field);
+        var name = CultureInfo.GetCultureInfo("es-PA").TextInfo.ToTitleCase(
+            raw.ToLower(CultureInfo.GetCultureInfo("es-PA")));
+        return Regex.Replace(name, @"\bPanama\b", "Panamá",
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
     }
 
     private static async Task<GeoCountry[]> CountryList(IHttpClientFactory clients,
