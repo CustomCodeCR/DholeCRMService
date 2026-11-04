@@ -330,11 +330,6 @@ internal static class ContactEndpoints
         return Results.Ok(await db.Addresses.AsNoTracking().Where(x => x.AccountId == id)
             .OrderBy(x => x.AddressType).ToListAsync(ct));
     }
-    private static bool ValidLocation(string? code, string? a1, string? a2, string? a3, string? postal) =>
-        (string.IsNullOrEmpty(code) || System.Text.RegularExpressions.Regex.IsMatch(code, @"^[A-Za-z]{2}$")) &&
-        new[] { a1, a2, a3 }.All(x => x is null || x.Length <= 160) &&
-        (postal is null || postal.Length <= 32);
-
     private static async Task<IResult> AddAddress(Guid id, AddressRequest r,
         CrmDbContext db, HttpContext h, IConfigReferenceService config, CancellationToken ct)
     {
@@ -343,8 +338,6 @@ internal static class ContactEndpoints
         if (string.IsNullOrWhiteSpace(r.AddressText) || r.AddressText.Length > 4000 ||
             string.IsNullOrWhiteSpace(r.AddressType) || r.AddressType.Length > 40)
             return CrmDataEndpoints.Bad("Invalid address");
-        if (!ValidLocation(r.CountryCode, r.AdministrativeArea1, r.AdministrativeArea2, r.AdministrativeArea3, r.PostalCode))
-            return CrmDataEndpoints.Bad("Invalid location");
         if (!await CrmDataEndpoints.ValidCountry(config, r.CountryId, ct))
             return CrmDataEndpoints.Bad("Unknown country");
         if (!ValidGeo(r.CountryCode, r.Admin1Code, r.Admin1Name, r.Admin2Code, r.Admin2Name,
@@ -359,11 +352,6 @@ internal static class ContactEndpoints
         var address = new Address { AccountId = id, ContactId = r.ContactId,
             CountryId = r.CountryId, AddressType = r.AddressType,
             AddressText = r.AddressText.Trim(), Location = r.Location,
-            CountryCode = r.CountryCode?.Trim().ToUpperInvariant(),
-            AdministrativeArea1 = r.AdministrativeArea1?.Trim(),
-            AdministrativeArea2 = r.AdministrativeArea2?.Trim(),
-            AdministrativeArea3 = r.AdministrativeArea3?.Trim(),
-            PostalCode = r.PostalCode?.Trim(),
             CreatedByUserId = CrmAccess.UserId(h) };
         ApplyGeo(address, r.CountryCode, r.Admin1Code, r.Admin1Name,
             r.Admin2Code, r.Admin2Name, r.Admin3Code, r.Admin3Name, r.PostalCode);
@@ -387,14 +375,7 @@ internal static class ContactEndpoints
         if (r.CountryCode is not null)
             ApplyGeo(address, r.CountryCode, r.Admin1Code, r.Admin1Name,
                 r.Admin2Code, r.Admin2Name, r.Admin3Code, r.Admin3Name, r.PostalCode);
-        if (!ValidLocation(r.CountryCode, r.AdministrativeArea1, r.AdministrativeArea2, r.AdministrativeArea3, r.PostalCode))
-            return CrmDataEndpoints.Bad("Invalid location");
         address.AddressType = r.AddressType;
-        address.CountryCode = r.CountryCode?.Trim().ToUpperInvariant();
-        address.AdministrativeArea1 = r.AdministrativeArea1?.Trim();
-        address.AdministrativeArea2 = r.AdministrativeArea2?.Trim();
-        address.AdministrativeArea3 = r.AdministrativeArea3?.Trim();
-        address.PostalCode = r.PostalCode?.Trim();
         address.AddressText = r.AddressText.Trim();
         address.Location = r.Location;
         address.UpdatedAt = DateTime.UtcNow;
