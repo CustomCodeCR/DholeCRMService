@@ -11,4 +11,7 @@
     <ProjectReference Include="../Dhole.Crm.Infrastructure/Dhole.Crm.Infrastructure.csproj" />
     <ProjectReference Include="../Dhole.Crm.Contracts/Dhole.Crm.Contracts.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Data/costa-rica-2026.json" LogicalName="Dhole.Crm.Api.Data.CostaRica2026.json" />
+  </ItemGroup>
 </Project>
