@@ -20,6 +20,7 @@ public sealed record ActivityRescheduleRequest(long ExpectedVersion,DateTime Sch
 public sealed record ActivityCancelRequest(long ExpectedVersion,string Reason);
 public sealed record ActivityNoteRequest(string NoteText,
     IReadOnlyList<AgreementCommitmentRequest>? AgreementCommitments = null);
+public sealed record ExistingAgreementRequest(IReadOnlyList<AgreementCommitmentRequest> Commitments);
 public sealed record ActivityParticipantRequest(Guid? ContactId,Guid? UserId,string? ParticipantName,string Role);
 
 internal static class CommercialActivityEndpoints
@@ -37,6 +38,7 @@ internal static class CommercialActivityEndpoints
 
         g.MapGet("/activities/{id:guid}/notes",Notes);
         g.MapPost("/activities/{id:guid}/notes",AddNote);
+        g.MapPost("/activities/{id:guid}/notes/{noteId:guid}/commitments",ScheduleExistingNote);
         g.MapGet("/activities/{id:guid}/participants",Participants);
         g.MapPost("/activities/{id:guid}/participants",AddParticipant);
         return g;
@@ -329,6 +331,58 @@ internal static class CommercialActivityEndpoints
                     createdCommitments=generated.Select(x=>new {x.Id,x.Subject,x.DueAt})})
             : result;
     }
+    // Explicit one-time conversion of a note that was saved before dated
+    // agreement scheduling existed. The original note and activity stay intact.
+    private static async Task<IResult> ScheduleExistingNote(Guid id,Guid noteId,
+        ExistingAgreementRequest request,CrmDbContext db,HttpContext h,CancellationToken ct)
+    {
+        if(!CrmAccess.Scope(h,"crm.activity.update"))return CrmAccess.Denied();
+        var activity=await FindAllowed(id,db,h,ct);
+        if(activity is null)return Results.NotFound();
+        var note=await db.ActivityNotes.AsNoTracking()
+            .FirstOrDefaultAsync(x=>x.Id==noteId && x.ActivityId==id,ct);
+        if(note is null)return Results.NotFound();
+        var entries=request.Commitments;
+        if(entries is null || entries.Count is < 1 or > 30 ||
+            entries.Any(x=>string.IsNullOrWhiteSpace(x.Subject) ||
+                x.Subject.Length>250 || x.DueAt.Kind!=DateTimeKind.Utc ||
+                x.DueAt<=DateTime.UtcNow))
+            return CommercialAccess.Invalid("Confirmed future agreement dates and titles are required.");
+        await using var tx=await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable,ct);
+        var existingReason="Acuerdo de observación "+noteId;
+        var exists=await db.FollowupHistories.AsNoTracking()
+            .AnyAsync(x=>x.Reason==existingReason,ct);
+        if(exists)return CommercialAccess.Conflict("This observation already has calendar commitments.");
+        var actor=CrmAccess.UserId(h);
+        var generated=new List<Followup>();
+        foreach(var item in entries.DistinctBy(x=>(x.Subject.Trim().ToUpperInvariant(),x.DueAt)))
+        {
+            var followup=new Followup {
+                AccountId=activity.AccountId,LeadId=activity.LeadId,
+                OpportunityId=activity.OpportunityId,
+                AssignedUserId=activity.OwnerUserId,
+                Channel="SYSTEM",Subject=item.Subject.Trim(),
+                DueAt=item.DueAt,ReminderLeadMinutes=activity.ReminderLeadMinutes,
+                ReminderChannelStrategy="BOTH",CreatedByUserId=actor
+            };
+            generated.Add(followup);
+            db.Followups.Add(followup);
+            db.FollowupHistories.Add(new FollowupHistory {
+                FollowupId=followup.Id,ActorUserId=actor,CreatedByUserId=actor,
+                Action="Created",Reason=existingReason,NewDueAt=item.DueAt
+            });
+            await CrmReminderEnqueue.QueueAsync(db,"Followup",followup.Id,
+                followup.AccountId,followup.AssignedUserId,followup.RowVersion,
+                followup.DueAt,followup.ReminderLeadMinutes,"BOTH",
+                "crm.followup.reminder.v1",actor,ct);
+        }
+        var committed=await CommercialAccess.Save(db,ct);
+        if(committed is not Microsoft.AspNetCore.Http.HttpResults.Ok)return committed;
+        await tx.CommitAsync(ct);
+        return Results.Created("/api/crm/activities/"+id+"/notes/"+noteId+"/commitments",
+            new{noteId,created=generated.Count});
+    }
+
     private static async Task<IResult> Participants(Guid id,CrmDbContext db,HttpContext h,CancellationToken ct)
     {
         if(!CanRead(h)||await FindAllowed(id,db,h,ct) is null)return CrmAccess.Denied();
