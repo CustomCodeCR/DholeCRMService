@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Net.Http.Json;
 using System.Text.Json;
+using System.Text;
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.Caching.Memory;
 
@@ -21,6 +22,7 @@ internal static class CrmGeoEndpoints
     {
         group.MapGet("/geo/countries", Countries);
         group.MapGet("/geo/divisions", Divisions);
+        group.MapGet("/geo/postal-codes", PostalCodes);
         return group;
     }
 
@@ -170,6 +172,76 @@ internal static class CrmGeoEndpoints
         return Regex.Replace(name, @"\bPanama\b", "Panamá",
             RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
     }
+
+
+    // Postal codes vary by address in many countries. Suggest known codes only,
+    // without silently inventing one from an administrative division.
+    // Requests contain PUBLIC place names only; never send street addresses.
+    private static async Task<IResult> PostalCodes(
+        string countryCode, string? locality, string? region,
+        HttpContext http, IHttpClientFactory clients, IMemoryCache cache,
+        CancellationToken ct)
+    {
+        if (!Allowed(http)) return CrmAccess.Denied();
+        var iso = (countryCode ?? "").Trim().ToUpperInvariant();
+        if (!Regex.IsMatch(iso, "^[A-Z]{2}$") ||
+            locality is { Length: > 160 } || region is { Length: > 160 })
+            return CrmDataEndpoints.Bad("Invalid postal code search");
+
+        // Costa Rica has a deterministic district code (existing CRM calculation).
+        // Panama's 2026 official postal system is geolocated down to the building;
+        // a corregimiento alone is insufficient to identify the correct code.
+        if (iso is "CR" or "PA" || string.IsNullOrWhiteSpace(locality))
+            return Results.Ok(new { options = Array.Empty<GeoOption>(),
+                source = iso == "PA" ? "correospanama.gob.pa" : "none" });
+
+        var place = locality.Trim();
+        var area = region?.Trim() ?? "";
+        try
+        {
+            var choices = await Cached(cache,
+                "crm:geo:postal:v1:" + iso + ":" + place.ToUpperInvariant() + ":" +
+                area.ToUpperInvariant(), async () =>
+            {
+                var url = "https://geocoding-api.open-meteo.com/v1/search?name=" +
+                    Uri.EscapeDataString(place) + "&count=30&language=es&countryCode=" + iso;
+                using var request = new HttpRequestMessage(HttpMethod.Get, url);
+                var data = await Load(clients, request, ct, envelope: false);
+                if (!data.TryGetProperty("results", out var results) ||
+                    results.ValueKind != JsonValueKind.Array) return Array.Empty<GeoOption>();
+                var found = new List<GeoOption>();
+                foreach (var entry in results.EnumerateArray())
+                {
+                    if (!entry.TryGetProperty("country_code", out var country) ||
+                        !string.Equals(country.GetString(), iso, StringComparison.OrdinalIgnoreCase))
+                        continue;
+                    var name = entry.TryGetProperty("name", out var n) ? n.GetString() ?? "" : "";
+                    if (PostalMatchName(place) != PostalMatchName(name)) continue;
+                    var admin1 = entry.TryGetProperty("admin1", out var a) ? a.GetString() ?? "" : "";
+                    if (area.Length > 0 && admin1.Length > 0 &&
+                        PostalMatchName(area) != PostalMatchName(admin1))
+                        continue;
+                    if (!entry.TryGetProperty("postcodes", out var codes) ||
+                        codes.ValueKind != JsonValueKind.Array) continue;
+                    foreach (var code in codes.EnumerateArray())
+                    {
+                        if (code.ValueKind != JsonValueKind.String) continue;
+                        var postal = (code.GetString() ?? "").Trim();
+                        if (postal.Length is > 0 and <= 32)
+                            found.Add(new GeoOption(postal, postal));
+                    }
+                }
+                return found.DistinctBy(x => x.Code, StringComparer.OrdinalIgnoreCase)
+                    .OrderBy(x => x.Code, StringComparer.OrdinalIgnoreCase).Take(100).ToArray();
+            });
+            return Results.Ok(new { options = choices, source = "GeoNames / Open-Meteo" });
+        }
+        catch (Exception e) when (IsProviderFailure(e)) { return Unavailable(); }
+    }
+
+    private static string PostalMatchName(string value) =>
+        Regex.Replace(value.Trim().ToLowerInvariant().Normalize(NormalizationForm.FormD),
+            @"\\p{Mn}", "");
 
     private static async Task<GeoCountry[]> CountryList(IHttpClientFactory clients,
         IMemoryCache cache, CancellationToken ct) =>
