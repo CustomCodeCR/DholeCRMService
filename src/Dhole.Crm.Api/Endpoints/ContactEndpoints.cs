@@ -17,9 +17,15 @@ public sealed record ContactPreferenceRequest(long? ExpectedVersion, string Pref
 public sealed record ConsentRequest(string Channel, string Purpose, string Status, string Source,
     string? EvidenceReference);
 public sealed record AddressRequest(Guid? ContactId, Guid? CountryId, string AddressType,
-    string AddressText, string? Location);
+    string AddressText, string? Location, string? CountryCode = null,
+    string? Admin1Code = null, string? Admin1Name = null,
+    string? Admin2Code = null, string? Admin2Name = null,
+    string? Admin3Code = null, string? Admin3Name = null, string? PostalCode = null);
 public sealed record PatchAddressRequest(long ExpectedVersion, string AddressType,
-    string AddressText, string? Location);
+    string AddressText, string? Location, string? CountryCode = null,
+    string? Admin1Code = null, string? Admin1Name = null,
+    string? Admin2Code = null, string? Admin2Name = null,
+    string? Admin3Code = null, string? Admin3Name = null, string? PostalCode = null);
 
 internal static class ContactEndpoints
 {
@@ -300,6 +306,23 @@ internal static class ContactEndpoints
         await db.SaveChangesAsync(ct);
         return Results.Created("/api/crm/contacts/" + id + "/consents", consent);
     }
+    private static bool ValidGeo(string? country, params string?[] segments) =>
+        (string.IsNullOrWhiteSpace(country) || System.Text.RegularExpressions.Regex.IsMatch(country, "^[A-Za-z]{2}$")) &&
+        segments.All(s => s is null || s.Length <= 160);
+
+    private static void ApplyGeo(Address address, string? iso, string? firstCode, string? firstName,
+        string? secondCode, string? secondName, string? thirdCode, string? thirdName, string? postal)
+    {
+        address.CountryCode = iso?.Trim().ToUpperInvariant();
+        address.Admin1Code = firstCode?.Trim();
+        address.Admin1Name = firstName?.Trim();
+        address.Admin2Code = secondCode?.Trim();
+        address.Admin2Name = secondName?.Trim();
+        address.Admin3Code = thirdCode?.Trim();
+        address.Admin3Name = thirdName?.Trim();
+        address.PostalCode = CrmGeoEndpoints.PostalCodeForCostaRica(address.CountryCode,
+            address.Admin1Code, address.Admin2Code, address.Admin3Code) ?? postal?.Trim();
+    }
     private static async Task<IResult> GetAddresses(Guid id, CrmDbContext db, HttpContext h, CancellationToken ct)
     {
         if (!CrmDataEndpoints.HasRead(h, "account")) return CrmAccess.Denied();
@@ -317,6 +340,12 @@ internal static class ContactEndpoints
             return CrmDataEndpoints.Bad("Invalid address");
         if (!await CrmDataEndpoints.ValidCountry(config, r.CountryId, ct))
             return CrmDataEndpoints.Bad("Unknown country");
+        if (!ValidGeo(r.CountryCode, r.Admin1Code, r.Admin1Name, r.Admin2Code, r.Admin2Name,
+                r.Admin3Code, r.Admin3Name) || r.PostalCode is { Length: > 32 } ||
+            (!string.IsNullOrWhiteSpace(r.Admin2Code) && string.IsNullOrWhiteSpace(r.Admin1Code)) ||
+            (!string.IsNullOrWhiteSpace(r.Admin3Code) && string.IsNullOrWhiteSpace(r.Admin2Code)) ||
+            (!string.IsNullOrWhiteSpace(r.Admin1Code) && string.IsNullOrWhiteSpace(r.CountryCode)))
+            return CrmDataEndpoints.Bad("Invalid geographic address hierarchy");
         if (r.ContactId is not null && !await db.AccountContacts.AnyAsync(x => x.AccountId == id &&
             x.ContactId == r.ContactId && x.ActiveTo == null, ct))
             return CrmDataEndpoints.Bad("Contact does not belong to this account");
@@ -324,6 +353,8 @@ internal static class ContactEndpoints
             CountryId = r.CountryId, AddressType = r.AddressType,
             AddressText = r.AddressText.Trim(), Location = r.Location,
             CreatedByUserId = CrmAccess.UserId(h) };
+        ApplyGeo(address, r.CountryCode, r.Admin1Code, r.Admin1Name,
+            r.Admin2Code, r.Admin2Name, r.Admin3Code, r.Admin3Name, r.PostalCode);
         db.Addresses.Add(address);
         await db.SaveChangesAsync(ct);
         return Results.Created("/api/crm/addresses/" + address.Id, address);
@@ -338,6 +369,12 @@ internal static class ContactEndpoints
         if (address.RowVersion != r.ExpectedVersion) return CrmDataEndpoints.Conflict("Stale row version");
         if (string.IsNullOrWhiteSpace(r.AddressText) || r.AddressText.Length > 4000)
             return CrmDataEndpoints.Bad("Invalid address");
+        if (!ValidGeo(r.CountryCode, r.Admin1Code, r.Admin1Name, r.Admin2Code, r.Admin2Name,
+                r.Admin3Code, r.Admin3Name) || r.PostalCode is { Length: > 32 })
+            return CrmDataEndpoints.Bad("Invalid geographic address hierarchy");
+        if (r.CountryCode is not null)
+            ApplyGeo(address, r.CountryCode, r.Admin1Code, r.Admin1Name,
+                r.Admin2Code, r.Admin2Name, r.Admin3Code, r.Admin3Name, r.PostalCode);
         address.AddressType = r.AddressType;
         address.AddressText = r.AddressText.Trim();
         address.Location = r.Location;

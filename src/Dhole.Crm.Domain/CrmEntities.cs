@@ -107,6 +107,15 @@ public sealed class Address : CrmRecord
     public string AddressType { get; set; } = "OTHER";
     public string AddressText { get; set; } = "";
     public string? Location { get; set; }
+    // ISO country code plus flexible administrative levels (province/state/canton/district/city).
+    public string? CountryCode { get; set; }
+    public string? Admin1Code { get; set; }
+    public string? Admin1Name { get; set; }
+    public string? Admin2Code { get; set; }
+    public string? Admin2Name { get; set; }
+    public string? Admin3Code { get; set; }
+    public string? Admin3Name { get; set; }
+    public string? PostalCode { get; set; }
 }
 public sealed class ContactPreference : CrmRecord
 {

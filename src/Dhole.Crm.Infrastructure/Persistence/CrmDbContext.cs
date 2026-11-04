@@ -173,6 +173,15 @@ public sealed partial class CrmDbContext(DbContextOptions<CrmDbContext> options)
         });
         b.Entity<Address>(e =>
         {
+            e.Property(x => x.CountryCode).HasMaxLength(2);
+            e.Property(x => x.Admin1Code).HasMaxLength(160);
+            e.Property(x => x.Admin1Name).HasMaxLength(160);
+            e.Property(x => x.Admin2Code).HasMaxLength(160);
+            e.Property(x => x.Admin2Name).HasMaxLength(160);
+            e.Property(x => x.Admin3Code).HasMaxLength(160);
+            e.Property(x => x.Admin3Name).HasMaxLength(160);
+            e.Property(x => x.PostalCode).HasMaxLength(32);
+            e.HasIndex(x => new { x.CountryCode, x.Admin1Code });
             e.HasOne<Account>().WithMany().HasForeignKey(x => x.AccountId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne<Contact>().WithMany().HasForeignKey(x => x.ContactId).OnDelete(DeleteBehavior.Restrict);
         });
