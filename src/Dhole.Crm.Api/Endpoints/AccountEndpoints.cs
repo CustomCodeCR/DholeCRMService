@@ -25,6 +25,7 @@ internal static class AccountEndpoints
     public static RouteGroupBuilder MapAccounts(this RouteGroupBuilder group)
     {
         group.MapGet("/accounts", List);
+        group.MapGet("/accounts/filter-options", AccountFilterOptions);
         group.MapGet("/accounts/{id:guid}", Get);
         group.MapGet("/accounts/{id:guid}/change-history", ChangeHistory);
         group.MapPost("/accounts", Create);
@@ -49,8 +50,54 @@ internal static class AccountEndpoints
         return types.Length <= 10 && types.All(x => x.Length is > 0 and <= 64);
     }
 
+    // Values for CRM filters must come from accounts the requesting user is allowed to see.
+    // Do not expose the whole Auth directory to a CRM viewer.
+    private static async Task<IResult> AccountFilterOptions(
+        CrmDbContext db, HttpContext http, IAuthReferenceService auth,
+        IMemoryCache cache, ILoggerFactory loggerFactory, CancellationToken ct)
+    {
+        if (!CrmDataEndpoints.HasRead(http, "account")) return CrmAccess.Denied();
+        var assigned = await CrmAccess.VisibleAccounts(db, http).AsNoTracking()
+            .Select(x => new { x.ExecutiveUserId, x.IsCastroFallasExecutive })
+            .Distinct().ToArrayAsync(ct);
+        var sellerIds = assigned.Where(x => !x.IsCastroFallasExecutive && x.ExecutiveUserId != Guid.Empty)
+            .Select(x => x.ExecutiveUserId).Distinct().ToArray();
+        var logger = loggerFactory.CreateLogger("Dhole.Crm.AccountFilterOptions");
+        using var gate = new SemaphoreSlim(4);
+        var resolved = await Task.WhenAll(sellerIds.Select(async userId =>
+        {
+            await gate.WaitAsync(ct);
+            try
+            {
+                var name = await cache.GetOrCreateAsync($"crm:assigned-seller:{userId:N}", async entry =>
+                {
+                    entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(2);
+                    var person = await auth.GetActiveAsync(userId, ct);
+                    return string.IsNullOrWhiteSpace(person?.DisplayName)
+                        ? "Vendedor no disponible" : person.DisplayName.Trim();
+                });
+                return (Id: userId, Name: name ?? "Vendedor no disponible");
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "Could not resolve CRM seller filter option");
+                return (Id: userId, Name: "Vendedor no disponible");
+            }
+            finally { gate.Release(); }
+        }));
+        var sellers = resolved.Select(x => new { value = x.Id.ToString("D"), label = x.Name })
+            .OrderBy(x => x.label).ToList();
+        if (assigned.Any(x => x.IsCastroFallasExecutive))
+            sellers.Insert(0, new { value = "__castro_fallas__", label = "Castro Fallas" });
+        if (assigned.Any(x => !x.IsCastroFallasExecutive && x.ExecutiveUserId == Guid.Empty))
+            sellers.Add(new { value = "__unassigned__", label = "Sin asignar" });
+        return Results.Ok(new { sellers });
+    }
+
     private static async Task<IResult> List(CrmDbContext db, HttpContext http,
-        string? q, string? customerTypeCode, string? categoryCode, int? page, int? pageSize, CancellationToken ct)
+        string? q, string? customerTypeCode, string? categoryCode, string? seller,
+        string? relationship, int? page, int? pageSize, CancellationToken ct)
     {
         if (!CrmDataEndpoints.HasRead(http, "account")) return CrmAccess.Denied();
         var query = CrmAccess.VisibleAccounts(db, http).AsNoTracking();
@@ -61,6 +108,26 @@ internal static class AccountEndpoints
             query = query.Where(x => x.CustomerTypeCode == customerTypeCode);
         if (categoryCode is "A" or "B" or "C" or "D")
             query = query.Where(x => x.CategoryCode == categoryCode);
+        if (seller == "__castro_fallas__")
+            query = query.Where(x => x.IsCastroFallasExecutive);
+        else if (seller == "__unassigned__")
+            query = query.Where(x => !x.IsCastroFallasExecutive && x.ExecutiveUserId == Guid.Empty);
+        else if (!string.IsNullOrWhiteSpace(seller))
+        {
+            if (!Guid.TryParse(seller, out var sellerId))
+                return CrmDataEndpoints.Bad("Invalid seller filter");
+            query = query.Where(x => !x.IsCastroFallasExecutive && x.ExecutiveUserId == sellerId);
+        }
+        if (!string.IsNullOrWhiteSpace(relationship))
+        {
+            var selected = relationship.Trim();
+            if (selected.Length > 64 || selected.Contains(','))
+                return CrmDataEndpoints.Bad("Invalid relationship filter");
+            // Exact token match within the comma-separated multiselect; not a substring.
+            var token = "," + selected.ToLowerInvariant().Replace(" ", "") + ",";
+            query = query.Where(x => x.RelationshipTypeCode != null &&
+                ("," + x.RelationshipTypeCode.ToLower().Replace(" ", "") + ",").Contains(token));
+        }
         var total = await query.CountAsync(ct);
         var number = Math.Max(1, page ?? 1);
         var size = Math.Clamp(pageSize ?? 25, 1, 100);
