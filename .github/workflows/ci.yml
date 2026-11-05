@@ -61,7 +61,12 @@ jobs:
           set -euo pipefail
           # Exercise the real DholeSystem Compose endpoint configuration in CI.
           # Only the API gets 8080/8081 Kestrel settings; workers still listen on 8082.
-          env Kestrel__Endpoints__Http__Url="http://+:8080" Kestrel__Endpoints__Http__Protocols="Http1" Kestrel__Endpoints__Grpc__Url="http://+:8081" Kestrel__Endpoints__Grpc__Protocols="Http2" dotnet run --no-build -c Release --project src/Dhole.Crm.Api > "$RUNNER_TEMP/crm-api.log" 2>&1 &
+          # CI-only non-production JWT settings are required by Auth's startup validation.
+          # No real credentials or production signing key are used for the smoke test.
+          env Auth__Jwt__Issuer="DholeCRM-CI" Auth__Jwt__Audience="DholeCRM-CI" Auth__Jwt__SecretKey="ci-only-nonproduction-jwt-key-please-never-deploy-123456" \
+            Kestrel__Endpoints__Http__Url="http://+:8080" Kestrel__Endpoints__Http__Protocols="Http1" \
+            Kestrel__Endpoints__Grpc__Url="http://+:8081" Kestrel__Endpoints__Grpc__Protocols="Http2" \
+            dotnet run --no-build -c Release --project src/Dhole.Crm.Api > "$RUNNER_TEMP/crm-api.log" 2>&1 &
           api_pid=$!
           dotnet run --no-build -c Release --project src/Dhole.Crm.Workers > "$RUNNER_TEMP/crm-workers.log" 2>&1 &
           worker_pid=$!
