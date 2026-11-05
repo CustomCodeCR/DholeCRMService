@@ -222,39 +222,77 @@ internal static class AccountEndpoints
         return Results.Ok(new { sellers });
     }
 
+    private static string[] ParseAccountFilter(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? [] :
+        value.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+            .Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+
     private static async Task<IResult> List(CrmDbContext db, HttpContext http,
         string? q, string? customerTypeCode, string? categoryCode, string? seller,
         string? relationship, int? page, int? pageSize, CancellationToken ct)
     {
         if (!CrmDataEndpoints.HasRead(http, "account")) return CrmAccess.Denied();
+        // All dimensions are ANDed; selected values within each dimension are ORed.
+        // Filtering stays in SQL before Count/Skip/Take to preserve authorized pagination.
+        if (new[] { customerTypeCode, categoryCode, seller, relationship }
+            .Any(value => value is { Length: > 4096 }))
+            return CrmDataEndpoints.Bad("Account filter too long");
+
         var query = CrmAccess.VisibleAccounts(db, http).AsNoTracking();
         if (!string.IsNullOrWhiteSpace(q))
             query = query.Where(x => x.DisplayName.ToLower().Contains(q.Trim().ToLower()) ||
                                      x.LegalName.ToLower().Contains(q.Trim().ToLower()));
-        if (customerTypeCode is "cash" or "credit")
-            query = query.Where(x => x.CustomerTypeCode == customerTypeCode);
-        if (categoryCode is "A" or "B" or "C" or "D")
-            query = query.Where(x => x.CategoryCode == categoryCode);
-        if (seller == "__castro_fallas__")
-            query = query.Where(x => x.IsCastroFallasExecutive);
-        else if (seller == "__unassigned__")
-            query = query.Where(x => !x.IsCastroFallasExecutive && x.ExecutiveUserId == Guid.Empty);
-        else if (!string.IsNullOrWhiteSpace(seller))
+
+        var types = ParseAccountFilter(customerTypeCode);
+        if (types.Length > 2 || types.Any(value => value is not ("cash" or "credit")))
+            return CrmDataEndpoints.Bad("Invalid customer type filter");
+        if (types.Length > 0)
+            query = query.Where(x => types.Contains(x.CustomerTypeCode));
+
+        var categories = ParseAccountFilter(categoryCode);
+        if (categories.Length > 4 || categories.Any(value => value is not ("A" or "B" or "C" or "D")))
+            return CrmDataEndpoints.Bad("Invalid account category filter");
+        if (categories.Length > 0)
+            query = query.Where(x => categories.Contains(x.CategoryCode));
+
+        var sellers = ParseAccountFilter(seller);
+        if (sellers.Length > 100) return CrmDataEndpoints.Bad("Too many seller filters");
+        if (sellers.Length > 0)
         {
-            if (!Guid.TryParse(seller, out var sellerId))
-                return CrmDataEndpoints.Bad("Invalid seller filter");
-            query = query.Where(x => !x.IsCastroFallasExecutive && x.ExecutiveUserId == sellerId);
+            var house = sellers.Contains("__castro_fallas__");
+            var unassigned = sellers.Contains("__unassigned__");
+            var sellerIds = new List<Guid>();
+            foreach (var value in sellers)
+            {
+                if (value is "__castro_fallas__" or "__unassigned__") continue;
+                if (!Guid.TryParse(value, out var id))
+                    return CrmDataEndpoints.Bad("Invalid seller filter");
+                sellerIds.Add(id);
+            }
+            var selectedSellerIds = sellerIds.ToArray();
+            query = query.Where(x => (house && x.IsCastroFallasExecutive) ||
+                (unassigned && !x.IsCastroFallasExecutive && x.ExecutiveUserId == Guid.Empty) ||
+                (!x.IsCastroFallasExecutive && selectedSellerIds.Contains(x.ExecutiveUserId)));
         }
-        if (!string.IsNullOrWhiteSpace(relationship))
+
+        var relationships = ParseAccountFilter(relationship);
+        if (relationships.Length > 10 || relationships.Any(value => value.Length is < 1 or > 64))
+            return CrmDataEndpoints.Bad("Invalid relationship filter");
+        if (relationships.Length > 0)
         {
-            var selected = relationship.Trim();
-            if (selected.Length > 64 || selected.Contains(','))
-                return CrmDataEndpoints.Bad("Invalid relationship filter");
-            // Exact token match within the comma-separated multiselect; not a substring.
-            var token = "," + selected.ToLowerInvariant().Replace(" ", "") + ",";
-            query = query.Where(x => x.RelationshipTypeCode != null &&
-                ("," + x.RelationshipTypeCode.ToLower().Replace(" ", "") + ",").Contains(token));
+            // Account roles are persisted as comma-separated tokens. Match complete roles,
+            // never substrings; UNION provides OR semantics translatable by EF Core.
+            IQueryable<Account>? matches = null;
+            foreach (var value in relationships)
+            {
+                var token = "," + value.ToLowerInvariant().Replace(" ", "") + ",";
+                var matching = query.Where(x => x.RelationshipTypeCode != null &&
+                    ("," + x.RelationshipTypeCode.ToLower().Replace(" ", "") + ",").Contains(token));
+                matches = matches is null ? matching : matches.Union(matching);
+            }
+            query = matches!;
         }
+
         var total = await query.CountAsync(ct);
         var number = Math.Max(1, page ?? 1);
         var size = Math.Clamp(pageSize ?? 25, 1, 100);
