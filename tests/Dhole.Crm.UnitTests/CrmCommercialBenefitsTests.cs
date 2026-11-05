@@ -171,8 +171,10 @@ public sealed class CrmCommercialBenefitsTests
               "calculationMode":"Flat","includedStorageDays":null,"saleAmount":-1}]
             """;
         Assert.IsFalse(CommercialBenefitRules.ValidRate(rule));
-        rule.TierSalesJson = """[{"dimension":"ContainerType","minValue":null,"maxValue":null,
-          "containerTypeId":"40HC","calculationMode":"Flat","includedStorageDays":null,"saleAmount":25}]""";
+        rule.TierSalesJson = """
+            [{"dimension":"ContainerType","minValue":null,"maxValue":null,
+              "containerTypeId":"40HC","calculationMode":"Flat","includedStorageDays":null,"saleAmount":25}]
+            """;
         Assert.IsTrue(CommercialBenefitRules.ValidRate(rule));
         rule.SourceCostId = null;
         Assert.IsFalse(CommercialBenefitRules.ValidRate(rule));
