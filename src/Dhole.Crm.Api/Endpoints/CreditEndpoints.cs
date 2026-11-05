@@ -198,7 +198,7 @@ internal static class CreditEndpoints
         foreach (var item in requested)
         {
             if (item is null || item.CoverageType is not ("INCLUDED" or "EXCLUDED") ||
-                !Regex.IsMatch(item.ServiceCode ?? "", @"^[A-Za-z0-9_-]{1,80}$") ||
+                item.ServiceCode is null || !Regex.IsMatch(item.ServiceCode, @"^[A-Za-z0-9_-]{1,80}$") ||
                 item.Description is null || item.Description.Length > 2000)
                 return false;
             var code = item.ServiceCode.Trim().ToUpperInvariant();
