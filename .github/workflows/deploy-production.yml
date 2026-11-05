@@ -21,6 +21,8 @@ env:
 
 jobs:
   deploy:
+    # Production deployments require manual workflow_dispatch authorization.
+    if: github.event_name == 'workflow_dispatch'
     runs-on: [self-hosted, linux, x64, dhole]
     steps:
       - uses: actions/checkout@v4
