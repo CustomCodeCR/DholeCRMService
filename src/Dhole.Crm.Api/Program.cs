@@ -21,6 +21,13 @@ if (!builder.Configuration.GetSection("Kestrel:Endpoints").Exists())
     });
 }
 var app = builder.Build();
+// Report this deployed assembly's version via health probes.
+app.Use(async (context, next) =>
+{
+    if (context.Request.Path.Value?.StartsWith("/health", StringComparison.OrdinalIgnoreCase) == true)
+        context.Response.Headers["X-Dhole-Version"] = typeof(Program).Assembly.GetName().Version?.ToString(3) ?? "unknown";
+    await next();
+});
 app.MapGet("/health/live", () => Results.Ok(new { status = "live", service = "DholeCRM" }));
 app.MapGet("/health/ready", async (IDependencyVerifier verifier, CancellationToken ct) =>
 {
