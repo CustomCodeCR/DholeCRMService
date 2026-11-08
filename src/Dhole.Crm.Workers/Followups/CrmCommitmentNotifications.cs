@@ -85,12 +85,12 @@ internal static class CrmCommitmentNotifications
             // Send only the current repeat interval while the activity is unresolved.
             if(item.ReminderRepeatMinutes is > 0 && now>=item.Start)
             {
-                var slot=(int)((now-item.Start).TotalMinutes/item.ReminderRepeatMinutes.Value);
-                if(slot>0)
+                var repeatSlot=(int)((now-item.Start).TotalMinutes/item.ReminderRepeatMinutes.Value);
+                if(repeatSlot>0)
                 {
-                    var repeatedAt=item.Start.AddMinutes(slot*item.ReminderRepeatMinutes.Value);
+                    var repeatedAt=item.Start.AddMinutes(repeatSlot*item.ReminderRepeatMinutes.Value);
                     if(repeatedAt>=now.AddMinutes(-2))
-                        QueuePair(db,existing,item,item.OwnerUserId,"repeat-"+slot,
+                        QueuePair(db,existing,item,item.OwnerUserId,"repeat-"+repeatSlot,
                             "owner",repeatedAt,now,"crm.commitment.upcoming.v1");
                 }
             }
