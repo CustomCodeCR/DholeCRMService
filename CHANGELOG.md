@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.4.0] - 2026-11-07 (candidato aislado, NO liberado)
+
+- F2 piloto de durabilidad de realtime: tablas PostgreSQL separadas `crm_realtime_outbox/inbox` con índices, leases recuperables y DLQ; la infraestructura original de recordatorios CRM permanece intacta.
+- Productor transaccional y publicador Redis Streams con reintentos exponenciales y jitter; consumo de prueba idempotente con ACK después del commit.
+- Worker registrado **apagado por defecto**; requiere `Features:UniversalRealtimeEnabled=true` y `Realtime:Outbox:Enabled=true` tras completar F0-F10 y aprobación de batch.
+- Pruebas de F2 aisladas en GitHub Actions PostgreSQL/Redis; no considerar F2 aprobada hasta evidencia de aceptación y controles de Redis real, retención, recuperación y seguridad.
+- Ningún cambio directo a `develop`, `master`, `main`, ni despliegue.
+
+
 ## [1.3.1] - 2026-11-08
 
 - Corrige la falla de entrega de todos los recordatorios CRM: registra IConnectionMultiplexer antes de resolver RedisStreamPublisher en los workers.
