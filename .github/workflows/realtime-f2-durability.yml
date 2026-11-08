@@ -9,6 +9,10 @@ on:
       - 'src/Dhole.Crm.Workers/Realtime/**'
       - 'src/Dhole.Crm.Workers/Program.cs'
       - 'src/Dhole.Crm.Api/Endpoints/AccountEndpoints.cs'
+      - 'src/Dhole.Crm.Api/Endpoints/CrmDataEndpoints.cs'
+      - 'version.json'
+      - 'Directory.Build.targets'
+      - 'CHANGELOG.md'
       - 'src/Dhole.Crm.Api/Dhole.Crm.Api.csproj'
       - 'tests/Dhole.Crm.IntegrationTests/Dhole.Crm.IntegrationTests.csproj'
       - 'tests/Dhole.Crm.IntegrationTests/CrmRealtimeDurabilityPilotIntegrationTests.cs'
@@ -53,6 +57,8 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '10.0.x'
+      - name: Enforce CRM candidate SemVer and changelog
+        run: python3 scripts/verify_dhole_version.py
       - name: Restore pilot integration test
         run: dotnet restore tests/Dhole.Crm.IntegrationTests/Dhole.Crm.IntegrationTests.csproj --configfile NuGet.Config
       - name: Restore real CRM API for F5 candidate compilation
