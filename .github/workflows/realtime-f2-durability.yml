@@ -12,6 +12,7 @@ on:
       - 'src/Dhole.Crm.Api/Dhole.Crm.Api.csproj'
       - 'tests/Dhole.Crm.IntegrationTests/Dhole.Crm.IntegrationTests.csproj'
       - 'tests/Dhole.Crm.IntegrationTests/CrmRealtimeDurabilityPilotIntegrationTests.cs'
+      - 'tests/Dhole.Crm.IntegrationTests/CrmRealtimeF5HttpIntegrationTests.cs'
       - '.github/workflows/realtime-f2-durability.yml'
   workflow_dispatch:
 permissions:
@@ -65,7 +66,7 @@ jobs:
           mkdir -p TestResults
           dotnet test tests/Dhole.Crm.IntegrationTests/Dhole.Crm.IntegrationTests.csproj \
             -c Release --no-build \
-            --filter "FullyQualifiedName~CrmRealtimeDurabilityPilotIntegrationTests" \
+            --filter "FullyQualifiedName~CrmRealtimeDurabilityPilotIntegrationTests|FullyQualifiedName~CrmRealtimeF5HttpIntegrationTests" \
             --logger "trx;LogFileName=rt-20261107-01-f2-crm.trx" \
             --results-directory TestResults \
             -- RunConfiguration.TreatNoTestsAsError=true
