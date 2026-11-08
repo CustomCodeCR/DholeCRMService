@@ -12,8 +12,10 @@ public sealed record ActivityCreateRequest(Guid? AccountId,Guid? LeadId,Guid? Op
     int? ReminderLeadMinutes = null,string? ReminderChannelStrategy = null,
     string? Involved = null,string? Agreements = null,
     string? NextCommitment = null,DateTime? CommitmentDueAt = null,
-    IReadOnlyList<AgreementCommitmentRequest>? AgreementCommitments = null);
-public sealed record ActivityPatchRequest(long ExpectedVersion,string Subject,string? LocationText);
+    IReadOnlyList<AgreementCommitmentRequest>? AgreementCommitments = null,
+    int? RepeatEveryDays = null, int? ReminderRepeatMinutes = null);
+public sealed record ActivityPatchRequest(long ExpectedVersion,string Subject,string? LocationText,
+    int? RepeatEveryDays = null,int? ReminderLeadMinutes = null,int? ReminderRepeatMinutes = null);
 public sealed record ActivityCompleteRequest(long ExpectedVersion,string Outcome,DateTime OccurredAt,string? Note);
 public sealed record ActivityRescheduleRequest(long ExpectedVersion,DateTime ScheduledStartAt,
     DateTime? ScheduledEndAt,string Reason);
@@ -84,6 +86,8 @@ internal static class CommercialActivityEndpoints
     {
         if(!CrmAccess.Scope(h,"crm.activity.create"))return CrmAccess.Denied();
         if((r.ReminderLeadMinutes is < 0 or > 10080) ||
+            (r.RepeatEveryDays.HasValue && r.RepeatEveryDays.Value is not (0 or 1 or 7 or 14 or 30)) ||
+            (r.ReminderRepeatMinutes.HasValue && r.ReminderRepeatMinutes.Value is not (0 or 5 or 15 or 30 or 60 or 240 or 1440)) ||
             (r.ReminderChannelStrategy is not null && r.ReminderChannelStrategy is not ("BOTH" or "EMAIL" or "SYSTEM"))||
             !CommercialRules.ValidActivityType(r.Type)||
             string.IsNullOrWhiteSpace(r.Subject)||r.Subject.Length>250||
@@ -124,7 +128,9 @@ internal static class CommercialActivityEndpoints
             OccurredAt=r.OccurredAt,Status=r.OccurredAt.HasValue?"Completed":"Scheduled",
             Outcome=r.OccurredAt.HasValue?"COMPLETED":null,
             LocationText=r.LocationText,CreatedByUserId=current,
-            ReminderLeadMinutes=r.ReminderLeadMinutes,ReminderChannelStrategy=r.ReminderChannelStrategy
+            ReminderLeadMinutes=r.ReminderLeadMinutes,ReminderChannelStrategy=r.ReminderChannelStrategy,
+            RepeatEveryDays=r.RepeatEveryDays is > 0 ? r.RepeatEveryDays : null,
+            ReminderRepeatMinutes=r.ReminderRepeatMinutes is > 0 ? r.ReminderRepeatMinutes : null
         };
         db.Activities.Add(activity);
         // Reuse the existing notes/participants and followup models rather than
@@ -195,10 +201,23 @@ internal static class CommercialActivityEndpoints
         var a=await FindAllowed(id,db,h,ct);if(a is null)return Results.NotFound();
         if(a.RowVersion!=r.ExpectedVersion)return CommercialAccess.Conflict("Stale activity version");
         if(a.Status!="Scheduled")return CommercialAccess.Conflict("Only scheduled activities can be edited");
-        if(string.IsNullOrWhiteSpace(r.Subject)||r.Subject.Length>250)
-            return CommercialAccess.Invalid("Invalid activity subject");
+        if(string.IsNullOrWhiteSpace(r.Subject)||r.Subject.Length>250 ||
+            r.ReminderLeadMinutes is < 0 or > 10080 ||
+            (r.RepeatEveryDays.HasValue && r.RepeatEveryDays.Value is not (0 or 1 or 7 or 14 or 30)) ||
+            (r.ReminderRepeatMinutes.HasValue && r.ReminderRepeatMinutes.Value is not (0 or 5 or 15 or 30 or 60 or 240 or 1440)))
+            return CommercialAccess.Invalid("Invalid activity subject or reminder recurrence");
         a.Subject=r.Subject.Trim();a.LocationText=r.LocationText;
+        if(r.ReminderLeadMinutes.HasValue)a.ReminderLeadMinutes=r.ReminderLeadMinutes;
+        if(r.RepeatEveryDays.HasValue)a.RepeatEveryDays=r.RepeatEveryDays is > 0 ? r.RepeatEveryDays : null;
+        if(r.ReminderRepeatMinutes.HasValue)a.ReminderRepeatMinutes=r.ReminderRepeatMinutes is > 0 ? r.ReminderRepeatMinutes : null;
         a.RowVersion++;a.UpdatedAt=DateTime.UtcNow;a.UpdatedByUserId=CrmAccess.UserId(h);
+        if(a.ScheduledStartAt is { } upcoming && upcoming>DateTime.UtcNow.AddMinutes(-2))
+            await CrmReminderEnqueue.QueueAsync(db,"Activity",a.Id,a.AccountId,
+                a.OwnerUserId,a.RowVersion,upcoming,a.ReminderLeadMinutes,
+                a.ReminderChannelStrategy,a.Type=="CALL"?"crm.call.reminder.v1":
+                a.Type=="VISIT"?"crm.visit.reminder.v1":
+                a.Type=="MEETING"?"crm.meeting.reminder.v1":"crm.activity.reminder.v1",
+                a.CreatedByUserId,ct);
         var result=await CommercialAccess.Save(db,ct);
         return result is Microsoft.AspNetCore.Http.HttpResults.Ok?Results.Ok(a):result;
     }
