@@ -16,6 +16,15 @@ public static class CrmRealtimeOutboxWriter
 {
     public const string CrmStream = "dhole.crm.realtime.v1";
 
+    private static readonly HashSet<string> ForbiddenPayloadFields = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "password", "passwordHash", "secret", "apiKey", "accessToken",
+        "refreshToken", "token", "authorization", "cookie", "email",
+        "phone", "phoneNumber", "address", "fullName", "firstName",
+        "lastName", "ssn", "taxId", "cardNumber", "creditCard",
+        "bankAccount", "identityNumber", "rawPayload", "privateKey"
+    };
+
     private static readonly Regex EventName = new(
         @"^crm\.[a-z][a-z0-9]*(\.[a-z][a-z0-9]*)+\.v[1-9][0-9]*$",
         RegexOptions.CultureInvariant | RegexOptions.Compiled,
@@ -47,6 +56,23 @@ public static class CrmRealtimeOutboxWriter
             !root.TryGetProperty("eventType", out var type) ||
             type.ValueKind != JsonValueKind.String ||
             !EventName.IsMatch(type.GetString() ?? "") ||
+            !root.TryGetProperty("schemaVersion", out var schemaVersion) ||
+            schemaVersion.ValueKind != JsonValueKind.Number || !schemaVersion.TryGetInt32(out var schema) || schema <= 0 ||
+            !root.TryGetProperty("aggregateType", out var aggregateType) ||
+            aggregateType.ValueKind != JsonValueKind.String || string.IsNullOrWhiteSpace(aggregateType.GetString()) ||
+            !root.TryGetProperty("aggregateVersion", out var aggregateVersion) ||
+            aggregateVersion.ValueKind != JsonValueKind.Number ||
+            !aggregateVersion.TryGetInt64(out var revision) || revision <= 0 ||
+            !root.TryGetProperty("occurredAtUtc", out var occurred) ||
+            occurred.ValueKind != JsonValueKind.String ||
+            !DateTimeOffset.TryParse(occurred.GetString(), out var timestamp) ||
+            timestamp.Offset != TimeSpan.Zero ||
+            !root.TryGetProperty("producer", out var producer) ||
+            producer.ValueKind != JsonValueKind.String || string.IsNullOrWhiteSpace(producer.GetString()) ||
+            !root.TryGetProperty("correlationId", out var correlation) ||
+            correlation.ValueKind != JsonValueKind.String || string.IsNullOrWhiteSpace(correlation.GetString()) ||
+            !root.TryGetProperty("audienceRef", out var audience) ||
+            audience.ValueKind != JsonValueKind.String || string.IsNullOrWhiteSpace(audience.GetString()) ||
             !root.TryGetProperty("aggregateId", out var aggregate) ||
             aggregate.ValueKind != JsonValueKind.String ||
             string.IsNullOrWhiteSpace(aggregate.GetString()) ||
@@ -89,15 +115,7 @@ ON CONFLICT (event_id) DO NOTHING;
         if (value.ValueKind != JsonValueKind.Object) return false;
         foreach (var property in value.EnumerateObject())
         {
-            if (property.Name.Equals("password", StringComparison.OrdinalIgnoreCase) ||
-                property.Name.Equals("email", StringComparison.OrdinalIgnoreCase) ||
-                property.Name.Equals("token", StringComparison.OrdinalIgnoreCase) ||
-                property.Name.Equals("accessToken", StringComparison.OrdinalIgnoreCase) ||
-                property.Name.Equals("refreshToken", StringComparison.OrdinalIgnoreCase) ||
-                property.Name.Equals("secret", StringComparison.OrdinalIgnoreCase) ||
-                property.Name.Equals("authorization", StringComparison.OrdinalIgnoreCase) ||
-                property.Name.Equals("phone", StringComparison.OrdinalIgnoreCase) ||
-                property.Name.Equals("address", StringComparison.OrdinalIgnoreCase) ||
+            if (ForbiddenPayloadFields.Contains(property.Name) ||
                 ContainsSensitiveFields(property.Value))
                 return true;
         }
