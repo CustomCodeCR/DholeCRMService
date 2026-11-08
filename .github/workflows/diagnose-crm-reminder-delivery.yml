@@ -27,6 +27,28 @@ jobs:
             echo "$service: recent_delivery_error_log_lines=$recent"
           done
           echo "::endgroup::"
+          echo "::group::Sanitized CRM worker exception signatures"
+          worker="$(docker ps -q --filter label=com.docker.compose.service=crm-workers | head -n1)"
+          if [ -n "$worker" ]; then
+            docker logs --since 4m "$worker" 2>&1 | python3 -c '
+import re,sys,collections
+s=sys.stdin.read().splitlines()
+entries=[]
+for line in s:
+    if "Exception" not in line and "SqlState:" not in line and "CRM followup scheduler failed" not in line and "CRM outbox dispatch failed" not in line:
+        continue
+    line=re.sub(r"[a-zA-Z0-9_.+-]+@[a-zA-Z0-9.-]+", "[EMAIL]", line)
+    line=re.sub(r"[0-9a-fA-F]{8}-[0-9a-fA-F-]{27,}", "[UUID]", line)
+    line=re.sub(r"\\b(?:[0-9]{1,3}\\.){3}[0-9]{1,3}\\b","[IP]",line)
+    line=re.sub(r"(?i)(password|secret|token|apikey|authorization)\\s*[:=]\\s*[^ ]+",r"\\1=[REDACTED]",line)
+    if "Exception" in line:
+        line=line[:240]
+    entries.append(line.strip()[:250])
+for text,count in collections.Counter(entries).most_common(10):
+    print(f"count={count}: {text}")
+'
+          fi
+          echo "::endgroup::"
           echo "::group::Recent CRM reminder delivery (aggregate, no personal data)"
           pg="$(docker ps -q --filter label=com.docker.compose.service=postgres | head -n1)"
           if [ -z "$pg" ]; then echo "postgres: not running"; exit 1; fi
