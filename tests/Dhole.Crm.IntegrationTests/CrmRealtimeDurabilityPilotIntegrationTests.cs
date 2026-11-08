@@ -289,4 +289,47 @@ WHERE o.event_id = ANY(@ids);
         Assert.AreEqual(1L, await ScalarAsync(
             "SELECT applied_count FROM crm.crm_realtime_pilot_test_effects WHERE id=@id", id));
     }
+    [TestMethod]
+    public async Task Lost_Redis_stream_can_republish_Postgres_events_without_duplicate_projection()
+    {
+        await using var db = await OpenAsync();
+        using var connection = await ConnectionMultiplexer.ConnectAsync(Redis);
+        var redis = connection.GetDatabase();
+        var eventId = Guid.NewGuid();
+        var stream = "dhole.crm.realtime.f2loss." + Guid.NewGuid().ToString("N");
+        var group = "crm-f2-loss-" + Guid.NewGuid().ToString("N");
+        await AppendCommittedAsync(db, eventId);
+        await db.Database.ExecuteSqlRawAsync(
+            "UPDATE crm.crm_realtime_outbox SET stream_name = {0} WHERE event_id = {1}", stream, eventId);
+        var publisher = new CrmRealtimeOutboxProcessor(Postgres,
+            new CrmRedisRealtimeStreamWriter(redis), NullLogger.Instance);
+        Assert.AreEqual(1, (await publisher.DispatchOnceAsync(1)).Published);
+
+        var inbox = new CrmRealtimeInboxStore(Postgres);
+        var initial = new CrmRealtimeInboxConsumer(redis, inbox, stream, group, "stable-consumer");
+        Assert.AreEqual(1, await initial.ConsumeOnceAsync(ApplyProjection));
+        Assert.AreEqual(1L, await ScalarAsync(
+            "SELECT applied_count FROM crm.crm_realtime_pilot_test_effects WHERE id=@id", eventId));
+
+        // Simulate complete loss of Redis Stream and consumer group after
+        // PostgreSQL marked the event Published. Database Outbox survives.
+        Assert.IsTrue(await redis.KeyDeleteAsync(stream));
+        var recovery = new CrmRealtimeOutboxRecovery(Postgres);
+        var since = DateTimeOffset.UtcNow.AddMinutes(-10);
+        var until = DateTimeOffset.UtcNow.AddMinutes(10);
+        await Assert.ThrowsExactlyAsync<InvalidOperationException>(() =>
+            recovery.RequeuePublishedWindowAsync(stream, since, until,
+                "CI-approval-rejected", explicitlyApproved: false));
+        Assert.AreEqual(1, await recovery.RequeuePublishedWindowAsync(stream, since, until,
+            "CI-approved-redis-loss", explicitlyApproved: true));
+        Assert.AreEqual(1L, await ScalarAsync(
+            "SELECT replay_count FROM crm.crm_realtime_outbox WHERE event_id=@id", eventId));
+
+        Assert.AreEqual(1, (await publisher.DispatchOnceAsync(1)).Published);
+        var recovered = new CrmRealtimeInboxConsumer(redis, inbox, stream, group, "stable-consumer");
+        Assert.AreEqual(1, await recovered.ConsumeOnceAsync(ApplyProjection));
+        Assert.AreEqual(1L, await ScalarAsync(
+            "SELECT applied_count FROM crm.crm_realtime_pilot_test_effects WHERE id=@id", eventId));
+    }
+
 }
