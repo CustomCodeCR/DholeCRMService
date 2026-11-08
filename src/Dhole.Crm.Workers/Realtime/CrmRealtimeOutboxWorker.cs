@@ -1,3 +1,4 @@
+using Dhole.Crm.Infrastructure.Realtime;
 using Dhole.Crm.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using StackExchange.Redis;
@@ -18,7 +19,10 @@ internal sealed class CrmRealtimeOutboxWorker(
         while (!ct.IsCancellationRequested)
         {
             if (configuration.GetValue("Features:UniversalRealtimeEnabled", false) &&
-                configuration.GetValue("Realtime:Outbox:Enabled", false))
+                configuration.GetValue("Realtime:Outbox:Enabled", false) &&
+                configuration.GetValue("Realtime:BatchApproved", false) &&
+                string.Equals(configuration["Realtime:ReleaseId"],
+                    CrmAccountRealtimeCommit.ReleaseId, StringComparison.Ordinal))
             {
                 try
                 {
