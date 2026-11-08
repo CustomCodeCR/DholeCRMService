@@ -1,4 +1,8 @@
 using System.Text.Json;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.TestHost;
+using System.Net;
 using Dhole.Crm.Infrastructure.Persistence;
 using Dhole.Crm.Infrastructure.Realtime;
 using Dhole.Crm.Workers.Realtime;
@@ -393,6 +397,53 @@ WHERE o.event_id = ANY(@ids);
         await tx.RollbackAsync();
         Assert.AreEqual(0L, await ScalarAsync(
             "SELECT count(*) FROM crm.crm_realtime_outbox WHERE event_id=@id", eventId));
+    }
+
+    [TestMethod]
+    public async Task Http_mutation_commits_with_durable_outbox_even_while_realtime_publisher_fails()
+    {
+        // Real PostgreSQL + real ASP.NET TestServer HTTP pipeline; Redis writer
+        // deliberately fails at the transport boundary. This proves isolation
+        // for the pilot's HTTP write, not unmodified CRM business endpoints.
+        await using var prepared = await OpenAsync();
+        var id = Guid.NewGuid();
+        using var server = new TestServer(new WebHostBuilder().Configure(app =>
+            app.Run(async context =>
+            {
+                if (context.Request.Path == "/f2/commit" &&
+                    context.Request.Method == "POST")
+                {
+                    await using var db = await OpenAsync();
+                    await AppendCommittedAsync(db, id);
+                    context.Response.StatusCode = StatusCodes.Status201Created;
+                    return;
+                }
+
+                if (context.Request.Path == "/f2/read" &&
+                    context.Request.Method == "GET")
+                {
+                    var exists = await ScalarAsync(
+                        "SELECT count(*) FROM crm.crm_realtime_pilot_test_effects WHERE id=@id", id);
+                    context.Response.StatusCode = exists == 1
+                        ? StatusCodes.Status200OK : StatusCodes.Status404NotFound;
+                    return;
+                }
+                context.Response.StatusCode = StatusCodes.Status405MethodNotAllowed;
+            })));
+        using var client = server.CreateClient();
+        var response = await client.PostAsync("/f2/commit",
+            new StringContent("{}"));
+        Assert.AreEqual(HttpStatusCode.Created, response.StatusCode);
+        var failing = new CrmRealtimeOutboxProcessor(
+            Postgres, new FailureWriter(), NullLogger.Instance);
+        var result = await failing.DispatchOnceAsync(1);
+        Assert.AreEqual(1, result.Retried);
+        Assert.AreEqual(HttpStatusCode.OK,
+            (await client.GetAsync("/f2/read")).StatusCode);
+        Assert.AreEqual(1L, await ScalarAsync(
+            "SELECT count(*) FROM crm.crm_realtime_outbox WHERE event_id=@id AND status='Pending'", id));
+        Assert.AreEqual(1L, await ScalarAsync(
+            "SELECT count(*) FROM crm.crm_realtime_pilot_test_effects WHERE id=@id", id));
     }
 
 }
