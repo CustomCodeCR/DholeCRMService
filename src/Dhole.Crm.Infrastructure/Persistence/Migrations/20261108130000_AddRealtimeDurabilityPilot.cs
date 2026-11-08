@@ -27,6 +27,10 @@ CREATE TABLE IF NOT EXISTS crm.crm_realtime_outbox (
   published_at timestamptz,
   stream_id varchar(80),
   last_error varchar(512),
+  replay_count integer NOT NULL DEFAULT 0,
+  last_replay_at timestamptz,
+  replay_approval_id varchar(120),
+  CONSTRAINT ck_crm_realtime_replay_count CHECK (replay_count >= 0),
   CONSTRAINT ck_crm_realtime_outbox_status
     CHECK (status IN ('Pending','Leased','Published','DeadLetter')),
   CONSTRAINT ck_crm_realtime_attempt_count CHECK (attempt_count >= 0),
