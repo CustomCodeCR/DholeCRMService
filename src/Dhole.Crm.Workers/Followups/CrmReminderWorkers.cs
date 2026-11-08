@@ -25,6 +25,7 @@ internal sealed class CrmFollowupSchedulerWorker(IServiceScopeFactory scopes,
                     var db=scope.ServiceProvider.GetRequiredService<CrmDbContext>();
                     var now=DateTime.UtcNow;
                     await CrmReminderEngine.GenerateAsync(db,now,stoppingToken);
+                    await CrmReminderEngine.GenerateRecurringActivitiesAsync(db,now,stoppingToken);
                     await CrmReminderEngine.PlanRemindersAsync(db,now,stoppingToken);
                     var auth=scope.ServiceProvider.GetRequiredService<IAuthReferenceService>();
                     await CrmCommitmentNotifications.PlanAsync(db,auth,now,logger,stoppingToken);
@@ -139,6 +140,7 @@ internal sealed class CrmReminderDispatcherWorker(IServiceScopeFactory scopes,IC
                 };
                 var payload=new {
                     eventId=reminder.Id.ToString(),
+                    idempotencyKey=reminder.Id.ToString("N"),
                     notificationType=reminder.NotificationType,
                     channel=reminder.Channel,
                     entityType=reminder.EntityType,
