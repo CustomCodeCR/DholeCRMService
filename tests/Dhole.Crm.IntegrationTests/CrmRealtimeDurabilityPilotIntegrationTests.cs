@@ -240,6 +240,11 @@ WHERE o.event_id = ANY(@ids);
         var cache = redis.GetDatabase();
         var id = Guid.NewGuid();
         await AppendCommittedAsync(db, id);
+        // Consume the committed producer outbox so no pending entries pollute
+        // the 1000-event acceptance test regardless of MSTest ordering.
+        var publisher = new CrmRealtimeOutboxProcessor(Postgres,
+            new CrmRedisRealtimeStreamWriter(cache), NullLogger.Instance);
+        Assert.AreEqual(1, (await publisher.DispatchOnceAsync(1)).Published);
         var group = "crm-f2-replay-" + Guid.NewGuid().ToString("N");
         var stream = CrmRealtimeOutboxWriter.CrmStream;
         var payload = Envelope(id);
@@ -250,7 +255,7 @@ WHERE o.event_id = ANY(@ids);
         });
         await cache.StreamCreateConsumerGroupAsync(stream, group, "$", createStream: true);
         // Simulate: effect and Inbox COMMIT succeed, process dies BEFORE XACK.
-        var entry = await cache.StreamAddAsync(stream, new[] {
+        await cache.StreamAddAsync(stream, new[] {
             new NameValueEntry("event_id", id.ToString("D")),
             new NameValueEntry("event_type", "crm.account.updated.v1"),
             new NameValueEntry("payload_json", payload)
