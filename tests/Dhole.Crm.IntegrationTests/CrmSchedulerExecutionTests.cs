@@ -80,4 +80,32 @@ public sealed class CrmSchedulerExecutionTests
         var after=CrmReminderEngine.NextOccurrence(prior,7,"America/Costa_Rica",prior);
         Assert.AreEqual(prior.AddDays(7),after);
     }
+    [TestMethod]
+    public async Task Recurring_visit_creates_one_future_copy_and_preserves_cadence()
+    {
+        var user=Guid.NewGuid();var now=DateTime.UtcNow;
+        var lead=new Lead {Name="Recurring test lead",ExecutiveUserId=user,CreatedByUserId=user};
+        var visit=new Activity {
+            LeadId=lead.Id,OwnerUserId=user,Type="VISIT",Subject="Recurring visit",
+            ScheduledStartAt=now.AddMinutes(-10),ScheduledEndAt=now.AddMinutes(50),
+            RepeatEveryDays=7,ReminderLeadMinutes=5,ReminderRepeatMinutes=15,
+            CreatedByUserId=user
+        };
+        await using(var db=await Open())
+        {
+            db.Leads.Add(lead);db.Activities.Add(visit);await db.SaveChangesAsync();
+            await CrmReminderEngine.GenerateRecurringActivitiesAsync(db,now,CancellationToken.None);
+        }
+        await using(var db=await Open())
+        {
+            await CrmReminderEngine.GenerateRecurringActivitiesAsync(db,now,CancellationToken.None);
+            var children=await db.Activities.AsNoTracking().Where(x=>x.RecurrenceParentId==visit.Id).ToListAsync();
+            Assert.HasCount(1,children);
+            Assert.IsTrue(children[0].ScheduledStartAt>now);
+            Assert.AreEqual(7,children[0].RepeatEveryDays);
+            Assert.AreEqual(5,children[0].ReminderLeadMinutes);
+            Assert.AreEqual(15,children[0].ReminderRepeatMinutes);
+            Assert.AreEqual(user,children[0].OwnerUserId);
+        }
+    }
 }

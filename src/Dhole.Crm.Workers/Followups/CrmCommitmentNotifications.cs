@@ -20,7 +20,8 @@ internal static class CrmCommitmentNotifications
 
     private sealed record Commitment(
         string EntityType, Guid EntityId, Guid OwnerUserId, long Version,
-        DateTime Start, DateTime Deadline, int LeadMinutes, Guid CreatedByUserId);
+        DateTime Start, DateTime Deadline, int LeadMinutes,
+        int? ReminderRepeatMinutes, Guid CreatedByUserId);
 
     public static async Task PlanAsync(
         CrmDbContext db, IAuthReferenceService auth, DateTime now,
@@ -47,11 +48,11 @@ internal static class CrmCommitmentNotifications
                 a.ScheduledStartAt!.Value,
                 a.ScheduledEndAt ?? a.ScheduledStartAt!.Value,
                 Math.Clamp(a.ReminderLeadMinutes ?? 60, 0, 10080),
-                a.CreatedByUserId))
+                a.ReminderRepeatMinutes,a.CreatedByUserId))
             .Concat(followups.Select(f => new Commitment(
                 "Followup", f.Id, f.AssignedUserId, f.RowVersion,
                 f.DueAt, f.DueAt, Math.Clamp(f.ReminderLeadMinutes ?? 60, 0, 10080),
-                f.CreatedByUserId))).ToArray();
+                null,f.CreatedByUserId))).ToArray();
         if (work.Length == 0) return;
 
         // Fetch existing keys once rather than issuing a query for each delivery.
@@ -71,14 +72,27 @@ internal static class CrmCommitmentNotifications
             foreach (var lead in ReminderLeads.Append(item.LeadMinutes).Distinct())
             {
                 var fireAt = item.Start.AddMinutes(-lead);
-                // Never backfill old pre-event stages after a restart or a status transition.
-                if (fireAt < now) continue;
+                // Tolerate up to two minutes of scheduler delay at the exact start.
+                if (fireAt < now.AddMinutes(-2)) continue;
                 var phase = lead == item.LeadMinutes ? "lead" :
                     lead == 1440 ? "day" : lead == 60 ? "hour" : "start";
                 QueuePair(db, existing, item, item.OwnerUserId, phase,
                     "owner", fireAt, now,
                     phase == "start" ? "crm.commitment.start.v1" :
                     "crm.commitment.upcoming.v1");
+            }
+
+            // Send only the current repeat interval while the activity is unresolved.
+            if(item.ReminderRepeatMinutes is > 0 && now>=item.Start)
+            {
+                var repeatSlot=(int)((now-item.Start).TotalMinutes/item.ReminderRepeatMinutes.Value);
+                if(repeatSlot>0)
+                {
+                    var repeatedAt=item.Start.AddMinutes(repeatSlot*item.ReminderRepeatMinutes.Value);
+                    if(repeatedAt>=now.AddMinutes(-2))
+                        QueuePair(db,existing,item,item.OwnerUserId,"repeat-"+repeatSlot,
+                            "owner",repeatedAt,now,"crm.commitment.upcoming.v1");
+                }
             }
 
             // A scheduled activity is NOT considered completed until a seller
