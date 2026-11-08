@@ -1,6 +1,6 @@
 using System.Text.Json;
 using Microsoft.AspNetCore.Builder;
-using Microsoft.AspNetCore.Hosting;
+using Microsoft.Extensions.Hosting;
 using Microsoft.AspNetCore.TestHost;
 using System.Net;
 using Dhole.Crm.Infrastructure.Persistence;
@@ -407,30 +407,23 @@ WHERE o.event_id = ANY(@ids);
         // for the pilot's HTTP write, not unmodified CRM business endpoints.
         await using var prepared = await OpenAsync();
         var id = Guid.NewGuid();
-        using var server = new TestServer(new WebHostBuilder().Configure(app =>
-            app.Run(async context =>
-            {
-                if (context.Request.Path == "/f2/commit" &&
-                    context.Request.Method == "POST")
-                {
-                    await using var db = await OpenAsync();
-                    await AppendCommittedAsync(db, id);
-                    context.Response.StatusCode = StatusCodes.Status201Created;
-                    return;
-                }
-
-                if (context.Request.Path == "/f2/read" &&
-                    context.Request.Method == "GET")
-                {
-                    var exists = await ScalarAsync(
-                        "SELECT count(*) FROM crm.crm_realtime_pilot_test_effects WHERE id=@id", id);
-                    context.Response.StatusCode = exists == 1
-                        ? StatusCodes.Status200OK : StatusCodes.Status404NotFound;
-                    return;
-                }
-                context.Response.StatusCode = StatusCodes.Status405MethodNotAllowed;
-            })));
-        using var client = server.CreateClient();
+        var builder = WebApplication.CreateBuilder();
+        builder.WebHost.UseTestServer();
+        await using var app = builder.Build();
+        app.MapPost("/f2/commit", async () =>
+        {
+            await using var db = await OpenAsync();
+            await AppendCommittedAsync(db, id);
+            return Microsoft.AspNetCore.Http.Results.StatusCode(201);
+        });
+        app.MapGet("/f2/read", async () =>
+        {
+            var exists = await ScalarAsync(
+                "SELECT count(*) FROM crm.crm_realtime_pilot_test_effects WHERE id=@id", id);
+            return Microsoft.AspNetCore.Http.Results.StatusCode(exists == 1 ? 200 : 404);
+        });
+        await app.StartAsync();
+        using var client = app.GetTestClient();
         var response = await client.PostAsync("/f2/commit",
             new StringContent("{}"));
         Assert.AreEqual(HttpStatusCode.Created, response.StatusCode);
