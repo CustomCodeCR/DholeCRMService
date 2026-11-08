@@ -363,4 +363,36 @@ WHERE o.event_id = ANY(@ids);
             "SELECT count(*) FROM crm.crm_realtime_inbox WHERE event_id=@id", eventId));
     }
 
+    [TestMethod]
+    public async Task Producer_rejects_sensitive_fields_nested_inside_minimal_payload()
+    {
+        await using var db = await OpenAsync();
+        var eventId = Guid.NewGuid();
+        var bad = Envelope(eventId).Replace(
+            "\"changedFields\":[\"status\"]",
+            "\"changedFields\":[\"status\"],\"email\":\"private@example.invalid\"",
+            StringComparison.Ordinal);
+        await using var tx = await db.Database.BeginTransactionAsync();
+        await Assert.ThrowsExactlyAsync<ArgumentException>(() =>
+            CrmRealtimeOutboxWriter.AppendAsync(db, eventId, bad));
+        await tx.RollbackAsync();
+        Assert.AreEqual(0L, await ScalarAsync(
+            "SELECT count(*) FROM crm.crm_realtime_outbox WHERE event_id=@id", eventId));
+    }
+
+    [TestMethod]
+    public async Task Producer_rejects_missing_version_contract_inside_business_transaction()
+    {
+        await using var db = await OpenAsync();
+        var eventId = Guid.NewGuid();
+        var bad = Envelope(eventId).Replace(
+            "\"schemaVersion\":1", "\"schemaVersion\":0", StringComparison.Ordinal);
+        await using var tx = await db.Database.BeginTransactionAsync();
+        await Assert.ThrowsExactlyAsync<ArgumentException>(() =>
+            CrmRealtimeOutboxWriter.AppendAsync(db, eventId, bad));
+        await tx.RollbackAsync();
+        Assert.AreEqual(0L, await ScalarAsync(
+            "SELECT count(*) FROM crm.crm_realtime_outbox WHERE event_id=@id", eventId));
+    }
+
 }
