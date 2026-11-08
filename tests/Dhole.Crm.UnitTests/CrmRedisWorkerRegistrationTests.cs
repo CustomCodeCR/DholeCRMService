@@ -31,7 +31,8 @@ public sealed class CrmRedisWorkerRegistrationTests
         using var provider = services.BuildServiceProvider(validateScopes: true);
 
         var connection = provider.GetRequiredService<IConnectionMultiplexer>();
-        var publisher = provider.GetRequiredService<IRedisStreamPublisher>();
+        using var scope = provider.CreateScope();
+        var publisher = scope.ServiceProvider.GetRequiredService<IRedisStreamPublisher>();
         Assert.IsNotNull(publisher);
         Assert.IsTrue(connection.IsConnected, "Redis publisher must use a connected multiplexer.");
 
