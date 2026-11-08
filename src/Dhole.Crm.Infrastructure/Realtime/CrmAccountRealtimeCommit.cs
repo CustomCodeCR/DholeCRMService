@@ -22,10 +22,19 @@ public static class CrmAccountRealtimeCommit
         string.Equals(flags["Realtime:ReleaseId"], ReleaseId, StringComparison.Ordinal);
 
     public static async Task PersistUpdatedAccountAsync(
-        CrmDbContext db, Account account, string correlationId, CancellationToken ct = default)
+        CrmDbContext db, Account account, string correlationId, CancellationToken ct = default,
+        string eventType = "crm.account.updated.v1")
     {
         ArgumentNullException.ThrowIfNull(db);
         ArgumentNullException.ThrowIfNull(account);
+        // Never accept an event name from an HTTP request or arbitrary caller.
+        if (eventType is not ("crm.account.updated.v1"
+            or "crm.account.created.v1"
+            or "crm.account.archived.v1"
+            or "crm.account.assigned.v1"
+            or "crm.account.logo.updated.v1"
+            or "crm.account.activity.added.v1"))
+            throw new ArgumentException("Unapproved CRM account event type.", nameof(eventType));
         if (account.Id == Guid.Empty || account.RowVersion < 1)
             throw new ArgumentException("Persisted account id/version required.", nameof(account));
 
@@ -38,7 +47,7 @@ public static class CrmAccountRealtimeCommit
         var envelope = JsonSerializer.Serialize(new
         {
             eventId,
-            eventType = "crm.account.updated.v1",
+            eventType,
             schemaVersion = 1,
             aggregateType = "account",
             aggregateId = account.Id.ToString("D"),
