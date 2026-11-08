@@ -336,10 +336,13 @@ ORDER BY (envelope_json->>'aggregateVersion')::bigint;
                 $"/api/crm/accounts/{account.Id:D}", owner, payloadA);
             using var requestB = Request(HttpMethod.Patch,
                 $"/api/crm/accounts/{account.Id:D}", owner, payloadB);
-            using var responseA = await editorA.SendAsync(requestA);
-            using var responseB = await editorB.SendAsync(requestB);
+            var concurrentA = editorA.SendAsync(requestA);
+            var concurrentB = editorB.SendAsync(requestB);
+            await Task.WhenAll(concurrentA, concurrentB);
+            using var responseA = await concurrentA;
+            using var responseB = await concurrentB;
             var statuses = new[] { responseA.StatusCode, responseB.StatusCode };
-            // Request B deliberately carries stale version. One succeeds and
+            // Both requests race with the same version. One succeeds and
             // exactly one fails; no silent lost update or second Outbox event.
             Assert.AreEqual(1, statuses.Count(code => code == HttpStatusCode.OK),
                 "One mutation must win at version " + version);
