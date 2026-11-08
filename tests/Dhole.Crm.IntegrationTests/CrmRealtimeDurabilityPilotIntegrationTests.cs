@@ -4,6 +4,8 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.AspNetCore.TestHost;
 using System.Net;
 using Dhole.Crm.Infrastructure.Persistence;
+using Dhole.Crm.Domain;
+using Microsoft.Extensions.Configuration;
 using Dhole.Crm.Infrastructure.Realtime;
 using Dhole.Crm.Workers.Realtime;
 using Microsoft.EntityFrameworkCore;
@@ -437,6 +439,80 @@ WHERE o.event_id = ANY(@ids);
             "SELECT count(*) FROM crm.crm_realtime_outbox WHERE event_id=@id AND status='Pending'", id));
         Assert.AreEqual(1L, await ScalarAsync(
             "SELECT count(*) FROM crm.crm_realtime_pilot_test_effects WHERE id=@id", id));
+    }
+
+
+    [TestMethod]
+    public void F5_CRM_pilot_requires_all_release_flags_and_matching_release_id()
+    {
+        var flags = new ConfigurationBuilder().AddInMemoryCollection(
+            new Dictionary<string, string?>
+            {
+                ["Features:UniversalRealtimeEnabled"] = "true",
+                ["Realtime:Outbox:Enabled"] = "true",
+                ["Realtime:BatchApproved"] = "false",
+                ["Realtime:ReleaseId"] = CrmAccountRealtimeCommit.ReleaseId
+            }).Build();
+        Assert.IsFalse(CrmAccountRealtimeCommit.IsEnabled(flags),
+            "F5 candidate must remain OFF without formal batch approval.");
+        flags["Realtime:BatchApproved"] = "true";
+        Assert.IsTrue(CrmAccountRealtimeCommit.IsEnabled(flags));
+        flags["Realtime:ReleaseId"] = "unexpected-release";
+        Assert.IsFalse(CrmAccountRealtimeCommit.IsEnabled(flags),
+            "A different release must never activate this pilot.");
+        flags["Realtime:ReleaseId"] = CrmAccountRealtimeCommit.ReleaseId;
+        flags["Realtime:Outbox:Enabled"] = "false";
+        Assert.IsFalse(CrmAccountRealtimeCommit.IsEnabled(flags));
+    }
+
+    [TestMethod]
+    public async Task F5_real_CRM_account_updates_commit_20_versions_and_exactly_20_outbox_events()
+    {
+        await using var db = await OpenAsync();
+        var actor = Guid.NewGuid();
+        var account = new Account
+        {
+            DisplayName = "Realtime CRM account 0",
+            LegalName = "Realtime CRM account",
+            ExecutiveUserId = actor,
+            CreatedByUserId = actor,
+            CategoryType = "CUSTOMER",
+            CategoryCode = "D"
+        };
+        db.Accounts.Add(account);
+        await db.SaveChangesAsync();
+        db.ChangeTracker.Clear();
+
+        for (var iteration = 1; iteration <= 20; iteration++)
+        {
+            var current = await db.Accounts.SingleAsync(x => x.Id == account.Id);
+            current.DisplayName = $"Realtime CRM account {iteration}";
+            current.RowVersion++;
+            current.UpdatedAt = DateTime.UtcNow;
+            current.UpdatedByUserId = actor;
+            await CrmAccountRealtimeCommit.PersistUpdatedAccountAsync(
+                db, current, $"f5-account-{iteration}");
+            db.ChangeTracker.Clear();
+        }
+
+        var readBack = await db.Accounts.AsNoTracking().SingleAsync(x => x.Id == account.Id);
+        Assert.AreEqual("Realtime CRM account 20", readBack.DisplayName);
+        Assert.AreEqual(21L, readBack.RowVersion);
+        Assert.AreEqual(20L, await ScalarAsync("""
+SELECT count(*) FROM crm.crm_realtime_outbox
+WHERE (envelope_json->>'aggregateId')::uuid = @id
+  AND envelope_json->>'eventType' = 'crm.account.updated.v1'
+  AND envelope_json->>'audienceRef' = 'crm:account:' || @id::text;
+""", account.Id));
+        Assert.AreEqual(20L, await ScalarAsync("""
+SELECT count(*) FROM crm.crm_account_change_history
+WHERE account_id = @id AND action_code = 'UPDATED';
+""", account.Id));
+        Assert.AreEqual(20L, await ScalarAsync("""
+SELECT count(DISTINCT (envelope_json->>'aggregateVersion'))
+FROM crm.crm_realtime_outbox
+WHERE (envelope_json->>'aggregateId')::uuid = @id;
+""", account.Id));
     }
 
 }
