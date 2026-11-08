@@ -1,5 +1,7 @@
 # Changelog
 
+- F7 C08 (candidato NO desplegado): 10 carreras de escritura entre dos clientes TestServer con mismo actor, PostgreSQL real, HTTP 409 para revisión obsoleta, una salida Outbox por versión y cero duplicados; CI #42511869179 PASS. No equivale a usuarios distintos ni staging real; versión 1.5.0 sigue candidata sin publicación.
+
 ## [1.5.0] - 2026-11-08 (candidato F6.01, SIN PUBLICAR)
 
 - F6.01: añade invalidaciones realtime transaccionales para crear cuentas, registrar actividad comercial de cuenta, actualizar logo, archivar y reasignar cuentas CRM; una operación de negocio y su evento Outbox se confirman juntos con permisos existentes.
