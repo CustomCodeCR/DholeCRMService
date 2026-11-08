@@ -332,4 +332,35 @@ WHERE o.event_id = ANY(@ids);
             "SELECT applied_count FROM crm.crm_realtime_pilot_test_effects WHERE id=@id", eventId));
     }
 
+    [TestMethod]
+    public async Task Abandoned_consumer_pending_entry_is_reclaimed_by_new_worker()
+    {
+        await using var db = await OpenAsync();
+        using var connection = await ConnectionMultiplexer.ConnectAsync(Redis);
+        var redis = connection.GetDatabase();
+        var eventId = Guid.NewGuid();
+        var stream = "dhole.crm.realtime.f2claim." + Guid.NewGuid().ToString("N");
+        var group = "crm-f2-claim-" + Guid.NewGuid().ToString("N");
+        await AppendCommittedAsync(db, eventId);
+        await db.Database.ExecuteSqlRawAsync(
+            "UPDATE crm.crm_realtime_outbox SET stream_name = {0} WHERE event_id = {1}", stream, eventId);
+        var publisher = new CrmRealtimeOutboxProcessor(Postgres,
+            new CrmRedisRealtimeStreamWriter(redis), NullLogger.Instance);
+        Assert.AreEqual(1, (await publisher.DispatchOnceAsync(1)).Published);
+
+        await redis.StreamCreateConsumerGroupAsync(stream, group, "0-0", createStream: true);
+        // The former worker reads the event but dies before DB commit or XACK.
+        var pending = await redis.StreamReadGroupAsync(stream, group, "dead-worker", ">", 1);
+        Assert.HasCount(1, pending);
+        var inbox = new CrmRealtimeInboxStore(Postgres);
+        var replacement = new CrmRealtimeInboxConsumer(redis, inbox, stream, group, "replacement-worker");
+        // Zero idle is ONLY for deterministic test; default in production is 30s.
+        Assert.AreEqual(1, await replacement.ConsumeOnceAsync(ApplyProjection,
+            count: 100, pendingMinIdleMs: 0));
+        Assert.AreEqual(1L, await ScalarAsync(
+            "SELECT applied_count FROM crm.crm_realtime_pilot_test_effects WHERE id=@id", eventId));
+        Assert.AreEqual(1L, await ScalarAsync(
+            "SELECT count(*) FROM crm.crm_realtime_inbox WHERE event_id=@id", eventId));
+    }
+
 }
