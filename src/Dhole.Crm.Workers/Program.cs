@@ -18,7 +18,8 @@ builder.Services.AddHostedService<DependencyHeartbeatWorker>();
 
 var app = builder.Build();
 // Fail fast: a healthy scheduler without a stream publisher silently loses notifications.
-_ = app.Services.GetRequiredService<IRedisStreamPublisher>();
+using (var startupScope = app.Services.CreateScope())
+    _ = startupScope.ServiceProvider.GetRequiredService<IRedisStreamPublisher>();
 app.MapGet("/health/live", () => Results.Ok(new { status = "live", service = "DholeCRM.Workers" }));
 app.MapGet("/health/ready", (WorkerHeartbeatState state) =>
     state.IsReady ? Results.Ok(new { status = "ready" }) :
