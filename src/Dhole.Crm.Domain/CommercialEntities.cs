@@ -79,6 +79,9 @@ public sealed class Activity : CrmRecord
     // Individual reminder settings; the account policy remains the fallback.
     public int? ReminderLeadMinutes { get; set; }
     public string? ReminderChannelStrategy { get; set; }
+    public int? RepeatEveryDays { get; set; }
+    public Guid? RecurrenceParentId { get; set; }
+    public int? ReminderRepeatMinutes { get; set; }
     public DateTime? ArchivedAt { get; set; }
 }
 public sealed class ActivityParticipant : CrmRecord

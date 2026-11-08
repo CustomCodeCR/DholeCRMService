@@ -61,6 +61,45 @@ public static class CrmReminderEngine
         }
     }
 
+    public static async Task GenerateRecurringActivitiesAsync(CrmDbContext db,DateTime now,CancellationToken ct)
+    {
+        await using var tx=await db.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted,ct);
+        if(!await Acquire(db,5012526,ct))return;
+        // Generate only the next future occurrence after worker downtime.
+        var due=await db.Activities.AsNoTracking()
+            .Where(x=>x.ArchivedAt==null && x.Status!="Cancelled" &&
+                x.RepeatEveryDays!=null && x.RepeatEveryDays>0 &&
+                x.ScheduledStartAt!=null && x.ScheduledStartAt<=now)
+            .OrderBy(x=>x.ScheduledStartAt).Take(500).ToListAsync(ct);
+        var ids=due.Select(x=>x.Id).ToArray();
+        var existing=await db.Activities.AsNoTracking()
+            .Where(x=>x.RecurrenceParentId.HasValue && ids.Contains(x.RecurrenceParentId.Value))
+            .Select(x=>x.RecurrenceParentId!.Value).ToListAsync(ct);
+        var scheduled=existing.ToHashSet();
+        foreach(var source in due)
+        {
+            if(!scheduled.Add(source.Id))continue;
+            var start=source.ScheduledStartAt!.Value;
+            var next=NextOccurrence(start,source.RepeatEveryDays!.Value,"America/Costa_Rica",now);
+            var duration=source.ScheduledEndAt.HasValue
+                ? source.ScheduledEndAt.Value-start : TimeSpan.FromHours(1);
+            db.Activities.Add(new Activity
+            {
+                AccountId=source.AccountId,LeadId=source.LeadId,
+                OpportunityId=source.OpportunityId,ContactId=source.ContactId,
+                OwnerUserId=source.OwnerUserId,Type=source.Type,Subject=source.Subject,
+                ScheduledStartAt=next,ScheduledEndAt=next.Add(duration),Status="Scheduled",
+                LocationText=source.LocationText,ReminderLeadMinutes=source.ReminderLeadMinutes,
+                ReminderChannelStrategy=source.ReminderChannelStrategy,
+                ReminderRepeatMinutes=source.ReminderRepeatMinutes,
+                RepeatEveryDays=source.RepeatEveryDays,RecurrenceParentId=source.Id,
+                CreatedByUserId=source.CreatedByUserId
+            });
+        }
+        await db.SaveChangesAsync(ct);
+        await tx.CommitAsync(ct);
+    }
+
     public static async Task PlanRemindersAsync(CrmDbContext db,DateTime now,CancellationToken ct)
     {
         await using var tx=await db.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted,ct);
