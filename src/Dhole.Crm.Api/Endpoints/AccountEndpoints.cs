@@ -389,7 +389,7 @@ internal static class AccountEndpoints
         }
     }
     private static async Task<IResult> Create(CreateAccountRequest request, CrmDbContext db,
-        HttpContext http, IAuthReferenceService auth, IConfigReferenceService config, IMemoryCache cache, IConfiguration flags, CancellationToken ct
+        HttpContext http, IAuthReferenceService auth, IConfigReferenceService config, IMemoryCache cache, IConfiguration flags, CancellationToken ct)
     {
         if (!CrmAccess.Scope(http, "crm.account.create")) return CrmAccess.Denied();
         var id = CrmAccess.UserId(http);
