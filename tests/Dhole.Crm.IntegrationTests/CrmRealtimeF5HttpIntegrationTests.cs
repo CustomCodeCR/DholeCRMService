@@ -269,4 +269,112 @@ ORDER BY (envelope_json->>'aggregateVersion')::bigint;
         }, await EnvelopeTypes(connection, assignedId));
     }
 
+    [TestMethod]
+    public async Task F7_C08_ten_parallel_editor_tabs_preserve_optimistic_concurrency_and_outbox()
+    {
+        // TestServer + REAL PostgreSQL; two independent HTTP clients of the
+        // same authorized user (two tabs), NOT two distinct staging users.
+        var owner = Guid.NewGuid();
+        var reader = Guid.NewGuid();
+        var denied = Guid.NewGuid();
+        var account = new Account
+        {
+            DisplayName = "Before F7 C08",
+            LegalName = "F7 C08 concurrency legal",
+            ExecutiveUserId = owner,
+            CreatedByUserId = owner,
+            CategoryType = "CUSTOMER",
+            CategoryCode = "D",
+            CustomerTypeCode = "cash"
+        };
+        await using (var seed = new CrmDbContext(
+            new DbContextOptionsBuilder<CrmDbContext>().UseNpgsql(Postgres).Options))
+        {
+            await seed.Database.MigrateAsync();
+            seed.Accounts.Add(account);
+            await seed.SaveChangesAsync();
+        }
+
+        var builder = WebApplication.CreateBuilder();
+        builder.WebHost.UseTestServer();
+        builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["ConnectionStrings:Postgres"] = Postgres,
+            ["Features:CrmEnabled"] = "true",
+            ["Features:UniversalRealtimeEnabled"] = "true",
+            ["Realtime:Outbox:Enabled"] = "true",
+            ["Realtime:BatchApproved"] = "true", // only isolated CI, never deployed
+            ["Realtime:ReleaseId"] = "rt-20261107-01"
+        });
+        builder.Services.AddCrmInfrastructure();
+        builder.Services.AddMemoryCache();
+        builder.Services.AddHttpClient();
+        builder.Services.AddSingleton<IAuthReferenceService>(new F5AuthReferences(owner, reader, denied));
+        builder.Services.AddSingleton<IConfigReferenceService>(new F5ConfigReferences());
+        builder.Services.AddAuthentication("F7-C08")
+            .AddScheme<AuthenticationSchemeOptions, F5AuthenticationHandler>("F7-C08", _ => { });
+        builder.Services.AddAuthorization();
+        await using var app = builder.Build();
+        app.UseAuthentication();
+        app.UseAuthorization();
+        app.MapCrmDataEndpoints();
+        await app.StartAsync();
+
+        using var editorA = app.GetTestClient();
+        using var editorB = app.GetTestClient();
+        var version = 1;
+        for (var attempt = 1; attempt <= 10; attempt++)
+        {
+            var payloadA = new PatchAccountRequest(
+                version, "C08 editor A " + attempt, account.LegalName,
+                "cash", null, null, "CUSTOMER", "D");
+            var payloadB = new PatchAccountRequest(
+                version, "C08 editor B " + attempt, account.LegalName,
+                "cash", null, null, "CUSTOMER", "D");
+
+            using var requestA = Request(HttpMethod.Patch,
+                $"/api/crm/accounts/{account.Id:D}", owner, payloadA);
+            using var requestB = Request(HttpMethod.Patch,
+                $"/api/crm/accounts/{account.Id:D}", owner, payloadB);
+            using var responseA = await editorA.SendAsync(requestA);
+            using var responseB = await editorB.SendAsync(requestB);
+            var statuses = new[] { responseA.StatusCode, responseB.StatusCode };
+            // Request B deliberately carries stale version. One succeeds and
+            // exactly one fails; no silent lost update or second Outbox event.
+            Assert.AreEqual(1, statuses.Count(code => code == HttpStatusCode.OK),
+                "One mutation must win at version " + version);
+            Assert.AreEqual(1, statuses.Count(code => code == HttpStatusCode.Conflict),
+                "Stale editor must receive HTTP 409");
+            version++;
+
+            await using var check = new NpgsqlConnection(Postgres);
+            await check.OpenAsync();
+            await using var row = new NpgsqlCommand("""
+                SELECT count(*)
+                FROM crm.crm_realtime_outbox
+                WHERE (envelope_json->>'aggregateId')::uuid=@id
+                  AND envelope_json->>'eventType'='crm.account.updated.v1'
+                  AND (envelope_json->>'aggregateVersion')::bigint=@version
+                """, check);
+            row.Parameters.AddWithValue("id", account.Id);
+            row.Parameters.AddWithValue("version", version);
+            Assert.AreEqual(1L, Convert.ToInt64(await row.ExecuteScalarAsync()),
+                "No extra Outbox event from rejected mutation");
+        }
+        using (var request = Request(HttpMethod.Get,
+                $"/api/crm/accounts/{account.Id:D}", denied))
+        using (var result = await editorA.SendAsync(request))
+            Assert.AreEqual(HttpStatusCode.Forbidden, result.StatusCode);
+
+        await using var verify = new NpgsqlConnection(Postgres);
+        await verify.OpenAsync();
+        await using var total = new NpgsqlCommand("""
+            SELECT count(*) FROM crm.crm_realtime_outbox
+            WHERE (envelope_json->>'aggregateId')::uuid=@id
+              AND envelope_json->>'eventType'='crm.account.updated.v1'
+            """, verify);
+        total.Parameters.AddWithValue("id", account.Id);
+        Assert.AreEqual(10L, Convert.ToInt64(await total.ExecuteScalarAsync()));
+    }
+
 }
