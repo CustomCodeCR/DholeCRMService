@@ -103,6 +103,21 @@ SET applied_count = applied_count + 1 WHERE id = @id;
             await AppendCommittedAsync(db, id);
         }
 
+        // Isolate this acceptance's consumer group from unrelated CI tests
+        // without changing the production stream configured by the writer.
+        var stream = "dhole.crm.realtime.f2ci." + Guid.NewGuid().ToString("N");
+        await using (var connection = new NpgsqlConnection(Postgres))
+        {
+            await connection.OpenAsync();
+            await using var command = new NpgsqlCommand("""
+UPDATE crm.crm_realtime_outbox
+SET stream_name = @stream WHERE event_id = ANY(@ids);
+""", connection);
+            command.Parameters.AddWithValue("stream", stream);
+            command.Parameters.AddWithValue("ids", ids.ToArray());
+            Assert.AreEqual(1000, await command.ExecuteNonQueryAsync());
+        }
+
         var processor = new CrmRealtimeOutboxProcessor(Postgres,
             new CrmRedisRealtimeStreamWriter(database), NullLogger.Instance);
         var published = 0;
@@ -119,7 +134,7 @@ SET applied_count = applied_count + 1 WHERE id = @id;
         var group = "crm-f2-ci-" + Guid.NewGuid().ToString("N");
         var inbox = new CrmRealtimeInboxStore(Postgres);
         var consumer = new CrmRealtimeInboxConsumer(database, inbox,
-            CrmRealtimeOutboxWriter.CrmStream, group, "stable-consumer");
+            stream, group, "stable-consumer");
         var acknowledged = 0;
         for (var i = 0; i < 20 && acknowledged < 1000; i++)
         {
@@ -132,7 +147,7 @@ SET applied_count = applied_count + 1 WHERE id = @id;
         // Duplicate publishing after PostgreSQL crash-after-XADD is allowed.
         // The same event ID must NOT run the projection twice.
         foreach (var id in ids.Take(100))
-            await database.StreamAddAsync(CrmRealtimeOutboxWriter.CrmStream, new[]
+            await database.StreamAddAsync(stream, new[]
             {
                 new NameValueEntry("event_id", id.ToString("D")),
                 new NameValueEntry("event_type", "crm.account.updated.v1"),
