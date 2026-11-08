@@ -276,7 +276,7 @@ WHERE o.event_id = ANY(@ids);
             new NameValueEntry("payload_json", payload)
         });
         var delivery = await cache.StreamReadGroupAsync(stream, group, "stable-consumer", ">", 1);
-        Assert.AreEqual(1, delivery.Length);
+        Assert.IsTrue(delivery.Length == 1, "Expected one pending stream delivery.");
         var inbox = new CrmRealtimeInboxStore(Postgres);
         Assert.IsTrue(await inbox.ApplyOnceAsync(id, group,
             async (connection, tx, ct) => {
