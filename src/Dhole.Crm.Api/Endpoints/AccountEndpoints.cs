@@ -389,7 +389,7 @@ internal static class AccountEndpoints
         }
     }
     private static async Task<IResult> Create(CreateAccountRequest request, CrmDbContext db,
-        HttpContext http, IAuthReferenceService auth, IConfigReferenceService config, IMemoryCache cache, CancellationToken ct)
+        HttpContext http, IAuthReferenceService auth, IConfigReferenceService config, IMemoryCache cache, IConfiguration flags, CancellationToken ct
     {
         if (!CrmAccess.Scope(http, "crm.account.create")) return CrmAccess.Denied();
         var id = CrmAccess.UserId(http);
@@ -462,8 +462,11 @@ internal static class AccountEndpoints
             AssignedBy = id, CreatedByUserId = id });
         try
         {
-            await db.SaveChangesAsync(ct);
-            return Results.Created("/api/crm/accounts/" + account.Id, account);
+            var committed = await CrmDataEndpoints.CommitAccount(db, account, http,
+                flags, "crm.account.created.v1", ct);
+            return committed is Microsoft.AspNetCore.Http.HttpResults.Ok
+                ? Results.Created("/api/crm/accounts/" + account.Id, account)
+                : committed;
         }
         catch (DbUpdateException) { return CrmDataEndpoints.Conflict("Account fiscal identity or assignment conflict"); }
     }
@@ -560,7 +563,7 @@ internal static class AccountEndpoints
         return committed is Microsoft.AspNetCore.Http.HttpResults.Ok ? Results.Ok(account) : committed;
     }
     private static async Task<IResult> SetLogo(Guid id, SetAccountLogoRequest request, CrmDbContext db,
-        HttpContext http, CancellationToken ct)
+        HttpContext http, IConfiguration flags, CancellationToken ct)
     {
         if (!CrmAccess.Scope(http, "crm.account.update")) return CrmAccess.Denied();
         var account = await db.Accounts.FindAsync([id], ct);
@@ -573,12 +576,13 @@ internal static class AccountEndpoints
         account.RowVersion++;
         account.UpdatedAt = DateTime.UtcNow;
         account.UpdatedByUserId = CrmAccess.UserId(http);
-        var committed = await CrmDataEndpoints.Commit(db, ct);
+        var committed = await CrmDataEndpoints.CommitAccount(db, account, http,
+            flags, "crm.account.logo.updated.v1", ct);
         return committed is Microsoft.AspNetCore.Http.HttpResults.Ok ? Results.Ok(account) : committed;
     }
 
     private static async Task<IResult> Archive(Guid id, ArchiveAccountRequest request, CrmDbContext db,
-        HttpContext http, CancellationToken ct)
+        HttpContext http, IConfiguration flags, CancellationToken ct)
     {
         if (!CrmAccess.Scope(http, "crm.account.archive")) return CrmAccess.Denied();
         if (string.IsNullOrWhiteSpace(request.Reason) || request.Reason.Length > 1000)
@@ -592,11 +596,12 @@ internal static class AccountEndpoints
         account.UpdatedAt = DateTime.UtcNow;
         account.UpdatedByUserId = CrmAccess.UserId(http);
         account.RowVersion++;
-        var committed = await CrmDataEndpoints.Commit(db, ct);
+        var committed = await CrmDataEndpoints.CommitAccount(db, account, http,
+            flags, "crm.account.archived.v1", ct);
         return committed is Microsoft.AspNetCore.Http.HttpResults.Ok ? Results.Ok(account) : committed;
     }
     private static async Task<IResult> Assign(Guid id, AssignAccountRequest request, CrmDbContext db,
-        HttpContext http, IAuthReferenceService auth, CancellationToken ct)
+        HttpContext http, IAuthReferenceService auth, IConfiguration flags, CancellationToken ct)
     {
         if (!CrmAccess.Scope(http, "crm.account.assign")) return CrmAccess.Denied();
         var account = await db.Accounts.FindAsync([id], ct);
@@ -628,7 +633,8 @@ internal static class AccountEndpoints
             ExecutiveUserId = executiveId, IsCastroFallasExecutive = request.AssignToCastroFallas,
             AssignedBy = CrmAccess.UserId(http), CreatedByUserId = CrmAccess.UserId(http),
             EffectiveFrom = when, Reason = request.Reason });
-        var committed = await CrmDataEndpoints.Commit(db, ct);
+        var committed = await CrmDataEndpoints.CommitAccount(db, account, http,
+            flags, "crm.account.assigned.v1", ct);
         return committed is Microsoft.AspNetCore.Http.HttpResults.Ok ? Results.Ok(account) : committed;
     }
     private static async Task<IResult> ChangeHistory(Guid id, CrmDbContext db,
@@ -707,10 +713,10 @@ internal static class AccountEndpoints
             .OrderBy(x => x.ActivityCode).ToListAsync(ct));
     }
     private static async Task<IResult> AddActivity(Guid id, AddBusinessActivityRequest request, CrmDbContext db,
-        HttpContext http, CancellationToken ct)
+        HttpContext http, IConfiguration flags, CancellationToken ct)
     {
         if (!CrmAccess.Scope(http, "crm.account.update")) return CrmAccess.Denied();
-        var account = await db.Accounts.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id && x.ArchivedAt == null, ct);
+        var account = await db.Accounts.FirstOrDefaultAsync(x => x.Id == id && x.ArchivedAt == null, ct);
         if (account is null) return Results.NotFound();
         if (!await CrmAccess.CanSeeAccount(db, http, account.Id, ct)) return CrmAccess.Denied();
         if (string.IsNullOrWhiteSpace(request.ActivityCode) || request.ActivityCode.Length > 64)
@@ -719,7 +725,16 @@ internal static class AccountEndpoints
             ActivityCode = request.ActivityCode.Trim(), ActivityDescription = request.Description,
             Source = request.Source, CreatedByUserId = CrmAccess.UserId(http) };
         db.AccountBusinessActivities.Add(item);
-        var committed = await CrmDataEndpoints.Commit(db, ct);
+        if (CrmAccountRealtimeCommit.IsEnabled(flags))
+        {
+            // A related account change must advance its resource version for
+            // Vue's monotonic event ordering and authorized REST refresh.
+            account.RowVersion++;
+            account.UpdatedAt = DateTime.UtcNow;
+            account.UpdatedByUserId = CrmAccess.UserId(http);
+        }
+        var committed = await CrmDataEndpoints.CommitAccount(db, account, http,
+            flags, "crm.account.activity.added.v1", ct);
         return committed is Microsoft.AspNetCore.Http.HttpResults.Ok ?
             Results.Created("/api/crm/accounts/" + id + "/business-activities", item) : committed;
     }
