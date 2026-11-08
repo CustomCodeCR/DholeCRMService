@@ -48,7 +48,7 @@ public sealed class CrmRealtimeF5HttpIntegrationTests
         public Task<AuthUserReference?> GetActiveAsync(Guid id, CancellationToken ct)
         {
             string[]? scopes =
-                id == owner ? ["crm.account.update", "crm.account.read"] :
+                id == owner ? ["crm.account.update", "crm.account.read", "crm.account.create", "crm.account.archive", "crm.account.assign"] :
                 id == reader ? ["crm.account.read-all"] :
                 id == forbidden ? ["crm.account.read"] : null;
             return Task.FromResult(scopes is null
@@ -160,4 +160,113 @@ WHERE (envelope_json->>'aggregateId')::uuid = @id
         read.Parameters.AddWithValue("id", account.Id);
         Assert.AreEqual("After F5 update", (string?)await read.ExecuteScalarAsync());
     }
+
+    [TestMethod]
+    public async Task F6_Account_create_activity_logo_archive_and_assign_emit_one_ordered_event_each()
+    {
+        var owner = Guid.NewGuid();
+        var reader = Guid.NewGuid();
+        var forbidden = Guid.NewGuid();
+        var builder = WebApplication.CreateBuilder();
+        builder.WebHost.UseTestServer();
+        builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["ConnectionStrings:Postgres"] = Postgres,
+            ["Features:CrmEnabled"] = "true",
+            ["Features:UniversalRealtimeEnabled"] = "true",
+            ["Realtime:Outbox:Enabled"] = "true",
+            ["Realtime:BatchApproved"] = "true",
+            ["Realtime:ReleaseId"] = "rt-20261107-01"
+        });
+        builder.Services.AddCrmInfrastructure();
+        builder.Services.AddMemoryCache();
+        builder.Services.AddHttpClient();
+        builder.Services.AddSingleton<IAuthReferenceService>(new F5AuthReferences(owner, reader, forbidden));
+        builder.Services.AddSingleton<IConfigReferenceService>(new F5ConfigReferences());
+        builder.Services.AddAuthentication("F6-CI")
+            .AddScheme<AuthenticationSchemeOptions, F5AuthenticationHandler>("F6-CI", _ => { });
+        builder.Services.AddAuthorization();
+        await using var app = builder.Build();
+        app.UseAuthentication();
+        app.UseAuthorization();
+        app.MapCrmDataEndpoints();
+        await app.StartAsync();
+        using var client = app.GetTestClient();
+        await using (var setup = new CrmDbContext(
+            new DbContextOptionsBuilder<CrmDbContext>().UseNpgsql(Postgres).Options))
+            await setup.Database.MigrateAsync();
+
+        async Task<Guid> Create(string suffix)
+        {
+            var data = new CreateAccountRequest(
+                "F6 account " + suffix, "F6 legal " + suffix,
+                null, null, null, "cash", null, null, "CUSTOMER", "D", owner);
+            using var request = Request(HttpMethod.Post, "/api/crm/accounts", owner, data);
+            using var response = await client.SendAsync(request);
+            Assert.AreEqual(HttpStatusCode.Created, response.StatusCode,
+                await response.Content.ReadAsStringAsync());
+            using var doc = System.Text.Json.JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+            return doc.RootElement.GetProperty("id").GetGuid();
+        }
+
+        var id = await Create(Guid.NewGuid().ToString("N"));
+        using (var activityRequest = Request(HttpMethod.Post,
+                $"/api/crm/accounts/{id:D}/business-activities", owner,
+                new AddBusinessActivityRequest("LOG", "Realtime test activity", "MANUAL")))
+        using (var activityResult = await client.SendAsync(activityRequest))
+            Assert.AreEqual(HttpStatusCode.Created, activityResult.StatusCode);
+
+        using (var logoRequest = Request(HttpMethod.Patch,
+                $"/api/crm/accounts/{id:D}/logo", owner,
+                new SetAccountLogoRequest(2, Guid.NewGuid())))
+        using (var logoResult = await client.SendAsync(logoRequest))
+            Assert.AreEqual(HttpStatusCode.OK, logoResult.StatusCode);
+
+        using (var archiveRequest = Request(HttpMethod.Post,
+                $"/api/crm/accounts/{id:D}/archive", owner,
+                new ArchiveAccountRequest(3, "F6 authorized archive")))
+        using (var archiveResult = await client.SendAsync(archiveRequest))
+            Assert.AreEqual(HttpStatusCode.OK, archiveResult.StatusCode);
+
+        using (var hiddenRequest = Request(HttpMethod.Get, $"/api/crm/accounts/{id:D}", reader))
+        using (var hiddenResult = await client.SendAsync(hiddenRequest))
+            Assert.AreEqual(HttpStatusCode.NotFound, hiddenResult.StatusCode);
+
+        var assignedId = await Create(Guid.NewGuid().ToString("N"));
+        using (var assignRequest = Request(HttpMethod.Post,
+                $"/api/crm/accounts/{assignedId:D}/assign", owner,
+                new AssignAccountRequest(1, reader, "F6 new owner")))
+        using (var assignResult = await client.SendAsync(assignRequest))
+            Assert.AreEqual(HttpStatusCode.OK, assignResult.StatusCode);
+
+        await using var connection = new NpgsqlConnection(Postgres);
+        await connection.OpenAsync();
+        static async Task<string[]> EnvelopeTypes(NpgsqlConnection db, Guid accountId)
+        {
+            await using var cmd = new NpgsqlCommand("""
+SELECT envelope_json->>'eventType'
+FROM crm.crm_realtime_outbox
+WHERE (envelope_json->>'aggregateId')::uuid = @id
+ORDER BY (envelope_json->>'aggregateVersion')::bigint;
+""", db);
+            cmd.Parameters.AddWithValue("id", accountId);
+            var list = new List<string>();
+            await using var cursor = await cmd.ExecuteReaderAsync();
+            while (await cursor.ReadAsync()) list.Add(cursor.GetString(0));
+            return list.ToArray();
+        }
+        CollectionAssert.AreEqual(new[]
+        {
+            "crm.account.created.v1",
+            "crm.account.activity.added.v1",
+            "crm.account.logo.updated.v1",
+            "crm.account.archived.v1"
+        }, await EnvelopeTypes(connection, id));
+        CollectionAssert.AreEqual(new[]
+        {
+            "crm.account.created.v1",
+            "crm.account.assigned.v1"
+        }, await EnvelopeTypes(connection, assignedId));
+    }
+
 }
