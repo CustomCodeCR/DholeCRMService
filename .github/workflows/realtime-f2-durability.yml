@@ -8,6 +8,9 @@ on:
       - 'src/Dhole.Crm.Infrastructure/Persistence/Migrations/20261108130000_AddRealtimeDurabilityPilot.cs'
       - 'src/Dhole.Crm.Workers/Realtime/**'
       - 'src/Dhole.Crm.Workers/Program.cs'
+      - 'src/Dhole.Crm.Api/Endpoints/AccountEndpoints.cs'
+      - 'src/Dhole.Crm.Api/Dhole.Crm.Api.csproj'
+      - 'tests/Dhole.Crm.IntegrationTests/Dhole.Crm.IntegrationTests.csproj'
       - 'tests/Dhole.Crm.IntegrationTests/CrmRealtimeDurabilityPilotIntegrationTests.cs'
       - '.github/workflows/realtime-f2-durability.yml'
   workflow_dispatch:
@@ -51,6 +54,10 @@ jobs:
           dotnet-version: '10.0.x'
       - name: Restore pilot integration test
         run: dotnet restore tests/Dhole.Crm.IntegrationTests/Dhole.Crm.IntegrationTests.csproj --configfile NuGet.Config
+      - name: Restore real CRM API for F5 candidate compilation
+        run: dotnet restore src/Dhole.Crm.Api/Dhole.Crm.Api.csproj --configfile NuGet.Config
+      - name: Compile REAL CRM API endpoints with candidate F5 adapter
+        run: dotnet build src/Dhole.Crm.Api/Dhole.Crm.Api.csproj -c Release --no-restore --warnaserror
       - name: Compile F2 pilot including CRM worker and EF migration
         run: dotnet build tests/Dhole.Crm.IntegrationTests/Dhole.Crm.IntegrationTests.csproj -c Release --no-restore --warnaserror
       - name: Test 1000 commits, PostgreSQL, real Redis, retries, DLQ and idempotency
