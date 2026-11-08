@@ -2,6 +2,7 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using Dhole.Crm.Domain;
 using Dhole.Crm.Infrastructure.Persistence;
+using Dhole.Crm.Infrastructure.Realtime;
 using Dhole.Crm.Infrastructure.References;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
@@ -468,7 +469,7 @@ internal static class AccountEndpoints
     }
 
     private static async Task<IResult> Patch(Guid id, PatchAccountRequest request, CrmDbContext db,
-        HttpContext http, IConfigReferenceService config, CancellationToken ct)
+        HttpContext http, IConfigReferenceService config, IConfiguration flags, CancellationToken ct)
     {
         if (!CrmAccess.Scope(http, "crm.account.update")) return CrmAccess.Denied();
         var account = await db.Accounts.FindAsync([id], ct);
@@ -530,6 +531,31 @@ internal static class AccountEndpoints
         account.RowVersion++;
         account.UpdatedAt = DateTime.UtcNow;
         account.UpdatedByUserId = CrmAccess.UserId(http);
+        if (CrmAccountRealtimeCommit.IsEnabled(flags))
+        {
+            // F5 candidate: emit only after the real PATCH is committed, atomically
+            // with its audit history. No user data is sent to SignalR.
+            try
+            {
+                await CrmAccountRealtimeCommit.PersistUpdatedAccountAsync(
+                    db, account, http.TraceIdentifier, ct);
+                return Results.Ok(account);
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                return CrmDataEndpoints.Conflict("Record modified concurrently");
+            }
+            catch (DbUpdateException)
+            {
+                return CrmDataEndpoints.Conflict("Conflicting or invalid CRM record");
+            }
+            catch (Npgsql.NpgsqlException)
+            {
+                // Fail the write rather than silently commit without an Outbox row.
+                return Results.Problem(statusCode: 503, title: "CRM realtime persistence unavailable");
+            }
+        }
+        // Existing REST behavior is identical while the batch is not approved.
         var committed = await CrmDataEndpoints.Commit(db, ct);
         return committed is Microsoft.AspNetCore.Http.HttpResults.Ok ? Results.Ok(account) : committed;
     }
