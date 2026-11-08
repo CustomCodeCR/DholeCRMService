@@ -63,9 +63,11 @@ public sealed class CrmRealtimeInboxConsumer(
     public async Task<int> ConsumeOnceAsync(
         Func<NpgsqlConnection, NpgsqlTransaction, JsonElement, CancellationToken, Task> projection,
         int count = 100,
+        long pendingMinIdleMs = 30_000,
         CancellationToken ct = default)
     {
         if (count is < 1 or > 100) throw new ArgumentOutOfRangeException(nameof(count));
+        if (pendingMinIdleMs < 0) throw new ArgumentOutOfRangeException(nameof(pendingMinIdleMs));
         ArgumentNullException.ThrowIfNull(projection);
         try
         {
@@ -78,6 +80,15 @@ public sealed class CrmRealtimeInboxConsumer(
         }
 
         var items = await redis.StreamReadGroupAsync(stream, group, consumerName, "0-0", count);
+        if (items.Length == 0)
+        {
+            // Recover orphaned pending entries from an abandoned consumer.
+            // Production default protects legitimate in-flight workers by
+            // waiting 30s idle; zero idle is restricted to deterministic CI.
+            var reclaimed = await redis.StreamAutoClaimAsync(
+                stream, group, consumerName, pendingMinIdleMs, "0-0", count: count);
+            items = reclaimed.ClaimedEntries;
+        }
         if (items.Length == 0)
             items = await redis.StreamReadGroupAsync(stream, group, consumerName, ">", count);
 
