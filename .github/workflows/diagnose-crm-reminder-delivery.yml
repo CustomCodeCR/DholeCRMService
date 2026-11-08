@@ -1,0 +1,50 @@
+name: CRM delivery health diagnostic (counts only)
+on:
+  push:
+    branches: [diagnostic/crm-reminder-delivery-20261108]
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: [self-hosted, linux, x64, dhole]
+    timeout-minutes: 5
+    steps:
+      - name: Inspect CRM and Notifications delivery without identifiers or secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "::group::Container availability"
+          for service in crm-workers notifications-workers notifications-api; do
+            cid="$(docker ps -q --filter "label=com.docker.compose.service=$service" | head -n1)"
+            if [ -z "$cid" ]; then echo "$service: NOT_RUNNING"; continue; fi
+            state="$(docker inspect -f '{{.State.Status}}' "$cid")"
+            echo "$service: $state"
+            if [ "$service" = "crm-workers" ]; then
+              docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' "$cid" |
+                grep -E '^Features__CrmBackgroundTasksEnabled=' || true
+            fi
+            recent="$(docker logs --since 20m "$cid" 2>&1 | grep -Eic 'CRM outbox|CRM followup scheduler|Could not create notification|notification processing cycle failed|Failed to process' || true)"
+            echo "$service: recent_delivery_error_log_lines=$recent"
+          done
+          echo "::endgroup::"
+          echo "::group::Recent CRM reminder delivery (aggregate, no personal data)"
+          pg="$(docker ps -q --filter label=com.docker.compose.service=postgres | head -n1)"
+          if [ -z "$pg" ]; then echo "postgres: not running"; exit 1; fi
+          docker exec -i "$pg" sh -c 'psql -v ON_ERROR_STOP=1 -U "${POSTGRES_USER:-postgres}" -d dhole_crm -At' <<'SQL'
+          SELECT 'reminders|' || coalesce(r.channel,'NULL') || '|' || coalesce(r.status,'NULL')
+            || '|' || coalesce(o.status,'NULL') || '|' || count(*)
+          FROM crm.crm_reminders r
+          LEFT JOIN crm.crm_outbox_messages o ON o.reminder_id=r.id
+          WHERE r.created_at>=now()-interval '2 hours'
+          GROUP BY r.channel,r.status,o.status
+          ORDER BY 1;
+          SELECT 'errors|' || coalesce(o.last_error,'none') || '|' || count(*)
+          FROM crm.crm_outbox_messages o
+          WHERE o.created_at>=now()-interval '2 hours' AND o.last_error IS NOT NULL
+          GROUP BY o.last_error ORDER BY count(*) DESC;
+          SELECT 'recent_activities|' || status || '|' || count(*)
+          FROM crm.crm_activities
+          WHERE created_at>=now()-interval '2 hours'
+          GROUP BY status;
+          SQL
+          echo "::endgroup::"
