@@ -106,13 +106,13 @@ SET applied_count = applied_count + 1 WHERE id = @id;
         // Isolate this acceptance's consumer group from unrelated CI tests
         // without changing the production stream configured by the writer.
         var stream = "dhole.crm.realtime.f2ci." + Guid.NewGuid().ToString("N");
-        await using (var connection = new NpgsqlConnection(Postgres))
+        await using (var acceptanceConnection = new NpgsqlConnection(Postgres))
         {
-            await connection.OpenAsync();
+            await acceptanceConnection.OpenAsync();
             await using var command = new NpgsqlCommand("""
 UPDATE crm.crm_realtime_outbox
 SET stream_name = @stream WHERE event_id = ANY(@ids);
-""", connection);
+""", acceptanceConnection);
             command.Parameters.AddWithValue("stream", stream);
             command.Parameters.AddWithValue("ids", ids.ToArray());
             Assert.AreEqual(1000, await command.ExecuteNonQueryAsync());
