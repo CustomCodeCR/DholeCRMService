@@ -2,8 +2,8 @@
   "schemaVersion": 1,
   "ecosystem": "Dhole",
   "component": "DholeCRMService",
-  "version": "1.6.0",
-  "ecosystemVersion": "1.14.0",
-  "releaseId": "rt-20261107-01",
-  "releaseStatus": "candidate-notificationshub-staging-not-deployed"
+  "version": "1.7.0",
+  "ecosystemVersion": "1.15.0",
+  "releaseId": "DH-20261109-CRM-CLIENT-QUOTES-053",
+  "releaseStatus": "candidate-develop"
 }
