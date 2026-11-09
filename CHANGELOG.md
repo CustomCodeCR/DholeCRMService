@@ -1,3 +1,6 @@
+## [1.7.0] - 2026-11-09
+- Nuevo buscador unificado de cuentas y prospectos para cotizaciones de Pricing, limitado a registros CRM visibles y con vendedor asignado desde Auth.
+
 # Changelog
 
 ## [1.6.0] - 2026-11-09 (NotificationsHub universal realtime pilot; candidate)
