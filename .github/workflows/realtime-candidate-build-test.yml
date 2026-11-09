@@ -26,8 +26,18 @@ jobs:
           --health-interval 3s
           --health-timeout 5s
           --health-retries 20
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 3s
+          --health-timeout 5s
+          --health-retries 20
     env:
       CRM_TEST_POSTGRES: "Host=127.0.0.1;Port=5432;Database=realtime_ci;Username=dhole_ci;Password=dhole_ci_ephemeral;Pooling=false"
+      CRM_TEST_REDIS: "127.0.0.1:6379,abortConnect=false"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
