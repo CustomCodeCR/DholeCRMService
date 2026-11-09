@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.5.5] - 2026-11-08 (F9 candidate, F3 WSS review waiver)
+
+- Incremento PATCH del release global 1.13.14 por política F9 de revisión de evidencia WSS ya aprobada en CI. No implica aprobar F3 staging, activar realtime ni desplegar. Sin cambios de negocio en este componente.
+
+
 
 ## [1.5.4] - 2026-11-08 (realtime F3, release candidato)
 
