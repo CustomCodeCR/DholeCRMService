@@ -35,6 +35,7 @@ internal static class PricingClientOptionsEndpoints
         if (!accountsAllowed && !leadsAllowed) return CrmAccess.Denied();
         if (q?.Length > 220) return CrmDataEndpoints.Bad("Search too long");
         var actor = CrmAccess.UserId(http);
+        var leadReadAll = CrmAccess.Scope(http, "crm.lead.read-all");
         if (sellerUserId.HasValue && sellerUserId != actor &&
             !CrmAccess.Scope(http, "crm.account.read-all") &&
             !CrmAccess.Scope(http, "crm.lead.read-all"))
@@ -50,7 +51,7 @@ internal static class PricingClientOptionsEndpoints
             });
         var leads = db.Leads.AsNoTracking()
             .Where(x => leadsAllowed && x.ArchivedAt == null && x.ConvertedAt == null &&
-                (CrmAccess.Scope(http, "crm.lead.read-all") || x.ExecutiveUserId == actor))
+                (leadReadAll || x.ExecutiveUserId == actor))
             .Select(x => new OptionRow {
                 Kind = "lead", Id = x.Id, DisplayName = x.CompanyName ?? x.Name,
                 LegalName = x.CompanyName ?? x.Name, TaxId = x.TaxId,
