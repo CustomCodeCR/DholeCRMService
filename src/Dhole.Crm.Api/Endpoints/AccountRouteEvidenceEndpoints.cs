@@ -10,12 +10,6 @@ public sealed record AddAccountRouteEvidenceRequest(
     string SourceKind, Guid SourceId, string PolCode, string? PoeCode,
     string PodCode, string? ServiceCode, string? Notes);
 
-// One provenance record applies to every selected POL/POE/POD combination.
-public sealed record AccountRouteEvidenceSelection(string PolCode, string? PoeCode, string PodCode);
-public sealed record AddAccountRouteEvidenceBatchRequest(
-    string SourceKind, Guid SourceId, AccountRouteEvidenceSelection[] Routes,
-    string? ServiceCode, string? Notes);
-
 /// <summary>
 /// Historical route observations are tied to a verified CRM meeting or a quote
 /// explicitly linked to the account's opportunity. Quote routes are NOT inferred
@@ -27,13 +21,7 @@ internal static class AccountRouteEvidenceEndpoints
     {
         g.MapGet("/accounts/{id:guid}/route-history", List);
         g.MapPost("/accounts/{id:guid}/route-history", Add);
-        g.MapPost("/accounts/{id:guid}/route-history/bulk", AddBatch);
         g.MapGet("/accounts/{id:guid}/quote-route-snapshots", QuoteRoutes);
-        g.MapGet("/accounts/{id:guid}/pricing-quotations", AccountQuotes);
-        g.MapGet("/accounts/{id:guid}/quote-dashboard", AccountQuoteDashboard);
-        g.MapGet("/accounts/{id:guid}/pricing-quotation-candidates", LegacyCandidates);
-        g.MapPost("/accounts/{id:guid}/pricing-quotations/reconcile", ReconcileLegacyQuotes);
-        g.MapGet("/leads/{id:guid}/pricing-quotations", LeadQuotes);
         return g;
     }
 
@@ -96,205 +84,6 @@ internal static class AccountRouteEvidenceEndpoints
         return Results.Ok(new { items = records, total, page = number, pageSize = size, popularRoutes });
     }
 
-    /// <summary>
-    /// Current Pricing status totals for quotes explicitly associated with this CRM
-    /// account or its converted leads. Every page is independently authorized by
-    /// Pricing with the caller's token; no customer-name matching is performed.
-    /// </summary>
-    private static async Task<IResult> AccountQuoteDashboard(Guid id, CrmDbContext db,
-        HttpContext h, IPricingCommercialClient pricing, CancellationToken ct)
-    {
-        if (!CrmDataEndpoints.HasRead(h, "account")) return CrmAccess.Denied();
-        if (!await CanSeeAccount(db, h, id, ct)) return Results.NotFound();
-        var bearer = Bearer(h);
-        if (string.IsNullOrWhiteSpace(bearer)) return Results.Unauthorized();
-
-        var convertedLeads = await db.Leads.AsNoTracking()
-            .Where(x => x.ConvertedAccountId == id && x.ConvertedAt != null)
-            .Select(x => x.Id).Distinct().Take(100).ToArrayAsync(ct);
-        var quotes = new Dictionary<Guid, PricingAccountQuote>();
-        var remoteTotal = 0;
-        const int pageSize = 100;
-        const int maxPages = 50;
-        for (var page = 1; page <= maxPages; page++)
-        {
-            var response = await pricing.GetAccountQuotes(
-                id, convertedLeads, bearer, page, pageSize, ct);
-            if (!response.Success)
-                return PricingFailure(response.Status, "consultar indicadores de cotizaciones");
-            var data = response.Value!;
-            remoteTotal = data.Total;
-            foreach (var quote in data.Items)
-            {
-                if (quote.PricingQuoteId != Guid.Empty)
-                    quotes[quote.PricingQuoteId] = quote;
-            }
-            if (page * pageSize >= data.Total || data.Items.Count == 0) break;
-        }
-
-        static bool Is(string? status, string expected) =>
-            string.Equals(status, expected, StringComparison.OrdinalIgnoreCase);
-        var values = quotes.Values.ToArray();
-        var sent = values.Count(q => Is(q.CommercialStatusSnapshot, "Sent") ||
-            Is(q.CommercialStatusSnapshot, "RequestedByClient") ||
-            Is(q.CommercialStatusSnapshot, "Expired"));
-        var approved = values.Count(q => Is(q.CommercialStatusSnapshot, "AcceptedByClient"));
-        var rejected = values.Count(q => Is(q.CommercialStatusSnapshot, "RejectedByClient"));
-        var cancelled = values.Count(q => Is(q.CommercialStatusSnapshot, "Cancelled"));
-        return Results.Ok(new {
-            total = values.Length, sent, approved, rejected, cancelled,
-            other = values.Length - sent - approved - rejected - cancelled,
-            pendingSync = 0,
-            lastSyncAt = DateTime.UtcNow,
-            linkedOnly = false,
-            truncated = remoteTotal > values.Length
-        });
-    }
-
-    // Only account-scoped quotes verified by Pricing using the caller's JWT.
-    // The association is persisted by account ID; never infer from client name.
-    private static async Task<IResult> AccountQuotes(Guid id, CrmDbContext db,
-        HttpContext h, IPricingCommercialClient pricing, int? page, int? pageSize,
-        CancellationToken ct)
-    {
-        // CRM account visibility authorizes the account-scoped view. The remote
-        // Pricing API independently requires pricing.rate.view on the caller token.
-        // crm.quote.read is specific to commercial opportunities, not mandatory
-        // for viewing an existing customer's own historical rates.
-        if (!CrmDataEndpoints.HasRead(h, "account")) return CrmAccess.Denied();
-        if (!await CanSeeAccount(db, h, id, ct)) return Results.NotFound();
-
-        var authorization = h.Request.Headers.Authorization.ToString();
-        if (!authorization.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
-            return Results.Unauthorized();
-        var bearer = authorization["Bearer ".Length..].Trim();
-        var linkedLeadIds = await db.Leads.AsNoTracking()
-            .Where(x => x.ConvertedAccountId == id && x.ConvertedAt != null)
-            .Select(x => x.Id).Distinct().Take(100).ToArrayAsync(ct);
-        var result = await pricing.GetAccountQuotes(id, linkedLeadIds, bearer,
-            Math.Max(1, page ?? 1), Math.Clamp(pageSize ?? 100, 1, 100), ct);
-        if (result.Success) return Results.Ok(result.Value);
-        return result.Status switch
-        {
-            HttpStatusCode.Unauthorized => Results.Unauthorized(),
-            HttpStatusCode.Forbidden => Results.Problem(statusCode: 403,
-                title: "Pricing requiere permiso pricing.rate.view para consultar cotizaciones"),
-            HttpStatusCode.NotFound => Results.NotFound(),
-            _ => Results.Problem(statusCode: 503,
-                title: "No se pudo consultar el historial de Pricing")
-        };
-    }
-
-    public sealed record ReconcileLegacyQuotesRequest(Guid[] QuoteIds);
-
-    private static async Task<(string? LegalName, IResult? Error)> GetVerifiedLegacyAccountName(
-        Guid id, CrmDbContext db, HttpContext h, CancellationToken ct)
-    {
-        if (!CrmDataEndpoints.HasRead(h, "account"))
-            return (null, CrmAccess.Denied());
-        var account = await CrmAccess.VisibleAccounts(db, h).AsNoTracking()
-            .Where(x => x.Id == id)
-            .Select(x => new { x.LegalName }).SingleOrDefaultAsync(ct);
-        if (account is null) return (null, Results.NotFound());
-        var legalName = account.LegalName.Trim();
-        if (legalName.Length is < 3 or > 220)
-            return (null, Results.Problem(statusCode: 409, title: "La razón social no es válida."));
-        // Refuse to reconcile a shared corporate name automatically to different CRM accounts.
-        var duplicates = await db.Accounts.AsNoTracking()
-            .CountAsync(x => x.ArchivedAt == null &&
-                x.LegalName.Trim().ToUpper() == legalName.ToUpperInvariant(), ct);
-        if (duplicates != 1)
-            return (null, Results.Problem(statusCode: 409,
-                title: "Hay varias cuentas con esta razón social; primero se deben resolver los duplicados."));
-        return (legalName, null);
-    }
-
-    private static string? Bearer(HttpContext h)
-    {
-        var token = h.Request.Headers.Authorization.ToString();
-        return token.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase)
-            ? token["Bearer ".Length..].Trim() : null;
-    }
-
-    private static IResult PricingFailure(HttpStatusCode status, string action) => status switch
-    {
-        HttpStatusCode.Unauthorized => Results.Unauthorized(),
-        HttpStatusCode.Forbidden => Results.Problem(statusCode: 403,
-            title: "Pricing requiere permiso para " + action),
-        HttpStatusCode.Conflict => Results.Problem(statusCode: 409,
-            title: "La conciliación de cotizaciones fue rechazada por Pricing."),
-        _ => Results.Problem(statusCode: 503,
-            title: "No fue posible " + action + " en Pricing.")
-    };
-
-    // Candidates are suggestions only. No relationship is written without explicit
-    // confirmation by an account editor and an independent Pricing update grant.
-    private static async Task<IResult> LegacyCandidates(Guid id, CrmDbContext db,
-        HttpContext h, IPricingCommercialClient pricing, int? page, int? pageSize,
-        CancellationToken ct)
-    {
-        // This endpoint only PREVIEWS suggestions: it never writes a quote link.
-        // Account readers may inspect possible historical matches, while POST
-        // reconciliation still requires both CRM and Pricing update permissions.
-        if (!CrmDataEndpoints.HasRead(h, "account")) return CrmAccess.Denied();
-        var (name, error) = await GetVerifiedLegacyAccountName(id, db, h, ct);
-        if (error is not null) return error;
-        var bearer = Bearer(h);
-        if (string.IsNullOrWhiteSpace(bearer)) return Results.Unauthorized();
-        var result = await pricing.GetLegacyCandidates(name!, bearer,
-            Math.Clamp(page ?? 1, 1, 100000), Math.Clamp(pageSize ?? 30, 1, 100), ct);
-        return result.Success ? Results.Ok(result.Value) :
-            PricingFailure(result.Status, "buscar cotizaciones anteriores");
-    }
-
-    private static async Task<IResult> ReconcileLegacyQuotes(Guid id,
-        ReconcileLegacyQuotesRequest request, CrmDbContext db,
-        HttpContext h, IPricingCommercialClient pricing, CancellationToken ct)
-    {
-        if (!CrmAccess.Scope(h, "crm.account.update")) return CrmAccess.Denied();
-        if (request.QuoteIds is not { Length: > 0 and <= 100 } ||
-            request.QuoteIds.Any(x => x == Guid.Empty))
-            return Results.BadRequest(new { message = "Seleccione de 1 a 100 cotizaciones." });
-        var (name, error) = await GetVerifiedLegacyAccountName(id, db, h, ct);
-        if (error is not null) return error;
-        var bearer = Bearer(h);
-        if (string.IsNullOrWhiteSpace(bearer)) return Results.Unauthorized();
-        var result = await pricing.ReconcileLegacyQuotes(id, name!,
-            request.QuoteIds.Distinct().ToArray(), bearer, ct);
-        return result.Success ? Results.Ok(result.Value) :
-            PricingFailure(result.Status, "vincular las cotizaciones históricas");
-    }
-
-    private static async Task<IResult> LeadQuotes(Guid id, CrmDbContext db,
-        HttpContext h, IPricingCommercialClient pricing, int? page, int? pageSize,
-        CancellationToken ct)
-    {
-        // Lead readers may consult this lead's rates without the optional
-        // opportunity quote scope; Pricing still authorizes the caller.
-        if (!CrmDataEndpoints.HasRead(h, "lead")) return CrmAccess.Denied();
-        var lead = await db.Leads.AsNoTracking()
-            .FirstOrDefaultAsync(x => x.Id == id && x.ArchivedAt == null, ct);
-        if (lead is null) return Results.NotFound();
-        if (!CrmAccess.LeadAccess(h, lead.ExecutiveUserId)) return CrmAccess.Denied();
-
-        var authorization = h.Request.Headers.Authorization.ToString();
-        if (!authorization.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
-            return Results.Unauthorized();
-        var bearer = authorization["Bearer ".Length..].Trim();
-        var response = await pricing.GetLeadQuotes(id, bearer,
-            Math.Max(1, page ?? 1), Math.Clamp(pageSize ?? 100, 1, 100), ct);
-        if (response.Success) return Results.Ok(response.Value);
-        return response.Status switch
-        {
-            HttpStatusCode.Unauthorized => Results.Unauthorized(),
-            HttpStatusCode.Forbidden => Results.Problem(statusCode: 403,
-                title: "Pricing requiere permiso pricing.rate.view para consultar cotizaciones"),
-            HttpStatusCode.NotFound => Results.NotFound(),
-            _ => Results.Problem(statusCode: 503,
-                title: "No se pudo consultar las cotizaciones del prospecto")
-        };
-    }
-
     private static async Task<IResult> QuoteRoutes(Guid id, CrmDbContext db,
         HttpContext h, IPricingCommercialClient pricing, int? page, int? pageSize,
         CancellationToken ct)
@@ -343,53 +132,6 @@ internal static class AccountRouteEvidenceEndpoints
         var items = await Task.WhenAll(tasks);
         return Results.Ok(new { items, page = pageNumber, pageSize = size, total,
             note = "Current authorized Pricing view; published revision when draft is pending." });
-    }
-
-    private static async Task<IResult> AddBatch(Guid id,
-        AddAccountRouteEvidenceBatchRequest r, CrmDbContext db,
-        HttpContext h, IConfigReferenceService config, CancellationToken ct)
-    {
-        if (r.Routes is not { Length: > 0 and <= 24 } ||
-            r.SourceId == Guid.Empty || r.SourceKind is not ("MEETING" or "QUOTE"))
-            return CrmDataEndpoints.Bad("Select a source and 1 to 24 route combinations");
-
-        // Keep bulk requests strictly unique. A replay of the same batch is
-        // idempotent because Add returns an existing record instead of inserting.
-        var normalized = r.Routes.Select(x => new AccountRouteEvidenceSelection(
-            x.PolCode?.Trim() ?? string.Empty,
-            string.IsNullOrWhiteSpace(x.PoeCode) ? null : x.PoeCode.Trim(),
-            x.PodCode?.Trim() ?? string.Empty)).ToArray();
-        var distinct = normalized.DistinctBy(x =>
-            (x.PolCode.ToUpperInvariant(), x.PoeCode?.ToUpperInvariant(),
-             x.PodCode.ToUpperInvariant())).ToArray();
-        if (distinct.Length != normalized.Length ||
-            normalized.Any(x => string.IsNullOrWhiteSpace(x.PolCode) ||
-                string.IsNullOrWhiteSpace(x.PodCode) ||
-                string.Equals(x.PolCode, x.PoeCode, StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(x.PolCode, x.PodCode, StringComparison.OrdinalIgnoreCase) ||
-                (!string.IsNullOrEmpty(x.PoeCode) &&
-                 string.Equals(x.PoeCode, x.PodCode, StringComparison.OrdinalIgnoreCase))))
-            return CrmDataEndpoints.Bad("Routes must have distinct, non-repeated endpoints");
-
-        // All selected routes are saved or none are. Add enforces the existing
-        // account visibility, catalog validity, and provenance authorization on
-        // each route; transaction prevents partially-saved multi-select requests.
-        await using var transaction = await db.Database.BeginTransactionAsync(ct);
-        var created = 0;
-        var alreadyExisting = 0;
-        foreach (var route in distinct)
-        {
-            var result = await Add(id, new AddAccountRouteEvidenceRequest(
-                r.SourceKind, r.SourceId, route.PolCode, route.PoeCode,
-                route.PodCode, r.ServiceCode, r.Notes), db, h, config, ct);
-            if (result is not IStatusCodeHttpResult status ||
-                status.StatusCode is not (>= 200 and < 300))
-                return result; // Roll back the entire batch when disposed.
-            if (status.StatusCode == StatusCodes.Status201Created) created++;
-            else alreadyExisting++;
-        }
-        await transaction.CommitAsync(ct);
-        return Results.Ok(new { created, alreadyExisting, total = distinct.Length });
     }
 
     private static async Task<IResult> Add(Guid id, AddAccountRouteEvidenceRequest r,

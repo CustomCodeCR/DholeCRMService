@@ -137,29 +137,6 @@ internal static class LeadEndpoints
         var committed = await CrmDataEndpoints.Commit(db, ct);
         return committed is Microsoft.AspNetCore.Http.HttpResults.Ok ? Results.Ok(lead) : committed;
     }
-    // Complete the CRM portion of conversion atomically. Keep LeadId as
-    // immutable provenance while making the same records visible in the
-    // account's ongoing agenda, analysis, opportunity and follow-up history.
-    private static async Task TransferProspectHistory(Guid leadId, Guid accountId,
-        CrmDbContext db, CancellationToken ct)
-    {
-        var activities = await db.Activities.Where(x =>
-            x.LeadId == leadId && x.AccountId == null).ToListAsync(ct);
-        foreach (var activity in activities) activity.AccountId = accountId;
-
-        var followups = await db.Followups.Where(x =>
-            x.LeadId == leadId && x.AccountId == null).ToListAsync(ct);
-        foreach (var followup in followups) followup.AccountId = accountId;
-
-        var opportunities = await db.Opportunities.Where(x =>
-            x.LeadId == leadId && x.AccountId == null).ToListAsync(ct);
-        foreach (var opportunity in opportunities) opportunity.AccountId = accountId;
-
-        var analyses = await db.CommercialAnalyses.Where(x =>
-            x.LeadId == leadId && x.AccountId == null).ToListAsync(ct);
-        foreach (var analysis in analyses) analysis.AccountId = accountId;
-    }
-
     private static async Task<IResult> Convert(Guid id, ConvertLeadRequest request, CrmDbContext db,
         HttpContext http, IConfigReferenceService config, CancellationToken ct)
     {
@@ -202,7 +179,6 @@ internal static class LeadEndpoints
             });
             try
             {
-                await TransferProspectHistory(id, matched.Id, db, ct);
                 await db.SaveChangesAsync(ct);
                 await tx.CommitAsync(ct);
                 return Results.Ok(new { leadId = id, accountId = matched.Id, alreadyConverted = false });
@@ -248,7 +224,6 @@ internal static class LeadEndpoints
             ConvertedBy = owner, CreatedByUserId = owner, Notes = request.Notes });
         try
         {
-            await TransferProspectHistory(id, account.Id, db, ct);
             await db.SaveChangesAsync(ct);
             await tx.CommitAsync(ct);
             return Results.Created("/api/crm/accounts/" + account.Id,

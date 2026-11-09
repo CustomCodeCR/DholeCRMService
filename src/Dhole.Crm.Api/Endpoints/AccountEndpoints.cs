@@ -1,5 +1,3 @@
-using System.Net.Http.Headers;
-using System.Net.Http.Json;
 using Dhole.Crm.Domain;
 using Dhole.Crm.Infrastructure.Persistence;
 using Dhole.Crm.Infrastructure.Realtime;
@@ -29,7 +27,6 @@ internal static class AccountEndpoints
     {
         group.MapGet("/accounts", List);
         group.MapGet("/accounts/filter-options", AccountFilterOptions);
-        group.MapGet("/pricing-client-options", PricingClientOptions);
         group.MapGet("/accounts/{id:guid}", Get);
         group.MapGet("/accounts/{id:guid}/change-history", ChangeHistory);
         group.MapPost("/accounts", Create);
@@ -44,130 +41,6 @@ internal static class AccountEndpoints
         group.MapGet("/accounts/{id:guid}/business-activities", Activities);
         group.MapPost("/accounts/{id:guid}/business-activities", AddActivity);
         return group;
-    }
-
-
-    private sealed record SellerOption(Guid UserId, string? DisplayName);
-    private sealed record SellerVisibilityOptions(Guid ViewerUserId, string Mode, SellerOption[] Sellers);
-
-    // Pricing uses CRM's live customer assignments rather than Config's temporary
-    // pricing-clients catalog. Search and authorization are both server-side.
-    private static async Task<IResult> PricingClientOptions(CrmDbContext db, HttpContext http,
-        IHttpClientFactory clients, IConfiguration configuration, IAuthReferenceService auth,
-        string? mode, string? q, Guid? sellerUserId, int? page, CancellationToken ct)
-    {
-        var isRequest = string.Equals(mode, "request", StringComparison.OrdinalIgnoreCase);
-        var isCreate = string.Equals(mode, "create", StringComparison.OrdinalIgnoreCase);
-        if (!isRequest && !isCreate) return CrmDataEndpoints.Bad("Choose a pricing client mode");
-        if (isRequest && !CrmAccess.Scope(http, "pricing.rate-request.create"))
-            return CrmAccess.Denied();
-        if (isCreate && !CrmAccess.Scope(http, "pricing.rate.create"))
-            return CrmAccess.Denied();
-
-        var query = db.Accounts.AsNoTracking().Where(x => x.ArchivedAt == null);
-        Guid[]? allowedSellerIds = null;
-        if (isRequest)
-        {
-            // Pricing is the source of truth for own/delegated seller visibility.
-            // CRM must never trust a seller ID supplied by a browser.
-            var baseText = configuration["Integrations:Pricing:BaseUrl"];
-            if (!Uri.TryCreate(baseText, UriKind.Absolute, out var baseUri) ||
-                baseUri.Scheme is not ("http" or "https"))
-                return CrmDataEndpoints.Unavailable();
-            var bearer = http.Request.Headers.Authorization.ToString();
-            if (!bearer.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
-                return Results.Unauthorized();
-            using var request = new HttpRequestMessage(HttpMethod.Get,
-                new Uri(baseUri.ToString().TrimEnd('/') + "/api/pricing/seller-visibility/me/options"));
-            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", bearer[7..].Trim());
-            SellerVisibilityOptions? visibility;
-            try
-            {
-                using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
-                timeout.CancelAfter(TimeSpan.FromSeconds(10));
-                using var response = await clients.CreateClient().SendAsync(request, timeout.Token);
-                if (response.StatusCode == System.Net.HttpStatusCode.Forbidden) return CrmAccess.Denied();
-                if (!response.IsSuccessStatusCode) return CrmDataEndpoints.Unavailable();
-                visibility = await response.Content.ReadFromJsonAsync<SellerVisibilityOptions>(timeout.Token);
-            }
-            catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
-            catch (Exception) { return CrmDataEndpoints.Unavailable(); }
-            if (visibility is null || visibility.ViewerUserId != CrmAccess.UserId(http))
-                return CrmAccess.Denied();
-            var allowed = (visibility.Sellers ?? Array.Empty<SellerOption>())
-                .Select(x => x.UserId).Where(x => x != Guid.Empty).Distinct().ToArray();
-            allowedSellerIds = allowed;
-            if (sellerUserId.HasValue && !allowed.Contains(sellerUserId.Value))
-                return CrmAccess.Denied();
-            var actor = CrmAccess.UserId(http);
-            // When the user manages multiple sellers, search all their portfolios.
-            // Optional seller filtering is always intersected with server-verified access.
-            query = query.Where(x =>
-                (sellerUserId.HasValue ? x.ExecutiveUserId == sellerUserId.Value
-                                       : allowed.Contains(x.ExecutiveUserId)) &&
-                (!x.IsCastroFallasExecutive ||
-                  CrmAccess.Scope(http,"crm.account.read-all") ||
-                  db.CastroFallasViewerGrants.Any(g=>g.UserId==actor&&g.RevokedAt==null)));
-        }
-
-        var term = q?.Trim();
-        if (term is { Length: > 120 }) return CrmDataEndpoints.Bad("Customer search too long");
-        if (!string.IsNullOrEmpty(term))
-        {
-            var search = term.ToLowerInvariant();
-            query = query.Where(x => x.DisplayName.ToLower().Contains(search) ||
-                x.LegalName.ToLower().Contains(search) ||
-                (x.TaxId != null && x.TaxId.Contains(term)));
-        }
-        // Both account and prospect identities come from CRM, with the same
-        // server-validated seller portfolio rules for Pricing requests.
-        var leads = db.Leads.AsNoTracking().Where(x =>
-            x.ArchivedAt == null && x.ConvertedAt == null);
-        if (isRequest)
-        {
-            var allowed = allowedSellerIds ?? Array.Empty<Guid>();
-            leads = leads.Where(x =>
-                (sellerUserId.HasValue ? x.ExecutiveUserId == sellerUserId.Value :
-                    allowed.Contains(x.ExecutiveUserId)));
-        }
-        if (!string.IsNullOrEmpty(term))
-        {
-            var search = term.ToLowerInvariant();
-            leads = leads.Where(x => x.Name.ToLower().Contains(search) ||
-                (x.CompanyName != null && x.CompanyName.ToLower().Contains(search)) ||
-                (x.TaxId != null && x.TaxId.Contains(term)));
-        }
-        var matches = query.Select(x => new {
-            x.Id, x.DisplayName, x.LegalName, x.TaxId,
-            x.ExecutiveUserId, x.IsCastroFallasExecutive, Kind = "account"
-        }).Concat(leads.Select(x => new {
-            x.Id, DisplayName = x.CompanyName ?? x.Name,
-            LegalName = x.CompanyName ?? x.Name,
-            x.TaxId, x.ExecutiveUserId,
-            IsCastroFallasExecutive = false, Kind = "lead"
-        }));
-        var total = await matches.CountAsync(ct);
-        var currentPage = Math.Clamp(page ?? 1, 1, 100000);
-        var rows = await matches.OrderBy(x => x.DisplayName).ThenBy(x => x.Kind)
-            .ThenBy(x => x.Id).Skip((currentPage-1)*30).Take(30).ToListAsync(ct);
-        var sellers = await Task.WhenAll(rows.Where(x=>!x.IsCastroFallasExecutive &&
-            x.ExecutiveUserId != Guid.Empty).Select(x=>x.ExecutiveUserId).Distinct()
-            .Select(async id => {
-                try { var u=await auth.GetActiveAsync(id,ct); return (Id:id,Name:u?.DisplayName); }
-                catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
-                catch (Exception) { return (Id:id,Name:(string?)null); }
-            }));
-        var names = sellers.ToDictionary(x=>x.Id,x=>x.Name);
-        return Results.Ok(new {
-            items = rows.Select(x=>new {
-                id=x.Id, kind=x.Kind, displayName=x.DisplayName, legalName=x.LegalName,
-                taxId=x.TaxId, executiveUserId=x.ExecutiveUserId,
-                isCastroFallasExecutive=x.IsCastroFallasExecutive,
-                executiveName=x.IsCastroFallasExecutive ? "Castro Fallas" :
-                    names.GetValueOrDefault(x.ExecutiveUserId) ?? "Vendedor no disponible"
-            }).ToArray(),
-            total, page=currentPage, pageSize=30
-        });
     }
 
     private static bool ValidRelationships(string? value)
