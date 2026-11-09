@@ -1,5 +1,10 @@
 # Changelog
 
+
+## [1.5.4] - 2026-11-08 (realtime F3, release candidato)
+
+- Se sincroniza SemVer PATCH y la versión global Dhole 1.13.13 por el nuevo ensayo automático TLS/WSS con Traefik en DholeApiGateway. Sin cambios funcionales adicionales en este componente, sin merge ni despliegue.
+
 ## [1.5.3] - 2026-11-08 (F6/F9 staging-audit candidate)
 
 - Sincroniza Dhole Realtime `rt-20261107-01` a versión global `1.13.12` tras incorporar auditoría real de persistencia en staging. PATCH 1.5.2 → 1.5.3; no modifica rutas, eventos, datos, contratos REST ni flags. No se fusiona hasta completar gates formales.
