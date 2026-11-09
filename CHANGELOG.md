@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.5.6] - 2026-11-08 (Dhole realtime coordinated hardening)
+
+- PATCH alignment to ecosystem 1.13.15 / rt-20261107-01; F2/F6 read-only AOF attestation and F10 branch retention hardening in DholeSystem.
+- Candidate unchanged in functionality; all realtime flags remain OFF; F6/F7/F8 formal gates and F9/F10 promotion pending.
+
+
 ## [1.5.5] - 2026-11-08 (F9 candidate, F3 WSS review waiver)
 
 - Incremento PATCH del release global 1.13.14 por política F9 de revisión de evidencia WSS ya aprobada en CI. No implica aprobar F3 staging, activar realtime ni desplegar. Sin cambios de negocio en este componente.
