@@ -1,7 +1,6 @@
-using System.Net.Http.Headers;
-using System.Net.Http.Json;
 using Dhole.Crm.Domain;
 using Dhole.Crm.Infrastructure.Persistence;
+using Dhole.Crm.Infrastructure.Realtime;
 using Dhole.Crm.Infrastructure.References;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
@@ -28,7 +27,6 @@ internal static class AccountEndpoints
     {
         group.MapGet("/accounts", List);
         group.MapGet("/accounts/filter-options", AccountFilterOptions);
-        group.MapGet("/pricing-client-options", PricingClientOptions);
         group.MapGet("/accounts/{id:guid}", Get);
         group.MapGet("/accounts/{id:guid}/change-history", ChangeHistory);
         group.MapPost("/accounts", Create);
@@ -43,130 +41,6 @@ internal static class AccountEndpoints
         group.MapGet("/accounts/{id:guid}/business-activities", Activities);
         group.MapPost("/accounts/{id:guid}/business-activities", AddActivity);
         return group;
-    }
-
-
-    private sealed record SellerOption(Guid UserId, string? DisplayName);
-    private sealed record SellerVisibilityOptions(Guid ViewerUserId, string Mode, SellerOption[] Sellers);
-
-    // Pricing uses CRM's live customer assignments rather than Config's temporary
-    // pricing-clients catalog. Search and authorization are both server-side.
-    private static async Task<IResult> PricingClientOptions(CrmDbContext db, HttpContext http,
-        IHttpClientFactory clients, IConfiguration configuration, IAuthReferenceService auth,
-        string? mode, string? q, Guid? sellerUserId, int? page, CancellationToken ct)
-    {
-        var isRequest = string.Equals(mode, "request", StringComparison.OrdinalIgnoreCase);
-        var isCreate = string.Equals(mode, "create", StringComparison.OrdinalIgnoreCase);
-        if (!isRequest && !isCreate) return CrmDataEndpoints.Bad("Choose a pricing client mode");
-        if (isRequest && !CrmAccess.Scope(http, "pricing.rate-request.create"))
-            return CrmAccess.Denied();
-        if (isCreate && !CrmAccess.Scope(http, "pricing.rate.create"))
-            return CrmAccess.Denied();
-
-        var query = db.Accounts.AsNoTracking().Where(x => x.ArchivedAt == null);
-        Guid[]? allowedSellerIds = null;
-        if (isRequest)
-        {
-            // Pricing is the source of truth for own/delegated seller visibility.
-            // CRM must never trust a seller ID supplied by a browser.
-            var baseText = configuration["Integrations:Pricing:BaseUrl"];
-            if (!Uri.TryCreate(baseText, UriKind.Absolute, out var baseUri) ||
-                baseUri.Scheme is not ("http" or "https"))
-                return CrmDataEndpoints.Unavailable();
-            var bearer = http.Request.Headers.Authorization.ToString();
-            if (!bearer.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
-                return Results.Unauthorized();
-            using var request = new HttpRequestMessage(HttpMethod.Get,
-                new Uri(baseUri.ToString().TrimEnd('/') + "/api/pricing/seller-visibility/me/options"));
-            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", bearer[7..].Trim());
-            SellerVisibilityOptions? visibility;
-            try
-            {
-                using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
-                timeout.CancelAfter(TimeSpan.FromSeconds(10));
-                using var response = await clients.CreateClient().SendAsync(request, timeout.Token);
-                if (response.StatusCode == System.Net.HttpStatusCode.Forbidden) return CrmAccess.Denied();
-                if (!response.IsSuccessStatusCode) return CrmDataEndpoints.Unavailable();
-                visibility = await response.Content.ReadFromJsonAsync<SellerVisibilityOptions>(timeout.Token);
-            }
-            catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
-            catch (Exception) { return CrmDataEndpoints.Unavailable(); }
-            if (visibility is null || visibility.ViewerUserId != CrmAccess.UserId(http))
-                return CrmAccess.Denied();
-            var allowed = (visibility.Sellers ?? Array.Empty<SellerOption>())
-                .Select(x => x.UserId).Where(x => x != Guid.Empty).Distinct().ToArray();
-            allowedSellerIds = allowed;
-            if (sellerUserId.HasValue && !allowed.Contains(sellerUserId.Value))
-                return CrmAccess.Denied();
-            var actor = CrmAccess.UserId(http);
-            // When the user manages multiple sellers, search all their portfolios.
-            // Optional seller filtering is always intersected with server-verified access.
-            query = query.Where(x =>
-                (sellerUserId.HasValue ? x.ExecutiveUserId == sellerUserId.Value
-                                       : allowed.Contains(x.ExecutiveUserId)) &&
-                (!x.IsCastroFallasExecutive ||
-                  CrmAccess.Scope(http,"crm.account.read-all") ||
-                  db.CastroFallasViewerGrants.Any(g=>g.UserId==actor&&g.RevokedAt==null)));
-        }
-
-        var term = q?.Trim();
-        if (term is { Length: > 120 }) return CrmDataEndpoints.Bad("Customer search too long");
-        if (!string.IsNullOrEmpty(term))
-        {
-            var search = term.ToLowerInvariant();
-            query = query.Where(x => x.DisplayName.ToLower().Contains(search) ||
-                x.LegalName.ToLower().Contains(search) ||
-                (x.TaxId != null && x.TaxId.Contains(term)));
-        }
-        // Both account and prospect identities come from CRM, with the same
-        // server-validated seller portfolio rules for Pricing requests.
-        var leads = db.Leads.AsNoTracking().Where(x =>
-            x.ArchivedAt == null && x.ConvertedAt == null);
-        if (isRequest)
-        {
-            var allowed = allowedSellerIds ?? Array.Empty<Guid>();
-            leads = leads.Where(x =>
-                (sellerUserId.HasValue ? x.ExecutiveUserId == sellerUserId.Value :
-                    allowed.Contains(x.ExecutiveUserId)));
-        }
-        if (!string.IsNullOrEmpty(term))
-        {
-            var search = term.ToLowerInvariant();
-            leads = leads.Where(x => x.Name.ToLower().Contains(search) ||
-                (x.CompanyName != null && x.CompanyName.ToLower().Contains(search)) ||
-                (x.TaxId != null && x.TaxId.Contains(term)));
-        }
-        var matches = query.Select(x => new {
-            x.Id, x.DisplayName, x.LegalName, x.TaxId,
-            x.ExecutiveUserId, x.IsCastroFallasExecutive, Kind = "account"
-        }).Concat(leads.Select(x => new {
-            x.Id, DisplayName = x.CompanyName ?? x.Name,
-            LegalName = x.CompanyName ?? x.Name,
-            x.TaxId, x.ExecutiveUserId,
-            IsCastroFallasExecutive = false, Kind = "lead"
-        }));
-        var total = await matches.CountAsync(ct);
-        var currentPage = Math.Clamp(page ?? 1, 1, 100000);
-        var rows = await matches.OrderBy(x => x.DisplayName).ThenBy(x => x.Kind)
-            .ThenBy(x => x.Id).Skip((currentPage-1)*30).Take(30).ToListAsync(ct);
-        var sellers = await Task.WhenAll(rows.Where(x=>!x.IsCastroFallasExecutive &&
-            x.ExecutiveUserId != Guid.Empty).Select(x=>x.ExecutiveUserId).Distinct()
-            .Select(async id => {
-                try { var u=await auth.GetActiveAsync(id,ct); return (Id:id,Name:u?.DisplayName); }
-                catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
-                catch (Exception) { return (Id:id,Name:(string?)null); }
-            }));
-        var names = sellers.ToDictionary(x=>x.Id,x=>x.Name);
-        return Results.Ok(new {
-            items = rows.Select(x=>new {
-                id=x.Id, kind=x.Kind, displayName=x.DisplayName, legalName=x.LegalName,
-                taxId=x.TaxId, executiveUserId=x.ExecutiveUserId,
-                isCastroFallasExecutive=x.IsCastroFallasExecutive,
-                executiveName=x.IsCastroFallasExecutive ? "Castro Fallas" :
-                    names.GetValueOrDefault(x.ExecutiveUserId) ?? "Vendedor no disponible"
-            }).ToArray(),
-            total, page=currentPage, pageSize=30
-        });
     }
 
     private static bool ValidRelationships(string? value)
@@ -388,7 +262,7 @@ internal static class AccountEndpoints
         }
     }
     private static async Task<IResult> Create(CreateAccountRequest request, CrmDbContext db,
-        HttpContext http, IAuthReferenceService auth, IConfigReferenceService config, IMemoryCache cache, CancellationToken ct)
+        HttpContext http, IAuthReferenceService auth, IConfigReferenceService config, IMemoryCache cache, IConfiguration flags, CancellationToken ct)
     {
         if (!CrmAccess.Scope(http, "crm.account.create")) return CrmAccess.Denied();
         var id = CrmAccess.UserId(http);
@@ -461,14 +335,17 @@ internal static class AccountEndpoints
             AssignedBy = id, CreatedByUserId = id });
         try
         {
-            await db.SaveChangesAsync(ct);
-            return Results.Created("/api/crm/accounts/" + account.Id, account);
+            var committed = await CrmDataEndpoints.CommitAccount(db, account, http,
+                flags, "crm.account.created.v1", ct);
+            return committed is Microsoft.AspNetCore.Http.HttpResults.Ok
+                ? Results.Created("/api/crm/accounts/" + account.Id, account)
+                : committed;
         }
         catch (DbUpdateException) { return CrmDataEndpoints.Conflict("Account fiscal identity or assignment conflict"); }
     }
 
     private static async Task<IResult> Patch(Guid id, PatchAccountRequest request, CrmDbContext db,
-        HttpContext http, IConfigReferenceService config, CancellationToken ct)
+        HttpContext http, IConfigReferenceService config, IConfiguration flags, CancellationToken ct)
     {
         if (!CrmAccess.Scope(http, "crm.account.update")) return CrmAccess.Denied();
         var account = await db.Accounts.FindAsync([id], ct);
@@ -530,11 +407,36 @@ internal static class AccountEndpoints
         account.RowVersion++;
         account.UpdatedAt = DateTime.UtcNow;
         account.UpdatedByUserId = CrmAccess.UserId(http);
+        if (CrmAccountRealtimeCommit.IsEnabled(flags))
+        {
+            // F5 candidate: emit only after the real PATCH is committed, atomically
+            // with its audit history. No user data is sent to SignalR.
+            try
+            {
+                await CrmAccountRealtimeCommit.PersistUpdatedAccountAsync(
+                    db, account, http.TraceIdentifier, ct);
+                return Results.Ok(account);
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                return CrmDataEndpoints.Conflict("Record modified concurrently");
+            }
+            catch (DbUpdateException)
+            {
+                return CrmDataEndpoints.Conflict("Conflicting or invalid CRM record");
+            }
+            catch (Npgsql.NpgsqlException)
+            {
+                // Fail the write rather than silently commit without an Outbox row.
+                return Results.Problem(statusCode: 503, title: "CRM realtime persistence unavailable");
+            }
+        }
+        // Existing REST behavior is identical while the batch is not approved.
         var committed = await CrmDataEndpoints.Commit(db, ct);
         return committed is Microsoft.AspNetCore.Http.HttpResults.Ok ? Results.Ok(account) : committed;
     }
     private static async Task<IResult> SetLogo(Guid id, SetAccountLogoRequest request, CrmDbContext db,
-        HttpContext http, CancellationToken ct)
+        HttpContext http, IConfiguration flags, CancellationToken ct)
     {
         if (!CrmAccess.Scope(http, "crm.account.update")) return CrmAccess.Denied();
         var account = await db.Accounts.FindAsync([id], ct);
@@ -547,12 +449,13 @@ internal static class AccountEndpoints
         account.RowVersion++;
         account.UpdatedAt = DateTime.UtcNow;
         account.UpdatedByUserId = CrmAccess.UserId(http);
-        var committed = await CrmDataEndpoints.Commit(db, ct);
+        var committed = await CrmDataEndpoints.CommitAccount(db, account, http,
+            flags, "crm.account.logo.updated.v1", ct);
         return committed is Microsoft.AspNetCore.Http.HttpResults.Ok ? Results.Ok(account) : committed;
     }
 
     private static async Task<IResult> Archive(Guid id, ArchiveAccountRequest request, CrmDbContext db,
-        HttpContext http, CancellationToken ct)
+        HttpContext http, IConfiguration flags, CancellationToken ct)
     {
         if (!CrmAccess.Scope(http, "crm.account.archive")) return CrmAccess.Denied();
         if (string.IsNullOrWhiteSpace(request.Reason) || request.Reason.Length > 1000)
@@ -566,11 +469,12 @@ internal static class AccountEndpoints
         account.UpdatedAt = DateTime.UtcNow;
         account.UpdatedByUserId = CrmAccess.UserId(http);
         account.RowVersion++;
-        var committed = await CrmDataEndpoints.Commit(db, ct);
+        var committed = await CrmDataEndpoints.CommitAccount(db, account, http,
+            flags, "crm.account.archived.v1", ct);
         return committed is Microsoft.AspNetCore.Http.HttpResults.Ok ? Results.Ok(account) : committed;
     }
     private static async Task<IResult> Assign(Guid id, AssignAccountRequest request, CrmDbContext db,
-        HttpContext http, IAuthReferenceService auth, CancellationToken ct)
+        HttpContext http, IAuthReferenceService auth, IConfiguration flags, CancellationToken ct)
     {
         if (!CrmAccess.Scope(http, "crm.account.assign")) return CrmAccess.Denied();
         var account = await db.Accounts.FindAsync([id], ct);
@@ -602,7 +506,8 @@ internal static class AccountEndpoints
             ExecutiveUserId = executiveId, IsCastroFallasExecutive = request.AssignToCastroFallas,
             AssignedBy = CrmAccess.UserId(http), CreatedByUserId = CrmAccess.UserId(http),
             EffectiveFrom = when, Reason = request.Reason });
-        var committed = await CrmDataEndpoints.Commit(db, ct);
+        var committed = await CrmDataEndpoints.CommitAccount(db, account, http,
+            flags, "crm.account.assigned.v1", ct);
         return committed is Microsoft.AspNetCore.Http.HttpResults.Ok ? Results.Ok(account) : committed;
     }
     private static async Task<IResult> ChangeHistory(Guid id, CrmDbContext db,
@@ -681,10 +586,10 @@ internal static class AccountEndpoints
             .OrderBy(x => x.ActivityCode).ToListAsync(ct));
     }
     private static async Task<IResult> AddActivity(Guid id, AddBusinessActivityRequest request, CrmDbContext db,
-        HttpContext http, CancellationToken ct)
+        HttpContext http, IConfiguration flags, CancellationToken ct)
     {
         if (!CrmAccess.Scope(http, "crm.account.update")) return CrmAccess.Denied();
-        var account = await db.Accounts.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id && x.ArchivedAt == null, ct);
+        var account = await db.Accounts.FirstOrDefaultAsync(x => x.Id == id && x.ArchivedAt == null, ct);
         if (account is null) return Results.NotFound();
         if (!await CrmAccess.CanSeeAccount(db, http, account.Id, ct)) return CrmAccess.Denied();
         if (string.IsNullOrWhiteSpace(request.ActivityCode) || request.ActivityCode.Length > 64)
@@ -693,7 +598,16 @@ internal static class AccountEndpoints
             ActivityCode = request.ActivityCode.Trim(), ActivityDescription = request.Description,
             Source = request.Source, CreatedByUserId = CrmAccess.UserId(http) };
         db.AccountBusinessActivities.Add(item);
-        var committed = await CrmDataEndpoints.Commit(db, ct);
+        if (CrmAccountRealtimeCommit.IsEnabled(flags))
+        {
+            // A related account change must advance its resource version for
+            // Vue's monotonic event ordering and authorized REST refresh.
+            account.RowVersion++;
+            account.UpdatedAt = DateTime.UtcNow;
+            account.UpdatedByUserId = CrmAccess.UserId(http);
+        }
+        var committed = await CrmDataEndpoints.CommitAccount(db, account, http,
+            flags, "crm.account.activity.added.v1", ct);
         return committed is Microsoft.AspNetCore.Http.HttpResults.Ok ?
             Results.Created("/api/crm/accounts/" + id + "/business-activities", item) : committed;
     }

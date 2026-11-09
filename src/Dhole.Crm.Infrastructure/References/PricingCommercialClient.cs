@@ -14,14 +14,6 @@ public sealed record PricingQuoteRouteSnapshot(
     Guid Id, string? QuoNumber, string? PolName, string? PoeName,
     string? PodName, string? ShipmentMode, string? Status, int? RevisionNumber,
     bool RevisionPending);
-public sealed record PricingAccountQuote(
-    Guid PricingQuoteId, string? QuoteNumberSnapshot, string? ShipmentModeSnapshot,
-    string? CommercialStatusSnapshot, DateTime LinkedAt,
-    string? PolName, string? PoeName, string? PodName, int RevisionNumber, bool Available,
-    Guid? ClientLeadId, string? ClientName = null);
-public sealed record PricingAccountQuotePage(
-    IReadOnlyList<PricingAccountQuote> Items, int Total, int Page, int PageSize);
-public sealed record LegacyPricingReconciliationResult(int Linked, int Total);
 public sealed record PricingCreateRequest(
     string Priority, string? ClientName, string? ExecutiveName,
     string? ShipmentMode, string? OriginName, string? DestinationName,
@@ -36,15 +28,6 @@ public interface IPricingCommercialClient
     Task<PricingResult<PricingRequestSnapshot>> GetRequest(Guid id,string bearer,CancellationToken ct);
     Task<PricingResult<PricingQuoteSnapshot>> GetQuote(Guid id,string bearer,CancellationToken ct);
     Task<PricingResult<PricingQuoteRouteSnapshot>> GetVisibleQuoteRoute(Guid id,string bearer,CancellationToken ct);
-    Task<PricingResult<PricingAccountQuotePage>> GetAccountQuotes(
-        Guid accountId, IReadOnlyCollection<Guid> convertedLeadIds,
-        string bearer, int page, int pageSize, CancellationToken ct);
-    Task<PricingResult<PricingAccountQuotePage>> GetLeadQuotes(
-        Guid leadId, string bearer, int page, int pageSize, CancellationToken ct);
-    Task<PricingResult<PricingAccountQuotePage>> GetLegacyCandidates(
-        string legalName, string bearer, int page, int pageSize, CancellationToken ct);
-    Task<PricingResult<LegacyPricingReconciliationResult>> ReconcileLegacyQuotes(
-        Guid accountId, string legalName, Guid[] quoteIds, string bearer, CancellationToken ct);
     Task<PricingResult<Guid>> CreateRequest(PricingCreateRequest body,
         string bearer,string idempotencyKey,string correlationId,CancellationToken ct);
 }
@@ -95,48 +78,6 @@ public sealed class PricingCommercialClient(HttpClient client,IConfiguration cfg
             }
         }
     }
-    public Task<PricingResult<PricingAccountQuotePage>> GetAccountQuotes(
-        Guid accountId, IReadOnlyCollection<Guid> convertedLeadIds,
-        string bearer, int page, int pageSize, CancellationToken ct)
-    {
-        var leads = string.Join(",", convertedLeadIds.Select(x => x.ToString("D")));
-        var req = new HttpRequestMessage(HttpMethod.Get,
-            GetUrl($"api/pricing/rates/crm-account/{accountId:D}?page={page}&pageSize={pageSize}&convertedLeadIds={leads}"));
-        SetBearer(req, bearer);
-        return Send<PricingAccountQuotePage>(req, ct);
-    }
-
-    public Task<PricingResult<PricingAccountQuotePage>> GetLeadQuotes(
-        Guid leadId, string bearer, int page, int pageSize, CancellationToken ct)
-    {
-        var req = new HttpRequestMessage(HttpMethod.Get,
-            GetUrl($"api/pricing/rates/crm-lead/{leadId:D}?page={page}&pageSize={pageSize}"));
-        SetBearer(req, bearer);
-        return Send<PricingAccountQuotePage>(req, ct);
-    }
-    public Task<PricingResult<PricingAccountQuotePage>> GetLegacyCandidates(
-        string legalName, string bearer, int page, int pageSize, CancellationToken ct)
-    {
-        var url = "api/pricing/rates/crm-legacy-candidates?clientName=" +
-            Uri.EscapeDataString(legalName) + $"&page={page}&pageSize={pageSize}";
-        var req = new HttpRequestMessage(HttpMethod.Get, GetUrl(url));
-        SetBearer(req, bearer);
-        return Send<PricingAccountQuotePage>(req, ct);
-    }
-
-    public Task<PricingResult<LegacyPricingReconciliationResult>> ReconcileLegacyQuotes(
-        Guid accountId, string legalName, Guid[] quoteIds, string bearer, CancellationToken ct)
-    {
-        var req = new HttpRequestMessage(HttpMethod.Post, GetUrl("api/pricing/rates/crm-legacy-reconcile"))
-        {
-            Content = JsonContent.Create(new {
-                accountId, clientName = legalName, rateIds = quoteIds
-            }, options: JsonOptions)
-        };
-        SetBearer(req, bearer);
-        return Send<LegacyPricingReconciliationResult>(req, ct);
-    }
-
     public Task<PricingResult<PricingRequestSnapshot>> GetRequest(Guid id,string bearer,CancellationToken ct)
     {
         var req=new HttpRequestMessage(HttpMethod.Get,GetUrl("api/pricing/crm/requests/"+id));
@@ -149,37 +90,13 @@ public sealed class PricingCommercialClient(HttpClient client,IConfiguration cfg
         SetBearer(req,bearer);
         return Send<PricingQuoteSnapshot>(req,ct);
     }
-    private async Task<PricingResult<PricingQuoteRouteSnapshot>> ReadQuoteRoute(
-        HttpRequestMessage req, CancellationToken ct)
-    {
-        var result = await Send<JsonElement>(req, ct);
-        if (!result.Success)
-            return new PricingResult<PricingQuoteRouteSnapshot>(result.Status, null);
-        try
-        {
-            var json = result.Value;
-            // Seller routes return the object directly. Staff /rates/{id}
-            // returns an ApiResponse<T> envelope with the route under data.
-            if (json.ValueKind == JsonValueKind.Object &&
-                json.TryGetProperty("data", out var wrapped)) json = wrapped;
-            if (json.ValueKind != JsonValueKind.Object)
-                return new PricingResult<PricingQuoteRouteSnapshot>(HttpStatusCode.BadGateway, null);
-            var route = json.Deserialize<PricingQuoteRouteSnapshot>(JsonOptions);
-            return new PricingResult<PricingQuoteRouteSnapshot>(result.Status, route);
-        }
-        catch (JsonException)
-        {
-            return new PricingResult<PricingQuoteRouteSnapshot>(HttpStatusCode.BadGateway, null);
-        }
-    }
-
     public async Task<PricingResult<PricingQuoteRouteSnapshot>> GetVisibleQuoteRoute(
         Guid id, string bearer, CancellationToken ct)
     {
         // Pricing validates each caller's seller scope and account ownership.
         var seller = new HttpRequestMessage(HttpMethod.Get, GetUrl("api/pricing/seller-rates/" + id));
         SetBearer(seller, bearer);
-        var result = await ReadQuoteRoute(seller, ct);
+        var result = await Send<PricingQuoteRouteSnapshot>(seller, ct);
         if (result.Success || (result.Status != HttpStatusCode.Forbidden &&
             result.Status != HttpStatusCode.Unauthorized))
             return result;
@@ -189,7 +106,7 @@ public sealed class PricingCommercialClient(HttpClient client,IConfiguration cfg
         // route labels from the response, never amounts or supplier costs.
         var staff = new HttpRequestMessage(HttpMethod.Get, GetUrl("api/pricing/rates/" + id));
         SetBearer(staff, bearer);
-        return await ReadQuoteRoute(staff, ct);
+        return await Send<PricingQuoteRouteSnapshot>(staff, ct);
     }
     public Task<PricingResult<Guid>> CreateRequest(PricingCreateRequest body,
         string bearer,string idempotencyKey,string correlationId,CancellationToken ct)

@@ -1,0 +1,85 @@
+name: Realtime F2 CRM durable pilot (isolated)
+on:
+  push:
+    branches:
+      - feature/dhole-realtime-universal-rt-20261107-01
+    paths:
+      - 'src/Dhole.Crm.Infrastructure/Realtime/**'
+      - 'src/Dhole.Crm.Infrastructure/Persistence/Migrations/20261108130000_AddRealtimeDurabilityPilot.cs'
+      - 'src/Dhole.Crm.Workers/Realtime/**'
+      - 'src/Dhole.Crm.Workers/Program.cs'
+      - 'src/Dhole.Crm.Api/Endpoints/AccountEndpoints.cs'
+      - 'src/Dhole.Crm.Api/Endpoints/CrmDataEndpoints.cs'
+      - 'version.json'
+      - 'Directory.Build.targets'
+      - 'CHANGELOG.md'
+      - 'src/Dhole.Crm.Api/Dhole.Crm.Api.csproj'
+      - 'tests/Dhole.Crm.IntegrationTests/Dhole.Crm.IntegrationTests.csproj'
+      - 'tests/Dhole.Crm.IntegrationTests/CrmRealtimeDurabilityPilotIntegrationTests.cs'
+      - 'tests/Dhole.Crm.IntegrationTests/CrmRealtimeF5HttpIntegrationTests.cs'
+      - '.github/workflows/realtime-f2-durability.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+  packages: read
+concurrency:
+  group: rt-20261107-01-f2-crm
+  cancel-in-progress: false
+jobs:
+  postgres-redis-durable-pilot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: crm_realtime_ci
+          POSTGRES_PASSWORD: ci_only_no_production
+          POSTGRES_DB: dhole_realtime_ci
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U crm_realtime_ci -d dhole_realtime_ci"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+      redis:
+        image: redis:7-alpine
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd "redis-cli ping" --health-interval 5s
+          --health-timeout 5s --health-retries 12
+    env:
+      NuGetPackageSourceCredentials_github: Username=github-actions;Password=${{ secrets.GITHUB_TOKEN }};ValidAuthenticationTypes=Basic
+      CRM_TEST_POSTGRES: Host=127.0.0.1;Port=5432;Database=dhole_realtime_ci;Username=crm_realtime_ci;Password=ci_only_no_production
+      CRM_TEST_REDIS: 127.0.0.1:6379
+      ConnectionStrings__Postgres: Host=127.0.0.1;Port=5432;Database=dhole_realtime_ci;Username=crm_realtime_ci;Password=ci_only_no_production
+      Redis__ConnectionString: 127.0.0.1:6379
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: Enforce CRM candidate SemVer and changelog
+        run: python3 scripts/verify_dhole_version.py
+      - name: Restore pilot integration test
+        run: dotnet restore tests/Dhole.Crm.IntegrationTests/Dhole.Crm.IntegrationTests.csproj --configfile NuGet.Config
+      - name: Restore real CRM API for F5 candidate compilation
+        run: dotnet restore src/Dhole.Crm.Api/Dhole.Crm.Api.csproj --configfile NuGet.Config
+      - name: Compile REAL CRM API endpoints with candidate F5 adapter
+        run: dotnet build src/Dhole.Crm.Api/Dhole.Crm.Api.csproj -c Release --no-restore --warnaserror
+      - name: Compile F2 pilot including CRM worker and EF migration
+        run: dotnet build tests/Dhole.Crm.IntegrationTests/Dhole.Crm.IntegrationTests.csproj -c Release --no-restore --warnaserror
+      - name: Test 1000 commits, PostgreSQL, real Redis, retries, DLQ and idempotency
+        run: |
+          mkdir -p TestResults
+          dotnet test tests/Dhole.Crm.IntegrationTests/Dhole.Crm.IntegrationTests.csproj \
+            -c Release --no-build \
+            --filter "FullyQualifiedName~CrmRealtimeDurabilityPilotIntegrationTests|FullyQualifiedName~CrmRealtimeF5HttpIntegrationTests" \
+            --logger "trx;LogFileName=rt-20261107-01-f2-crm.trx" \
+            --results-directory TestResults \
+            -- RunConfiguration.TreatNoTestsAsError=true
+      - name: Upload F2 test evidence (not a deployment)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rt-20261107-01-f2-crm-durability
+          path: TestResults/
+          if-no-files-found: warn
