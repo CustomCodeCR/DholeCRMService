@@ -1,4 +1,4 @@
-## 1.4.0 — 2026-11-09
+## [1.4.0] - 2026-11-09
 - Búsqueda autorizada de cuentas y prospectos desde solicitudes de Pricing y asignación comercial según CRM.
 
 # Changelog
