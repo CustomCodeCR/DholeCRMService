@@ -3,8 +3,8 @@ on:
   push:
     branches:
       - feature/rt-notificationshub-20261109-01
-    paths:
-      - .github/workflows/realtime-candidate-build-test.yml
+  pull_request:
+    branches: [develop, master]
 permissions:
   contents: read
   packages: read
@@ -12,6 +12,22 @@ jobs:
   build-test:
     runs-on: ubuntu-latest
     timeout-minutes: 35
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: dhole_ci
+          POSTGRES_PASSWORD: dhole_ci_ephemeral
+          POSTGRES_DB: realtime_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U dhole_ci -d realtime_ci"
+          --health-interval 3s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      CRM_TEST_POSTGRES: "Host=127.0.0.1;Port=5432;Database=realtime_ci;Username=dhole_ci;Password=dhole_ci_ephemeral;Pooling=false"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
