@@ -244,8 +244,11 @@ internal static class LeadEndpoints
         {
             await CrmCollectionRealtimeCommit.SaveLeadAsync(db,
                 http.RequestServices.GetRequiredService<IConfiguration>(), http.TraceIdentifier, ct);
-            await CrmCollectionRealtimeCommit.AppendCollectionAsync(db, "accountlist",
-                account.RowVersion, http.TraceIdentifier, ct);
+            // Preserve production's fail-closed realtime policy.
+            if (CrmAccountRealtimeCommit.IsEnabled(
+                    http.RequestServices.GetRequiredService<IConfiguration>()))
+                await CrmCollectionRealtimeCommit.AppendCollectionAsync(db, "accountlist",
+                    account.RowVersion, http.TraceIdentifier, ct);
             await tx.CommitAsync(ct);
             return Results.Created("/api/crm/accounts/" + account.Id,
                 new { leadId = id, accountId = account.Id, alreadyConverted = false });
