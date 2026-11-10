@@ -1,3 +1,8 @@
+## [1.9.0] - 2026-11-10
+
+- MINOR DH-20261110-CRM-AGENDA-RECONCILED-070: guarda actividad de origen de compromisos; expone consulta de origen y reapertura con auditoría; conserva política, permisos y endpoints existentes. Migración aditiva compatible.
+- Release coordinado con DholeWeb 1.19.0 y DholeSystem 1.19.0; CI y staging pendientes.
+
 ## [1.8.0] - 2026-11-10
 
 - MINOR DH-20261110-CRM-ADMIN-CALENDAR-069: permite a administradores activos consultar todas las agendas de CRM y los seguimientos automáticos, con detalles históricos y directorio filtrado por Auth. Lectura ampliada con roles vigentes, sin alterar autorización de escritura.
