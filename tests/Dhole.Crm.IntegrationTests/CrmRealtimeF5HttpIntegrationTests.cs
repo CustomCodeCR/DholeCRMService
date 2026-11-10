@@ -49,7 +49,7 @@ public sealed class CrmRealtimeF5HttpIntegrationTests
         {
             string[]? scopes =
                 id == owner ? ["crm.account.update", "crm.account.read", "crm.account.create", "crm.account.archive", "crm.account.assign"] :
-                id == reader ? ["crm.account.read-all"] :
+                id == reader ? ["crm.account.read-all", "crm.lead.read-all"] :
                 id == forbidden ? ["crm.account.read"] : null;
             return Task.FromResult(scopes is null
                 ? null : new AuthUserReference(id, true, scopes));
@@ -72,6 +72,50 @@ public sealed class CrmRealtimeF5HttpIntegrationTests
         msg.Headers.Add("X-F5-CI-Actor", actor.ToString("D"));
         if (body is not null) msg.Content = JsonContent.Create(body);
         return msg;
+    }
+
+    [TestMethod]
+    public async Task Realtime_collection_owner_acl_routes_exist_and_enforce_effective_CRM_scopes()
+    {
+        var owner = Guid.NewGuid();
+        var reader = Guid.NewGuid();
+        var forbidden = Guid.NewGuid();
+        var builder = WebApplication.CreateBuilder();
+        builder.WebHost.UseTestServer();
+        builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["Features:CrmEnabled"] = "true"
+        });
+        builder.Services.AddCrmInfrastructure();
+        builder.Services.AddMemoryCache();
+        builder.Services.AddHttpClient();
+        builder.Services.AddSingleton<IAuthReferenceService>(
+            new F5AuthReferences(owner, reader, forbidden));
+        builder.Services.AddSingleton<IConfigReferenceService>(new F5ConfigReferences());
+        builder.Services.AddAuthentication("F5-CI")
+            .AddScheme<AuthenticationSchemeOptions, F5AuthenticationHandler>("F5-CI", _ => { });
+        builder.Services.AddAuthorization();
+        await using var app = builder.Build();
+        app.UseAuthentication();
+        app.UseAuthorization();
+        app.MapCrmDataEndpoints();
+        await app.StartAsync();
+        using var client = app.GetTestClient();
+
+        foreach (var endpoint in new[] {
+            "/api/crm/accounts/realtime-access", "/api/crm/leads/realtime-access"
+        })
+        {
+            using var allowedRequest = Request(HttpMethod.Get, endpoint, reader);
+            using var allowed = await client.SendAsync(allowedRequest);
+            Assert.AreEqual(HttpStatusCode.OK, allowed.StatusCode, endpoint);
+            using var missingToken = await client.GetAsync(endpoint);
+            Assert.AreEqual(HttpStatusCode.Unauthorized, missingToken.StatusCode, endpoint);
+        }
+        using var scopeDenied = Request(HttpMethod.Get,
+            "/api/crm/leads/realtime-access", forbidden);
+        using var denied = await client.SendAsync(scopeDenied);
+        Assert.AreEqual(HttpStatusCode.Forbidden, denied.StatusCode);
     }
 
     [TestMethod]
