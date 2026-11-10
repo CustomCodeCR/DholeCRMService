@@ -146,12 +146,16 @@ internal static class CommercialActivityEndpoints
         foreach(var contactId in contactIds)
             if(!await CommercialAccess.ContactBelongsTo(db,contactId,r.AccountId,r.OpportunityId,ct))
                 return CommercialAccess.Invalid("Participant contact does not belong to this account");
+        var createdAtUtc=DateTime.UtcNow;
+        var occurredAt=r.OccurredAt ??
+            (CommercialRules.IsHistoricalActivity(r.ScheduledEndAt,createdAtUtc)
+                ? r.ScheduledEndAt : null);
         var activity=new Activity {
             AccountId=r.AccountId,LeadId=r.LeadId,OpportunityId=r.OpportunityId,ContactId=r.ContactId,
             OwnerUserId=owner,Type=r.Type,Subject=r.Subject.Trim(),
             ScheduledStartAt=r.ScheduledStartAt,ScheduledEndAt=r.ScheduledEndAt,
-            OccurredAt=r.OccurredAt,Status=r.OccurredAt.HasValue?"Completed":"Scheduled",
-            Outcome=r.OccurredAt.HasValue?"COMPLETED":null,
+            OccurredAt=occurredAt,Status=occurredAt.HasValue?"Completed":"Scheduled",
+            Outcome=occurredAt.HasValue?"COMPLETED":null,
             LocationText=r.LocationText,CreatedByUserId=current,
             ReminderLeadMinutes=r.ReminderLeadMinutes,ReminderChannelStrategy=r.ReminderChannelStrategy,
             RepeatEveryDays=r.RepeatEveryDays is > 0 ? r.RepeatEveryDays : null,
@@ -212,7 +216,8 @@ internal static class CommercialActivityEndpoints
         }
         try
         {
-            if(activity.Status=="Scheduled" && activity.ScheduledStartAt is { } scheduled)
+            if(activity.Status=="Scheduled" && activity.ScheduledStartAt is { } scheduled &&
+                scheduled > DateTime.UtcNow)
                 await CrmReminderEnqueue.QueueAsync(db,"Activity",activity.Id,activity.AccountId,
                     activity.OwnerUserId,activity.RowVersion,scheduled,
                     activity.ReminderLeadMinutes,activity.ReminderChannelStrategy,
