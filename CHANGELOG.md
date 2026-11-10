@@ -1,4 +1,4 @@
-## [1.7.1] - 2026-11-09
+## [1.7.2] - 2026-11-09
 - PATCH: add authenticated read-scope GET /api/crm/accounts/realtime-access and /api/crm/leads/realtime-access. REST endpoints return no customer or lead fields.
 - Durable transactional accountlist/leadlist invalidations for accounts and lead create/update/assign/archive/convert via existing CRM outbox and NotificationsHub, no new hub. Staging Compose sourced from DholeSystem/develop.
 - Ecosystem 1.16.1; master/production unchanged.
