@@ -1,3 +1,7 @@
+## [1.5.0] - 2026-11-10
+- MINOR DH-20261110-CRM-AGENDA-COLLABORATION-066: actividad con minuta extensible y selección validada de contactos; compromisos con vínculo persistido a actividad principal, recuperación retrocompatible de acuerdos históricos, consulta de compromisos y opción de reapertura con auditoría.
+- Nuevos endpoints GET de origen y compromisos, POST de reapertura; migración PostgreSQL aditiva. API REST, notificaciones y eventos realtime existentes permanecen compatibles; staging/CI pendientes.
+
 ## [1.4.1] - 2026-11-10
 - PATCH DH-20261110-CRM-ACCOUNT-SEARCH-064: GET /api/crm/accounts busca por nombre comercial, razón social, cédula o identificación fiscal parcial y completa, con y sin guiones, puntos o espacios.
 - Se respeta la autorización original, los filtros y la paginación SQL. Incluye registros históricos sin identificación normalizada, sin migraciones ni cambios a SignalR/REST. Ecosistema 1.17.9, candidato pendiente de CI/staging; sin autorización de producción.
