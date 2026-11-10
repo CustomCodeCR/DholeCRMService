@@ -64,7 +64,7 @@ internal static class CommercialActivityEndpoints
             ? activity : null;
     }
     private static async Task<IResult> List(CrmDbContext db,HttpContext h,
-        Guid? accountId,Guid? leadId,Guid? opportunityId,string? type,string? status,
+        Guid? accountId,Guid? leadId,Guid? opportunityId,Guid? ownerId,string? type,string? status,
         DateTime? from,DateTime? to,int? page,int? pageSize,CancellationToken ct)
     {
         if(!CanRead(h))return CrmAccess.Denied();
@@ -73,6 +73,13 @@ internal static class CommercialActivityEndpoints
             (!x.AccountId.HasValue || visibleAccounts.Contains(x.AccountId.Value)));
         if(!CrmAccess.Scope(h,"crm.activity.read-all") && !CrmAccess.IsCalendarAdministrator(h))
             query=query.Where(x=>x.OwnerUserId==CrmAccess.UserId(h));
+        if(ownerId.HasValue)
+        {
+            if(ownerId.Value!=CrmAccess.UserId(h) &&
+                !CrmAccess.Scope(h,"crm.activity.read-all") &&
+                !CrmAccess.IsCalendarAdministrator(h))return CrmAccess.Denied();
+            query=query.Where(x=>x.OwnerUserId==ownerId.Value);
+        }
         if(accountId is { } a)query=query.Where(x=>x.AccountId==a);
         if(leadId is { } l)query=query.Where(x=>x.LeadId==l);
         if(opportunityId is { } o)query=query.Where(x=>x.OpportunityId==o);
