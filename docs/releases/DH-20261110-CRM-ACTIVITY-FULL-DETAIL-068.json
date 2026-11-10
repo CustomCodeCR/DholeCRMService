@@ -1,0 +1,18 @@
+{
+  "releaseId": "DH-20261110-CRM-ACTIVITY-FULL-DETAIL-068",
+  "date": "2026-11-10",
+  "kind": "PATCH",
+  "component": "DholeCRMService",
+  "previous": "1.4.2",
+  "version": "1.4.3",
+  "ecosystemVersion": "1.17.14",
+  "contracts": [
+    "GET /api/crm/activities/{id}/commitments",
+    "GET /api/crm/followups/{id}/parent-activity"
+  ],
+  "schemaMigration": false,
+  "validation": {
+    "develop": "passed",
+    "master": "CI pending"
+  }
+}
