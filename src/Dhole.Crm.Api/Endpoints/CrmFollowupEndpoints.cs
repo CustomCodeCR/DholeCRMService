@@ -39,7 +39,8 @@ internal static class CrmFollowupEndpoints
     private static bool CanReadCalendar(HttpContext h)=>Manage(h)||Tasks(h)||
         CrmDataEndpoints.HasRead(h,"activity")||
         CrmAccess.Scope(h,"crm.activity.read-all")||
-        CrmAccess.Scope(h,"crm.account.read-all");
+        CrmAccess.Scope(h,"crm.account.read-all") ||
+        CrmAccess.IsCalendarAdministrator(h);
     private static bool Utc(DateTime dt)=>dt.Kind==DateTimeKind.Utc;
     private static async Task<bool> AccountVisible(Guid id,CrmDbContext db,HttpContext h,CancellationToken ct)=>
         await CrmAccess.CanSeeAccount(db,h,id,ct);
@@ -49,9 +50,15 @@ internal static class CrmFollowupEndpoints
          (x.AccountId.HasValue && CrmAccess.Scope(h,"crm.account.read-all")) ||
          (x.LeadId.HasValue && CrmAccess.Scope(h,"crm.lead.read-all")) ||
          (x.OpportunityId.HasValue && CrmAccess.Scope(h,"crm.opportunity.read-all")));
+    // Calendar administrators may view other users' followups but cannot
+    // reschedule, cancel or complete them without an existing write grant.
+    private static Task<bool> HasCalendarAccess(Followup x,CrmDbContext db,HttpContext h,CancellationToken ct) =>
+        CrmAccess.IsCalendarAdministrator(h) ? Task.FromResult(true) : HasAccess(x,db,h,ct);
+
     private static async Task<IResult> GetPolicy(Guid accountId,CrmDbContext db,HttpContext h,CancellationToken ct)
     {
-        if(!Manage(h)||!await AccountVisible(accountId,db,h,ct))return CrmAccess.Denied();
+        if(!(Manage(h)||CrmAccess.IsCalendarAdministrator(h)) ||
+            !await CrmAccess.CanSeeCalendarAccount(db,h,accountId,ct))return CrmAccess.Denied();
         var p=await db.AccountFollowupPolicies.AsNoTracking().FirstOrDefaultAsync(x=>x.AccountId==accountId,ct);
         // Absence of a policy is the normal create state, not a broken account.
         return p is null?Results.Json((object?)null):Results.Ok(p);
@@ -92,17 +99,18 @@ internal static class CrmFollowupEndpoints
         DateTime? from,DateTime? to,int? page,int? pageSize,CancellationToken ct)
     {
         if(!CanReadCalendar(h))return CrmAccess.Denied();
-        var visibleAccountIds = CrmAccess.VisibleAccounts(db,h).Select(a=>a.Id);
+        var visibleAccountIds = CrmAccess.CalendarVisibleAccounts(db,h).Select(a=>a.Id);
         var query=db.Followups.AsNoTracking().Where(x => x.ArchivedAt == null &&
             (!x.AccountId.HasValue || visibleAccountIds.Contains(x.AccountId.Value)));
         var actor=CrmAccess.UserId(h);
         var accounts=CrmAccess.Scope(h,"crm.account.read-all");
         var leads=CrmAccess.Scope(h,"crm.lead.read-all");
         var opportunities=CrmAccess.Scope(h,"crm.opportunity.read-all");
-        query=query.Where(x=>x.AssignedUserId==actor ||
-            (accounts && x.AccountId!=null) ||
-            (leads && x.LeadId!=null) ||
-            (opportunities && x.OpportunityId!=null));
+        if(!CrmAccess.IsCalendarAdministrator(h))
+            query=query.Where(x=>x.AssignedUserId==actor ||
+                (accounts && x.AccountId!=null) ||
+                (leads && x.LeadId!=null) ||
+                (opportunities && x.OpportunityId!=null));
         if(accountId.HasValue)query=query.Where(x=>x.AccountId==accountId);
         // Prospect calendars only request tasks linked to that lead.
         if(leadId.HasValue)query=query.Where(x=>x.LeadId==leadId);
@@ -117,7 +125,7 @@ internal static class CrmFollowupEndpoints
     {
         if(!CanReadCalendar(h))return CrmAccess.Denied();
         var x=await db.Followups.AsNoTracking().FirstOrDefaultAsync(x=>x.Id==id && x.ArchivedAt==null,ct);
-        return x is null?Results.NotFound():await HasAccess(x,db,h,ct)?Results.Ok(x):CrmAccess.Denied();
+        return x is null?Results.NotFound():await HasCalendarAccess(x,db,h,ct)?Results.Ok(x):CrmAccess.Denied();
     }
 
     // Resolve the original activity from the append-only creation history.
@@ -128,7 +136,7 @@ internal static class CrmFollowupEndpoints
         var followup=await db.Followups.AsNoTracking()
             .FirstOrDefaultAsync(x=>x.Id==id && x.ArchivedAt==null,ct);
         if(followup is null)return Results.NotFound();
-        if(!await HasAccess(followup,db,h,ct))return CrmAccess.Denied();
+        if(!await HasCalendarAccess(followup,db,h,ct))return CrmAccess.Denied();
         // Policy-generated followups have no Activity. Return their authorized
         // account policy context instead of presenting them as unexplained UUIDs.
         // These values describe the current policy, not a historical snapshot.
@@ -145,7 +153,7 @@ internal static class CrmFollowupEndpoints
                 policyOccurrenceAt=followup.PolicyOccurrenceAt,policy
             });
         }
-        if(!CrmDataEndpoints.HasRead(h,"activity"))
+        if(!CrmDataEndpoints.HasRead(h,"activity") && !CrmAccess.IsCalendarAdministrator(h))
             return Results.Ok(new{activityId=(Guid?)null,sourceType="UNAVAILABLE"});
         var origins=await db.FollowupHistories.AsNoTracking()
             .Where(x=>x.FollowupId==id && x.Action=="Created")
@@ -173,9 +181,10 @@ internal static class CrmFollowupEndpoints
         if(!parentId.HasValue)return Results.Ok(new{activityId=(Guid?)null,sourceType="MANUAL"});
         var activity=await db.Activities.AsNoTracking()
             .FirstOrDefaultAsync(x=>x.Id==parentId.Value && x.ArchivedAt==null,ct);
-        if(activity is null || !CommercialAccess.ActivityOwns(h,activity) ||
+        if(activity is null ||
+            (!CommercialAccess.ActivityOwns(h,activity) && !CrmAccess.IsCalendarAdministrator(h)) ||
             (activity.AccountId.HasValue &&
-             !await CrmAccess.CanSeeAccount(db,h,activity.AccountId.Value,ct)))
+             !await CrmAccess.CanSeeCalendarAccount(db,h,activity.AccountId.Value,ct)))
             return Results.Ok(new{activityId=(Guid?)null});
         return Results.Ok(new{activityId=(Guid?)activity.Id,activitySubject=activity.Subject,sourceType="ACTIVITY"});
     }
@@ -302,10 +311,10 @@ internal static class CrmFollowupEndpoints
 
     private static async Task<IResult> History(Guid id,CrmDbContext db,HttpContext h,CancellationToken ct)
     {
-        if(!Manage(h)&&!Tasks(h))return CrmAccess.Denied();
+        if(!CanReadCalendar(h))return CrmAccess.Denied();
         var x=await db.Followups.AsNoTracking().FirstOrDefaultAsync(x=>x.Id==id,ct);
         if(x is null)return Results.NotFound();
-        if(!await HasAccess(x,db,h,ct))return CrmAccess.Denied();
+        if(!await HasCalendarAccess(x,db,h,ct))return CrmAccess.Denied();
         return Results.Ok(await db.FollowupHistories.AsNoTracking().Where(x=>x.FollowupId==id)
             .OrderBy(x=>x.CreatedAt).ToListAsync(ct));
     }
