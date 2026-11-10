@@ -1,0 +1,26 @@
+{
+  "releaseId": "DH-20261110-CRM-ADMIN-CALENDAR-069",
+  "date": "2026-11-10",
+  "kind": "MINOR",
+  "ecosystemVersion": "1.18.0",
+  "component": "DholeCRMService",
+  "previous": "1.7.6",
+  "next": "1.8.0",
+  "components": {
+    "DholeAuthService": "1.6.0",
+    "DholeCRMService": "1.8.0",
+    "DholeWeb": "1.18.0",
+    "DholeSystem": "1.18.0"
+  },
+  "scope": [
+    "Auth active administrators can read every users CRM activities and followups and filter by active user.",
+    "Policy followups show title and context; legacy records remain readable.",
+    "Write actions retain their previous permissions."
+  ],
+  "validation": {
+    "ci": "pending",
+    "staging": "pending",
+    "production": "not deployed"
+  },
+  "migration": "none"
+}
