@@ -3,6 +3,7 @@ using Dhole.Crm.Infrastructure.Persistence;
 using Dhole.Crm.Infrastructure.References;
 using Dhole.Crm.Infrastructure.Realtime;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 
 namespace Dhole.Crm.Api.Endpoints;
 
@@ -20,6 +21,7 @@ internal static class LeadEndpoints
     public static RouteGroupBuilder MapLeads(this RouteGroupBuilder group)
     {
         group.MapGet("/leads", List);
+        group.MapGet("/leads/assigned-executives", AssignedExecutives);
         group.MapGet("/leads/realtime-access", (HttpContext http) =>
             CrmDataEndpoints.HasRead(http, "lead") ? Results.Ok() : CrmAccess.Denied());
         group.MapGet("/leads/{id:guid}", Get);
@@ -44,6 +46,59 @@ internal static class LeadEndpoints
         }
         catch (DbUpdateConcurrencyException) { return CrmDataEndpoints.Conflict("Record modified concurrently"); }
         catch (DbUpdateException) { return CrmDataEndpoints.Conflict("Conflicting or invalid CRM record"); }
+    }
+
+
+    // Resolve only salespeople of prospect records visible to the requesting user.
+    // Names are fetched server-to-server from Auth, not from a public user directory.
+    private static async Task<IResult> AssignedExecutives(
+        string? ids, CrmDbContext db, HttpContext http, IAuthReferenceService auth,
+        IMemoryCache cache, ILoggerFactory loggerFactory, CancellationToken ct)
+    {
+        if (!CrmDataEndpoints.HasRead(http, "lead")) return CrmAccess.Denied();
+        var parts = (ids ?? "").Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length is < 1 or > 100 || parts.Any(x => !Guid.TryParse(x, out _)))
+            return Results.BadRequest(new { error = "Prospect ids must be 1 to 100 valid GUIDs" });
+
+        var requested = parts.Select(Guid.Parse).Distinct().ToArray();
+        var query = db.Leads.AsNoTracking()
+            .Where(x => x.ArchivedAt == null && requested.Contains(x.Id));
+        if (!CrmAccess.Scope(http, "crm.lead.read-all"))
+            query = query.Where(x => x.ExecutiveUserId == CrmAccess.UserId(http));
+        var visible = await query.Select(x => new { x.Id, x.ExecutiveUserId }).ToArrayAsync(ct);
+        var sellerIds = visible.Where(x => x.ExecutiveUserId != Guid.Empty)
+            .Select(x => x.ExecutiveUserId).Distinct().ToArray();
+
+        using var gate = new SemaphoreSlim(4);
+        var logger = loggerFactory.CreateLogger("Dhole.Crm.LeadAssignedExecutives");
+        var names = await Task.WhenAll(sellerIds.Select(async userId =>
+        {
+            await gate.WaitAsync(ct);
+            try
+            {
+                var name = await cache.GetOrCreateAsync($"crm:assigned-seller:{userId:N}", async entry =>
+                {
+                    entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(2);
+                    var person = await auth.GetActiveAsync(userId, ct);
+                    return string.IsNullOrWhiteSpace(person?.DisplayName)
+                        ? "Vendedor no disponible" : person.DisplayName.Trim();
+                });
+                return (Id: userId, Name: name ?? "Vendedor no disponible");
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "Could not resolve assigned CRM prospect seller");
+                return (Id: userId, Name: "Vendedor no disponible");
+            }
+            finally { gate.Release(); }
+        }));
+        var resolved = names.ToDictionary(x => x.Id, x => x.Name);
+        var sellers = visible.ToDictionary(x => x.Id.ToString("D"),
+            x => x.ExecutiveUserId == Guid.Empty ? "Sin asignar"
+                : resolved.TryGetValue(x.ExecutiveUserId, out var name)
+                    ? name : "Vendedor no disponible");
+        return Results.Ok(new { sellers });
     }
 
     private static async Task<IResult> List(CrmDbContext db, HttpContext http,

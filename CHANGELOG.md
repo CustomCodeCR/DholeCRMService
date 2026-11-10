@@ -1,7 +1,12 @@
 ## [1.9.0] - 2026-11-10
 
-- MINOR DH-20261110-CRM-AGENDA-RECONCILED-070: guarda actividad de origen de compromisos; expone consulta de origen y reapertura con auditoría; conserva política, permisos y endpoints existentes. Migración aditiva compatible.
-- Release coordinado con DholeWeb 1.19.0 y DholeSystem 1.19.0; CI y staging pendientes.
+- MINOR DH-20261110-CRM-AGENDA-RECONCILED-070: compromisos asociados a actividad principal, lectura retrocompatible, reapertura y seguimiento de estado; contactos y minuta en actividades CRM.
+- Migración PostgreSQL aditiva; conserva las correcciones de CRM-PROSPECT-SELLER-072. Web/System 1.19.0; CI y staging pendientes.
+
+## [1.8.1] - 2026-11-10
+
+- DH-20261110-CRM-PROSPECT-SELLER-072: endpoint GET /leads/assigned-executives, resuelve nombres de vendedores de prospectos mediante Auth y verifica permisos de lectura por cada registro; respeta read-all y no expone prospectos ajenos.
+- Sin migración de base de datos; creación y reasignación ya admiten executiveUserId y crm.lead.assign. Ecosistema Dhole 1.18.2.
 
 ## [1.8.0] - 2026-11-10
 
