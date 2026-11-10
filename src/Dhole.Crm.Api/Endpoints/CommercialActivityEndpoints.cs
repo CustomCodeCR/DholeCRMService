@@ -38,6 +38,7 @@ internal static class CommercialActivityEndpoints
         g.MapPost("/activities/{id:guid}/cancel",Cancel);
         g.MapPost("/activities/{id:guid}/archive",Archive);
 
+        g.MapGet("/activities/{id:guid}/commitments",Commitments);
         g.MapGet("/activities/{id:guid}/notes",Notes);
         g.MapPost("/activities/{id:guid}/notes",AddNote);
         g.MapPost("/activities/{id:guid}/notes/{noteId:guid}/commitments",ScheduleExistingNote);
@@ -297,6 +298,32 @@ internal static class CommercialActivityEndpoints
         var result=await CommercialAccess.Save(db,ct);
         return result is Microsoft.AspNetCore.Http.HttpResults.Ok?Results.Ok(a):result;
     }
+
+    // A dated agreement remains a Followup. Reconstruct the relation from the
+    // original creation history so historical records need no data migration.
+    private static async Task<IResult> Commitments(Guid id,CrmDbContext db,HttpContext h,CancellationToken ct)
+    {
+        if(!CanRead(h))return CrmAccess.Denied();
+        var activity=await FindAllowed(id,db,h,ct);
+        if(activity is null)return Results.NotFound();
+        var noteIds=await db.ActivityNotes.AsNoTracking()
+            .Where(x=>x.ActivityId==id).Select(x=>x.Id).ToListAsync(ct);
+        var origins=new List<string>{"Acuerdo registrado en actividad comercial "+id};
+        origins.AddRange(noteIds.Select(noteId=>"Acuerdo de observación "+noteId));
+        var followupIds=db.FollowupHistories.AsNoTracking()
+            .Where(x=>x.Action=="Created" && x.Reason!=null && origins.Contains(x.Reason))
+            .Select(x=>x.FollowupId);
+        var commitments=await db.Followups.AsNoTracking()
+            .Where(x=>followupIds.Contains(x.Id) && x.ArchivedAt==null &&
+                x.AccountId==activity.AccountId && x.LeadId==activity.LeadId &&
+                x.OpportunityId==activity.OpportunityId &&
+                x.AssignedUserId==activity.OwnerUserId)
+            .OrderBy(x=>x.DueAt).ThenBy(x=>x.Id)
+            .Select(x=>new{x.Id,x.Subject,x.Status,x.DueAt,x.Channel,x.RowVersion})
+            .ToListAsync(ct);
+        return Results.Ok(commitments);
+    }
+
     private static async Task<IResult> Notes(Guid id,CrmDbContext db,HttpContext h,CancellationToken ct)
     {
         if(!CanRead(h)||await FindAllowed(id,db,h,ct) is null)return CrmAccess.Denied();
