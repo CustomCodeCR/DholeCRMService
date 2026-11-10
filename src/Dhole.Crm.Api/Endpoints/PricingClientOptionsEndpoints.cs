@@ -25,7 +25,7 @@ internal static class PricingClientOptionsEndpoints
     }
 
     private static async Task<IResult> List(CrmDbContext db, HttpContext http,
-        IAuthReferenceService auth, string? mode, string? q, Guid? sellerUserId,
+        IAuthReferenceService auth, string? mode, string? q, Guid? selectedClientId, Guid? sellerUserId,
         int? page, int? pageSize, CancellationToken ct)
     {
         if (mode is not ("request" or "create"))
@@ -58,7 +58,11 @@ internal static class PricingClientOptionsEndpoints
                 ExecutiveUserId = x.ExecutiveUserId, IsCastroFallasExecutive = false
             });
         var options = accounts.Concat(leads);
-        if (!string.IsNullOrWhiteSpace(q))
+        // Quotation editing must re-resolve its linked CRM account/lead by ID.
+        // Keep the existing visibility and seller filters: this is not a privileged lookup.
+        if (selectedClientId.HasValue)
+            options = options.Where(x => x.Id == selectedClientId.Value);
+        else if (!string.IsNullOrWhiteSpace(q))
         {
             var search = q.Trim().ToLowerInvariant();
             options = options.Where(x => x.DisplayName.ToLower().Contains(search) ||
