@@ -9,10 +9,32 @@ public interface IAuthReferenceService
 {
     Task<AuthUserReference?> GetActiveAsync(Guid userId, CancellationToken ct);
     Task<AuthUserReference?> GetActiveByUsernameAsync(string username, CancellationToken ct) => Task.FromResult<AuthUserReference?>(null);
+    Task<CrmUserDirectoryPage> GetDirectoryAsync(int page,int pageSize,string? search,CancellationToken ct) =>
+        Task.FromResult(new CrmUserDirectoryPage(0,page,pageSize,[]));
 }
 public sealed record AuthUserReference(Guid Id, bool Active, string[] Scopes, string? Email = null, string? DisplayName = null, string[]? Roles = null);
+public sealed record CrmUserDirectoryItem(Guid Id,string DisplayName,string UserName);
+public sealed record CrmUserDirectoryPage(int Total,int Page,int PageSize,CrmUserDirectoryItem[] Items);
 public sealed class AuthReferenceService(HttpClient http, IConfiguration configuration) : IAuthReferenceService
 {
+    public async Task<CrmUserDirectoryPage> GetDirectoryAsync(int page,int pageSize,string? search,CancellationToken ct)
+    {
+        var address=configuration["Auth:Client:BaseAddress"];
+        var key=configuration["Auth:Client:InternalServiceKey"];
+        if(string.IsNullOrWhiteSpace(address)||string.IsNullOrWhiteSpace(key))
+            throw new InvalidOperationException("Auth service lookup is not configured.");
+        var uri=address.TrimEnd('/')+"/api/internal/auth/crm-users/directory?page="+page+
+            "&pageSize="+pageSize+"&search="+Uri.EscapeDataString(search??"");
+        using var request=new HttpRequestMessage(HttpMethod.Get,uri);
+        request.Headers.TryAddWithoutValidation("X-Dhole-Service-Key",key);
+        using var timeout=CancellationTokenSource.CreateLinkedTokenSource(ct);
+        timeout.CancelAfter(TimeSpan.FromSeconds(5));
+        using var response=await http.SendAsync(request,timeout.Token);
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<CrmUserDirectoryPage>(cancellationToken:timeout.Token)
+            ?? throw new InvalidOperationException("Empty Auth directory response.");
+    }
+
 
     public async Task<AuthUserReference?> GetActiveByUsernameAsync(string username, CancellationToken ct)
     {
