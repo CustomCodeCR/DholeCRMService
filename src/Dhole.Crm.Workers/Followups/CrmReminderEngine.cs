@@ -9,6 +9,7 @@ namespace Dhole.Crm.Workers.Followups;
 // Every generated occurrence and reminder has a unique durable identity.
 public static class CrmReminderEngine
 {
+    public const string PeriodicFollowupSubject = "Seguimiento periódico";
     public static async Task<bool> Acquire(CrmDbContext db,long key,CancellationToken ct) =>
         await db.Database.SqlQuery<bool>(
             $"SELECT pg_try_advisory_xact_lock({key}) AS \"Value\"").SingleAsync(ct);
@@ -31,6 +32,7 @@ public static class CrmReminderEngine
             {
                 var followup=new Followup {AccountId=p.AccountId,PolicyId=p.Id,
                     PolicyOccurrenceAt=due,AssignedUserId=p.OwnerUserId,
+                    Subject=PeriodicFollowupSubject,
                     Channel=p.ChannelStrategy=="EMAIL"?"EMAIL":"SYSTEM",DueAt=due,
                     CreatedByUserId=p.CreatedByUserId};
                 db.Followups.Add(followup);
