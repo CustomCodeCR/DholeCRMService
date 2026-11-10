@@ -129,7 +129,24 @@ internal static class CrmFollowupEndpoints
             .FirstOrDefaultAsync(x=>x.Id==id && x.ArchivedAt==null,ct);
         if(followup is null)return Results.NotFound();
         if(!await HasAccess(followup,db,h,ct))return CrmAccess.Denied();
-        if(!CrmDataEndpoints.HasRead(h,"activity"))return Results.Ok(new{activityId=(Guid?)null});
+        // Policy-generated followups have no Activity. Return their authorized
+        // account policy context instead of presenting them as unexplained UUIDs.
+        // These values describe the current policy, not a historical snapshot.
+        if(followup.PolicyId is { } policyId)
+        {
+            var policy=await db.AccountFollowupPolicies.AsNoTracking()
+                .Where(p=>p.Id==policyId && p.AccountId==followup.AccountId)
+                .Select(p=>new {
+                    p.FrequencyDays,p.TimezoneId,p.ChannelStrategy,
+                    p.ReminderLeadMinutes,p.Enabled,p.PausedUntil,p.NextDueAt
+                }).FirstOrDefaultAsync(ct);
+            return Results.Ok(new {
+                activityId=(Guid?)null,sourceType="POLICY",
+                policyOccurrenceAt=followup.PolicyOccurrenceAt,policy
+            });
+        }
+        if(!CrmDataEndpoints.HasRead(h,"activity"))
+            return Results.Ok(new{activityId=(Guid?)null,sourceType="UNAVAILABLE"});
         var origins=await db.FollowupHistories.AsNoTracking()
             .Where(x=>x.FollowupId==id && x.Action=="Created")
             .Select(x=>x.Reason).ToListAsync(ct);
@@ -153,14 +170,14 @@ internal static class CrmFollowupEndpoints
                 if(parentId.HasValue)break;
             }
         }
-        if(!parentId.HasValue)return Results.Ok(new{activityId=(Guid?)null});
+        if(!parentId.HasValue)return Results.Ok(new{activityId=(Guid?)null,sourceType="MANUAL"});
         var activity=await db.Activities.AsNoTracking()
             .FirstOrDefaultAsync(x=>x.Id==parentId.Value && x.ArchivedAt==null,ct);
         if(activity is null || !CommercialAccess.ActivityOwns(h,activity) ||
             (activity.AccountId.HasValue &&
              !await CrmAccess.CanSeeAccount(db,h,activity.AccountId.Value,ct)))
             return Results.Ok(new{activityId=(Guid?)null});
-        return Results.Ok(new{activityId=(Guid?)activity.Id,activitySubject=activity.Subject});
+        return Results.Ok(new{activityId=(Guid?)activity.Id,activitySubject=activity.Subject,sourceType="ACTIVITY"});
     }
 
     private static async Task<IResult> Create(FollowupCreateRequest r,CrmDbContext db,HttpContext h,
