@@ -46,22 +46,32 @@ internal static class CommercialActivityEndpoints
         g.MapPost("/activities/{id:guid}/participants",AddParticipant);
         return g;
     }
-    private static bool CanRead(HttpContext h)=>CrmDataEndpoints.HasRead(h,"activity");
+    private static bool CanRead(HttpContext h)=>CrmDataEndpoints.HasRead(h,"activity") || CrmAccess.IsCalendarAdministrator(h);
     private static async Task<Activity?> FindAllowed(Guid id,CrmDbContext db,HttpContext h,CancellationToken ct)
     {
         var a=await db.Activities.FirstOrDefaultAsync(x=>x.Id==id&&x.ArchivedAt==null,ct);
         return a is not null && CommercialAccess.ActivityOwns(h,a) &&
             (!a.AccountId.HasValue || await CrmAccess.CanSeeAccount(db,h,a.AccountId.Value,ct)) ? a : null;
     }
+    // Separate read access from the existing owner-scoped mutation path.
+    private static async Task<Activity?> FindCalendarReadable(Guid id,CrmDbContext db,HttpContext h,CancellationToken ct)
+    {
+        var activity=await db.Activities.AsNoTracking()
+            .FirstOrDefaultAsync(x=>x.Id==id && x.ArchivedAt==null,ct);
+        return activity is not null &&
+            (CommercialAccess.ActivityOwns(h,activity)||CrmAccess.IsCalendarAdministrator(h)) &&
+            (!activity.AccountId.HasValue || await CrmAccess.CanSeeCalendarAccount(db,h,activity.AccountId.Value,ct))
+            ? activity : null;
+    }
     private static async Task<IResult> List(CrmDbContext db,HttpContext h,
         Guid? accountId,Guid? leadId,Guid? opportunityId,string? type,string? status,
         DateTime? from,DateTime? to,int? page,int? pageSize,CancellationToken ct)
     {
         if(!CanRead(h))return CrmAccess.Denied();
-        var visibleAccounts=CrmAccess.VisibleAccounts(db,h).Select(a=>a.Id);
+        var visibleAccounts=CrmAccess.CalendarVisibleAccounts(db,h).Select(a=>a.Id);
         var query=db.Activities.AsNoTracking().Where(x=>x.ArchivedAt==null &&
             (!x.AccountId.HasValue || visibleAccounts.Contains(x.AccountId.Value)));
-        if(!CrmAccess.Scope(h,"crm.activity.read-all"))
+        if(!CrmAccess.Scope(h,"crm.activity.read-all") && !CrmAccess.IsCalendarAdministrator(h))
             query=query.Where(x=>x.OwnerUserId==CrmAccess.UserId(h));
         if(accountId is { } a)query=query.Where(x=>x.AccountId==a);
         if(leadId is { } l)query=query.Where(x=>x.LeadId==l);
@@ -79,7 +89,7 @@ internal static class CommercialActivityEndpoints
     private static async Task<IResult> Get(Guid id,CrmDbContext db,HttpContext h,CancellationToken ct)
     {
         if(!CanRead(h))return CrmAccess.Denied();
-        var a=await FindAllowed(id,db,h,ct);
+        var a=await FindCalendarReadable(id,db,h,ct);
         return a is null?Results.NotFound():Results.Ok(a);
     }
     private static async Task<IResult> Create(ActivityCreateRequest r,CrmDbContext db,HttpContext h,
@@ -304,7 +314,7 @@ internal static class CommercialActivityEndpoints
     private static async Task<IResult> Commitments(Guid id,CrmDbContext db,HttpContext h,CancellationToken ct)
     {
         if(!CanRead(h))return CrmAccess.Denied();
-        var activity=await FindAllowed(id,db,h,ct);
+        var activity=await FindCalendarReadable(id,db,h,ct);
         if(activity is null)return Results.NotFound();
         var noteIds=await db.ActivityNotes.AsNoTracking()
             .Where(x=>x.ActivityId==id).Select(x=>x.Id).ToListAsync(ct);
@@ -326,7 +336,7 @@ internal static class CommercialActivityEndpoints
 
     private static async Task<IResult> Notes(Guid id,CrmDbContext db,HttpContext h,CancellationToken ct)
     {
-        if(!CanRead(h)||await FindAllowed(id,db,h,ct) is null)return CrmAccess.Denied();
+        if(!CanRead(h)||await FindCalendarReadable(id,db,h,ct) is null)return CrmAccess.Denied();
         return Results.Ok(await db.ActivityNotes.AsNoTracking().Where(x=>x.ActivityId==id)
             .OrderBy(x=>x.CreatedAt).ToListAsync(ct));
     }
@@ -431,7 +441,7 @@ internal static class CommercialActivityEndpoints
 
     private static async Task<IResult> Participants(Guid id,CrmDbContext db,HttpContext h,CancellationToken ct)
     {
-        if(!CanRead(h)||await FindAllowed(id,db,h,ct) is null)return CrmAccess.Denied();
+        if(!CanRead(h)||await FindCalendarReadable(id,db,h,ct) is null)return CrmAccess.Denied();
         return Results.Ok(await db.ActivityParticipants.AsNoTracking().Where(x=>x.ActivityId==id)
             .OrderBy(x=>x.CreatedAt).ToListAsync(ct));
     }
