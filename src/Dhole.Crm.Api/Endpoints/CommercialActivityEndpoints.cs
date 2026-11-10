@@ -335,31 +335,6 @@ internal static class CommercialActivityEndpoints
         return result is Microsoft.AspNetCore.Http.HttpResults.Ok?Results.Ok(a):result;
     }
 
-    // A dated agreement remains a Followup. Reconstruct the relation from the
-    // original creation history so historical records need no data migration.
-    private static async Task<IResult> Commitments(Guid id,CrmDbContext db,HttpContext h,CancellationToken ct)
-    {
-        if(!CanRead(h))return CrmAccess.Denied();
-        var activity=await FindCalendarReadable(id,db,h,ct);
-        if(activity is null)return Results.NotFound();
-        var noteIds=await db.ActivityNotes.AsNoTracking()
-            .Where(x=>x.ActivityId==id).Select(x=>x.Id).ToListAsync(ct);
-        var origins=new List<string>{"Acuerdo registrado en actividad comercial "+id};
-        origins.AddRange(noteIds.Select(noteId=>"Acuerdo de observación "+noteId));
-        var followupIds=db.FollowupHistories.AsNoTracking()
-            .Where(x=>x.Action=="Created" && x.Reason!=null && origins.Contains(x.Reason))
-            .Select(x=>x.FollowupId);
-        var commitments=await db.Followups.AsNoTracking()
-            .Where(x=>followupIds.Contains(x.Id) && x.ArchivedAt==null &&
-                x.AccountId==activity.AccountId && x.LeadId==activity.LeadId &&
-                x.OpportunityId==activity.OpportunityId &&
-                x.AssignedUserId==activity.OwnerUserId)
-            .OrderBy(x=>x.DueAt).ThenBy(x=>x.Id)
-            .Select(x=>new{x.Id,x.Subject,x.Status,x.DueAt,x.Channel,x.RowVersion})
-            .ToListAsync(ct);
-        return Results.Ok(commitments);
-    }
-
     private static async Task<IResult> Notes(Guid id,CrmDbContext db,HttpContext h,CancellationToken ct)
     {
         if(!CanRead(h)||await FindCalendarReadable(id,db,h,ct) is null)return CrmAccess.Denied();
@@ -468,7 +443,7 @@ internal static class CommercialActivityEndpoints
     private static async Task<IResult> Commitments(Guid id,CrmDbContext db,HttpContext h,CancellationToken ct)
     {
         if(!CanRead(h)) return CrmAccess.Denied();
-        if(await FindAllowed(id,db,h,ct) is null) return Results.NotFound();
+        if(await FindCalendarReadable(id,db,h,ct) is null) return Results.NotFound();
         // Include pre-migration commitments: their creation history already
         // stores the originating activity or agreement-note identifier.
         var noteIds=await db.ActivityNotes.AsNoTracking()
