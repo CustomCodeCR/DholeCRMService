@@ -87,6 +87,23 @@ public static class CrmDataEndpoints
         }
     }
 
+    internal static async Task<IResult> CommitLead(CrmDbContext db, Dhole.Crm.Domain.Lead lead,
+        HttpContext http, IConfiguration flags, CancellationToken ct)
+    {
+        try
+        {
+            await CrmLeadRealtimeCommit.PersistAsync(db, lead, flags, http.TraceIdentifier, ct);
+            return Results.Ok();
+        }
+        catch (DbUpdateConcurrencyException) { return Conflict("Record modified concurrently"); }
+        catch (DbUpdateException) { return Conflict("Conflicting or invalid prospect"); }
+        catch (Npgsql.NpgsqlException)
+        {
+            return Results.Problem(statusCode: 503,
+                title: "CRM realtime persistence unavailable");
+        }
+    }
+
     internal static async Task<IResult> Commit(CrmDbContext db, CancellationToken ct)
     {
         try { await db.SaveChangesAsync(ct); return Results.Ok(); }

@@ -60,6 +60,8 @@ public static class CrmAccountRealtimeCommit
             payload = new { changedFields = new[] { "account" }, aggregateVersion = account.RowVersion }
         });
         await CrmRealtimeOutboxWriter.AppendAsync(db, eventId, envelope, ct);
+        await CrmRealtimeCollectionInvalidation.AppendAsync(db,
+            CrmRealtimeCollectionInvalidation.AccountKind, correlationId, ct);
         await tx.CommitAsync(ct);
     }
 }
