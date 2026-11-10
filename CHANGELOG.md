@@ -1,3 +1,7 @@
+## [1.7.4] - 2026-11-10
+- PATCH DH-20261110-CRM-ACTIVITY-FULL-DETAIL-066: API de solo lectura para recuperar los compromisos creados desde actividades y la actividad principal de cada seguimiento derivado. Reconstrucción de vínculos mediante historial histórico existente, sin migraciones ni pérdida de datos.
+- Respeta autorización CRM por propietario, cuenta y actividad. Endpoints GET /activities/{id}/commitments y GET /followups/{id}/parent-activity; versiones DholeWeb/DholeSystem 1.17.11; pendientes CI y staging.
+
 ## [1.7.3] - 2026-11-10
 - PATCH DH-20261110-CRM-ACCOUNT-SEARCH-064: GET /api/crm/accounts busca por nombre comercial, razón social, cédula o identificación fiscal parcial y completa, con y sin guiones, puntos o espacios.
 - Se respeta la autorización original, los filtros y la paginación SQL. Incluye registros históricos sin identificación normalizada, sin migraciones ni cambios a SignalR/REST. Ecosistema 1.17.9, candidato pendiente de CI/staging; sin autorización de producción.
