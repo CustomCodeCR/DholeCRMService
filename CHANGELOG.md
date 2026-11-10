@@ -1,3 +1,8 @@
+## [1.8.0] - 2026-11-10
+
+- MINOR DH-20261110-CRM-ADMIN-CALENDAR-069: permite a administradores activos consultar todas las agendas de CRM y los seguimientos automáticos, con detalles históricos y directorio filtrado por Auth. Lectura ampliada con roles vigentes, sin alterar autorización de escritura.
+- Conserva íntegramente CRM 1.7.6 de rutas y cotizaciones comerciales de prospectos; Auth 1.6.0, Web/System 1.18.0. CI y staging pendientes.
+
 ## [1.7.6] - 2026-11-10
 
 - DH-20261110-CRM-PROSPECT-ROUTES-QUOTES-069: normalización UPPER CASE de nombres de prospectos en creación y edición, endpoints autorizados de oportunidades y cotizaciones vinculadas al prospecto.
