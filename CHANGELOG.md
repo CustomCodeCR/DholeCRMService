@@ -1,3 +1,7 @@
+## [1.7.3] - 2026-11-10
+- PATCH DH-20261110-CRM-ACCOUNT-SEARCH-061: buscar cuentas CRM por nombre comercial, razon social o cedula (TaxId/NormalizedTaxId), incluso con guiones, puntos o espacios, manteniendo filtros, autorizacion y paginacion SQL.
+- Contrato GET /api/crm/accounts permanece compatible, sin cambios de base de datos ni de realtime; ecosistema candidato 1.17.5.
+
 ## [1.7.2] - 2026-11-09
 - PATCH: add authenticated read-scope GET /api/crm/accounts/realtime-access and /api/crm/leads/realtime-access. REST endpoints return no customer or lead fields.
 - Durable transactional accountlist/leadlist invalidations for accounts and lead create/update/assign/archive/convert via existing CRM outbox and NotificationsHub, no new hub. Staging Compose sourced from DholeSystem/develop.
