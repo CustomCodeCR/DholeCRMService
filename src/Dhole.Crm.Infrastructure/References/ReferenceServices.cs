@@ -10,7 +10,7 @@ public interface IAuthReferenceService
     Task<AuthUserReference?> GetActiveAsync(Guid userId, CancellationToken ct);
     Task<AuthUserReference?> GetActiveByUsernameAsync(string username, CancellationToken ct) => Task.FromResult<AuthUserReference?>(null);
 }
-public sealed record AuthUserReference(Guid Id, bool Active, string[] Scopes, string? Email = null, string? DisplayName = null);
+public sealed record AuthUserReference(Guid Id, bool Active, string[] Scopes, string? Email = null, string? DisplayName = null, string[]? Roles = null);
 public sealed class AuthReferenceService(HttpClient http, IConfiguration configuration) : IAuthReferenceService
 {
 
