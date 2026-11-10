@@ -2,8 +2,8 @@
   "schemaVersion": 1,
   "ecosystem": "Dhole",
   "component": "DholeCRMService",
-  "version": "1.4.0",
-  "ecosystemVersion": "1.15.0",
-  "releaseId": "DH-20261109-CRM-CLIENT-QUOTES-053",
+  "version": "1.4.1",
+  "ecosystemVersion": "1.17.9",
+  "releaseId": "DH-20261110-CRM-ACCOUNT-SEARCH-064",
   "releaseStatus": "candidate-master-staging-pending"
 }
