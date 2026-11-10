@@ -1,3 +1,8 @@
+## [1.8.0] - 2026-11-10
+
+- MINOR DH-20261110-CRM-ADMIN-CALENDAR-069: los administradores activos de Auth pueden consultar agendas, actividades, seguimientos, etiquetas y usuarios de todas las agendas CRM; vendedores conservan su aislamiento. El detalle de seguimientos periódicos muestra un título real y datos de la política existente, manteniendo minutas y acuerdos históricos cuando los hay.
+- La autorización de lectura está validada desde Auth; crear, completar, cancelar y reprogramar mantienen permisos de escritura existentes. Componentes coordinados: Auth 1.6.0, CRM 1.8.0, Web 1.18.0, System 1.18.0. Staging/CI pendientes, producción no desplegada.
+
 ## [1.7.5] - 2026-11-10
 
 - PATCH DH-20261110-PRICING-CRM-REQUEST-IDENTITY-067: el selector autorizado de cuentas y prospectos permite resolver selectedClientId desde solicitudes existentes, sin perder filtros de permisos por cuenta, prospecto o vendedor y sin paginar fuera de su alcance. Release global Dhole 1.17.12, CI y staging pendientes.
