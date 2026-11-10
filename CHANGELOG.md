@@ -1,3 +1,7 @@
+## [1.4.1] - 2026-11-10
+- PATCH DH-20261110-CRM-ACCOUNT-SEARCH-064: GET /api/crm/accounts busca por nombre comercial, razón social, cédula o identificación fiscal parcial y completa, con y sin guiones, puntos o espacios.
+- Se respeta la autorización original, los filtros y la paginación SQL. Incluye registros históricos sin identificación normalizada, sin migraciones ni cambios a SignalR/REST. Ecosistema 1.17.9, candidato pendiente de CI/staging; sin autorización de producción.
+
 ## [1.4.0] - 2026-11-09
 - Búsqueda autorizada de cuentas y prospectos desde solicitudes de Pricing y asignación comercial según CRM.
 
