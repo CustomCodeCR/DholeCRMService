@@ -3,6 +3,12 @@
 
 # Changelog
 
+## [1.7.1] - 2026-11-09
+
+- PATCH: transactional CRM account and lead list invalidations and per-lead events through existing PostgreSQL realtime outbox on create/update/assign/archive/convert. Events are metadata-only; owner REST continues enforcing account/prospect visibility.
+- Authorized read-only ACL checks for both CRM lists. Staging workflow loads DholeSystem/develop. Ecosystem 1.15.2, no master/production changes.
+
+
 ## [1.6.0] - 2026-11-09 (NotificationsHub universal realtime pilot; candidate)
 
 - MINOR: retain domain Outbox/REST producer and scoped access under the existing NotificationsHub delivery model; CustomCodeFramework untouched.

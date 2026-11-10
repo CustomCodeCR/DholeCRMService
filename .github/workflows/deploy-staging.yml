@@ -31,7 +31,7 @@ jobs:
           rm -rf .dhole-system
           cloned=0
           for attempt in 1 2 3 4 5; do
-            if git clone --depth 1 --branch master https://github.com/CustomCodeCR/DholeSystem.git .dhole-system; then
+            if git clone --depth 1 --branch develop https://github.com/CustomCodeCR/DholeSystem.git .dhole-system; then
               cloned=1
               break
             fi
@@ -40,7 +40,7 @@ jobs:
             if [ "$attempt" -lt 5 ]; then sleep $((attempt * 5)); fi
           done
           if [ "$cloned" -ne 1 ]; then
-            echo "::error::Unable to load DholeSystem from master"
+            echo "::error::Unable to load DholeSystem from develop"
             exit 1
           fi
           mkdir -p "$RUNNER_TEMP/dhole-env"

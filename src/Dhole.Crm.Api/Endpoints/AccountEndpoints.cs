@@ -26,6 +26,8 @@ internal static class AccountEndpoints
     public static RouteGroupBuilder MapAccounts(this RouteGroupBuilder group)
     {
         group.MapGet("/accounts", List);
+        group.MapGet("/accounts/realtime-access", (HttpContext http) =>
+            CrmDataEndpoints.HasRead(http, "account") ? Results.Ok() : CrmAccess.Denied());
         group.MapGet("/accounts/filter-options", AccountFilterOptions);
         group.MapGet("/accounts/{id:guid}", Get);
         group.MapGet("/accounts/{id:guid}/change-history", ChangeHistory);
