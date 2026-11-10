@@ -2,8 +2,9 @@
   "schemaVersion": 1,
   "ecosystem": "Dhole",
   "component": "DholeCRMService",
-  "version": "1.7.5",
-  "ecosystemVersion": "1.17.12",
-  "releaseId": "DH-20261110-PRICING-CRM-REQUEST-IDENTITY-067",
-  "releaseStatus": "candidate-develop-ci-staging-pending"
+  "version": "1.8.0",
+  "ecosystemVersion": "1.18.0",
+  "releaseId": "DH-20261110-CRM-ADMIN-CALENDAR-069",
+  "releaseStatus": "candidate-develop-ci-staging-pending",
+  "businessReleaseId": "DH-20261110-CRM-ADMIN-CALENDAR-069"
 }
