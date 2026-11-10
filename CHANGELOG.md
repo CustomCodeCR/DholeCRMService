@@ -1,3 +1,8 @@
+## [1.5.0] - 2026-11-10
+
+- MINOR DH-20261110-CRM-ADMIN-CALENDAR-069: administradores pueden leer todas las agendas de CRM, incluidos seguimientos periódicos e historial, con roles activos validados por Auth. Nuevos directorio y filtros; no se amplía la autorización de escritura.
+- Coordinado con Auth 1.3.0, Web 1.18.0, System 1.18.0; CI y staging pendientes.
+
 ## [1.4.3] - 2026-11-10
 
 - PATCH DH-20261110-CRM-ACTIVITY-FULL-DETAIL-068: añade endpoints autorizados de solo lectura para consultar acuerdos generados por actividades y reconstruir su actividad principal desde el historial CRM. Traslada la implementación probada en develop, conservando los arreglos recientes de identidad comercial.
