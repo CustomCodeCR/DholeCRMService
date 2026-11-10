@@ -21,6 +21,8 @@ public sealed partial class CrmDbContext
             e.HasOne<Lead>().WithMany().HasForeignKey(x=>x.LeadId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne<Opportunity>().WithMany().HasForeignKey(x=>x.OpportunityId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne<AccountFollowupPolicy>().WithMany().HasForeignKey(x=>x.PolicyId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne<Activity>().WithMany().HasForeignKey(x=>x.OriginActivityId).OnDelete(DeleteBehavior.Restrict);
+            e.HasIndex(x=>x.OriginActivityId);
             e.Property(x=>x.Channel).HasMaxLength(12);
             e.Property(x=>x.Subject).HasMaxLength(250);
             e.Property(x=>x.ReminderChannelStrategy).HasMaxLength(12);
