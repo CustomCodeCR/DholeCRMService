@@ -15,7 +15,19 @@ internal static class CrmCalendarLabelsEndpoints
     public static RouteGroupBuilder MapCalendarLabels(this RouteGroupBuilder group)
     {
         group.MapGet("/calendar/labels", Get);
+        group.MapGet("/calendar/users", GetUserDirectory);
         return group;
+    }
+
+    private static async Task<IResult> GetUserDirectory(int? page,int? pageSize,string? search,
+        HttpContext http,IAuthReferenceService auth,CancellationToken ct)
+    {
+        if(!CrmAccess.IsCalendarAdministrator(http))return CrmAccess.Denied();
+        if(search?.Length>100)return Results.BadRequest(new{error="Search too long"});
+        var n=Math.Max(1,page??1);
+        var size=Math.Clamp(pageSize??100,1,100);
+        var result=await auth.GetDirectoryAsync(n,size,search,ct);
+        return Results.Ok(result);
     }
 
     private static Guid[] Parse(string? values)
@@ -33,7 +45,8 @@ internal static class CrmCalendarLabelsEndpoints
         if(!CrmDataEndpoints.HasRead(http,"activity") &&
            !CrmAccess.Scope(http,"crm.task.manage") &&
            !CrmAccess.Scope(http,"crm.followup.manage") &&
-           !CrmAccess.Scope(http,"crm.activity.read-all"))
+           !CrmAccess.Scope(http,"crm.activity.read-all") &&
+           !CrmAccess.IsCalendarAdministrator(http))
             return CrmAccess.Denied();
         Guid[] wantedAccounts,wantedLeads,wantedOwners;
         try
@@ -44,12 +57,12 @@ internal static class CrmCalendarLabelsEndpoints
         }
         catch(ArgumentException){return Results.BadRequest(new{error="Invalid calendar label IDs"});}
 
-        var accounts=await CrmAccess.VisibleAccounts(db,http).AsNoTracking()
+        var accounts=await CrmAccess.CalendarVisibleAccounts(db,http).AsNoTracking()
             .Where(a=>wantedAccounts.Contains(a.Id))
             .Select(a=>new{a.Id,a.DisplayName,a.LegalName})
             .ToListAsync(ct);
         var actor=CrmAccess.UserId(http);
-        var leadAccess=CrmAccess.Scope(http,"crm.lead.read-all");
+        var leadAccess=CrmAccess.Scope(http,"crm.lead.read-all") || CrmAccess.IsCalendarAdministrator(http);
         var leads=await db.Leads.AsNoTracking()
             .Where(l=>wantedLeads.Contains(l.Id)&&l.ArchivedAt==null &&
                 (leadAccess||l.ExecutiveUserId==actor))
@@ -58,9 +71,9 @@ internal static class CrmCalendarLabelsEndpoints
         var validAccounts=accounts.Select(a=>a.Id).ToArray();
         var validLeads=leads.Select(l=>l.Id).ToArray();
         // Resolve only owners who have an event linked to a visible client/lead.
-        var allActivities=CrmAccess.Scope(http,"crm.activity.read-all");
-        var allAccounts=CrmAccess.Scope(http,"crm.account.read-all");
-        var allLeads=CrmAccess.Scope(http,"crm.lead.read-all");
+        var allActivities=CrmAccess.Scope(http,"crm.activity.read-all") || CrmAccess.IsCalendarAdministrator(http);
+        var allAccounts=CrmAccess.Scope(http,"crm.account.read-all") || CrmAccess.IsCalendarAdministrator(http);
+        var allLeads=CrmAccess.Scope(http,"crm.lead.read-all") || CrmAccess.IsCalendarAdministrator(http);
         var ownersFromActivities=await db.Activities.AsNoTracking()
             .Where(a=>a.ArchivedAt==null && wantedOwners.Contains(a.OwnerUserId) &&
                 ((a.AccountId.HasValue&&validAccounts.Contains(a.AccountId.Value))||
