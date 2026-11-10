@@ -28,6 +28,18 @@ public sealed class CrmCommercialRulesTests
         Assert.IsTrue(CommercialRules.ValidClose(false,true,"PRICE"));
     }
     [TestMethod]
+    public void Historical_activities_can_be_registered_without_retroactive_reminders()
+    {
+        var now=new DateTime(2026,11,10,20,0,0,DateTimeKind.Utc);
+        var start=now.AddDays(-5);
+        var end=start.AddHours(1);
+        Assert.IsTrue(CommercialRules.ValidActivitySchedule(start,end));
+        Assert.IsTrue(CommercialRules.IsHistoricalActivity(end,now));
+        Assert.IsFalse(CommercialRules.IsHistoricalActivity(now.AddHours(1),now));
+        Assert.IsFalse(CommercialRules.IsHistoricalActivity(null,now));
+        Assert.IsFalse(CommercialRules.ValidActivitySchedule(end,start));
+    }
+    [TestMethod]
     public void Activity_schedule_must_be_UTC_and_ordered()
     {
         var start=new DateTime(2026,10,14,20,0,0,DateTimeKind.Utc);
