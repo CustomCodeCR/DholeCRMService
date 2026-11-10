@@ -96,7 +96,7 @@ internal static class CrmFollowupEndpoints
         return result is Microsoft.AspNetCore.Http.HttpResults.Ok?Results.Ok(p):result;
     }
     private static async Task<IResult> List(CrmDbContext db,HttpContext h,Guid? accountId,Guid? leadId,string? status,
-        DateTime? from,DateTime? to,int? page,int? pageSize,CancellationToken ct)
+        DateTime? from,DateTime? to,Guid? ownerId,int? page,int? pageSize,CancellationToken ct)
     {
         if(!CanReadCalendar(h))return CrmAccess.Denied();
         var visibleAccountIds = CrmAccess.CalendarVisibleAccounts(db,h).Select(a=>a.Id);
@@ -111,6 +111,12 @@ internal static class CrmFollowupEndpoints
                 (accounts && x.AccountId!=null) ||
                 (leads && x.LeadId!=null) ||
                 (opportunities && x.OpportunityId!=null));
+        if(ownerId.HasValue)
+        {
+            if(ownerId.Value!=actor && !CrmAccess.IsCalendarAdministrator(h) &&
+                !accounts && !leads && !opportunities)return CrmAccess.Denied();
+            query=query.Where(x=>x.AssignedUserId==ownerId.Value);
+        }
         if(accountId.HasValue)query=query.Where(x=>x.AccountId==accountId);
         // Prospect calendars only request tasks linked to that lead.
         if(leadId.HasValue)query=query.Where(x=>x.LeadId==leadId);
