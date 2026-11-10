@@ -19,6 +19,22 @@ internal static class CrmAccess
         var scopes = http.Items["crm.effective-scopes"] as HashSet<string>;
         return scopes?.Contains(scope) == true;
     }
+    // Role names are from the internal Auth active-user lookup, not from client
+    // headers or unrefreshed JWT role claims. This grant is CALENDAR READ ONLY.
+    private static readonly HashSet<string> CalendarAdministratorRoles = new(
+        ["Administrador","Administrator","Admin","SuperUsuario","SuperUser","SuperAdmin","SuperAdministrador"],
+        StringComparer.OrdinalIgnoreCase);
+    public static bool IsCalendarAdministrator(HttpContext http) =>
+        http.Items["crm.active-roles"] is HashSet<string> roles &&
+        roles.Overlaps(CalendarAdministratorRoles);
+
+    public static IQueryable<Account> CalendarVisibleAccounts(CrmDbContext db,HttpContext http) =>
+        IsCalendarAdministrator(http)
+            ? db.Accounts.Where(a=>a.ArchivedAt==null)
+            : VisibleAccounts(db,http);
+    public static Task<bool> CanSeeCalendarAccount(CrmDbContext db,HttpContext http,Guid id,CancellationToken ct) =>
+        CalendarVisibleAccounts(db,http).AnyAsync(a=>a.Id==id,ct);
+
     // The assigned Auth user of a house account is operational, not an access grant.
     // Never infer permission from the institutional account's ExecutiveUserId.
     public static IQueryable<Account> VisibleAccounts(CrmDbContext db, HttpContext http)
@@ -52,6 +68,8 @@ internal static class CrmAccess
             var active = await auth.GetActiveAsync(id, http.RequestAborted);
             if (active is null) return Results.Unauthorized();
             http.Items["crm.effective-scopes"] = new HashSet<string>(active.Scopes ?? [],
+                StringComparer.OrdinalIgnoreCase);
+            http.Items["crm.active-roles"] = new HashSet<string>(active.Roles ?? [],
                 StringComparer.OrdinalIgnoreCase);
         }
         catch (Exception) when (!http.RequestAborted.IsCancellationRequested)
