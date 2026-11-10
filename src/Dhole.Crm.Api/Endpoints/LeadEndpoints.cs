@@ -82,7 +82,7 @@ internal static class LeadEndpoints
             return CrmDataEndpoints.Bad("Unknown country");
         if (await auth.GetActiveAsync(executiveId, ct) is null)
             return CrmDataEndpoints.Bad("Unknown or inactive executive");
-        var lead = new Lead { Name = request.Name.Trim(), CompanyName = request.CompanyName?.Trim(),
+        var lead = new Lead { Name = request.Name.Trim().ToUpperInvariant(), CompanyName = request.CompanyName?.Trim().ToUpperInvariant(),
             CountryId = request.CountryId, TaxId = request.TaxId?.Trim(),
             SourceCode = request.SourceCode?.Trim(), RelationshipTypeCode = request.RelationshipTypeCode?.Trim(),
             ExecutiveUserId = executiveId, ContactEmail = request.ContactEmail?.Trim(),
@@ -105,8 +105,8 @@ internal static class LeadEndpoints
         if (string.IsNullOrWhiteSpace(request.Name) || request.Name.Length > 220 ||
             !CrmDataEndpoints.IsEmailValid(request.ContactEmail))
             return CrmDataEndpoints.Bad("Invalid lead");
-        lead.Name = request.Name.Trim();
-        lead.CompanyName = request.CompanyName?.Trim();
+        lead.Name = request.Name.Trim().ToUpperInvariant();
+        lead.CompanyName = request.CompanyName?.Trim().ToUpperInvariant();
         lead.SourceCode = request.SourceCode?.Trim();
         lead.RelationshipTypeCode = request.RelationshipTypeCode?.Trim();
         lead.QualificationStatus = request.QualificationStatus;
