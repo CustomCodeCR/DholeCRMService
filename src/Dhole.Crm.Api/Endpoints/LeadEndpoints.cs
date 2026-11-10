@@ -1,6 +1,7 @@
 using Dhole.Crm.Domain;
 using Dhole.Crm.Infrastructure.Persistence;
 using Dhole.Crm.Infrastructure.References;
+using Dhole.Crm.Infrastructure.Realtime;
 using Microsoft.EntityFrameworkCore;
 
 namespace Dhole.Crm.Api.Endpoints;
@@ -19,6 +20,8 @@ internal static class LeadEndpoints
     public static RouteGroupBuilder MapLeads(this RouteGroupBuilder group)
     {
         group.MapGet("/leads", List);
+        group.MapGet("/leads/realtime-access", (HttpContext http) =>
+            CrmDataEndpoints.HasRead(http, "lead") ? Results.Ok() : CrmAccess.Denied());
         group.MapGet("/leads/{id:guid}", Get);
         group.MapPost("/leads", Create);
         group.MapPatch("/leads/{id:guid}", Patch);
@@ -28,6 +31,19 @@ internal static class LeadEndpoints
 
         return group;
     }
+    private static async Task<IResult> CommitLeadAsync(CrmDbContext db, HttpContext http,
+        CancellationToken ct)
+    {
+        try
+        {
+            await CrmCollectionRealtimeCommit.SaveLeadAsync(db,
+                http.RequestServices.GetRequiredService<IConfiguration>(), http.TraceIdentifier, ct);
+            return Results.Ok();
+        }
+        catch (DbUpdateConcurrencyException) { return CrmDataEndpoints.Conflict("Record modified concurrently"); }
+        catch (DbUpdateException) { return CrmDataEndpoints.Conflict("Conflicting or invalid CRM record"); }
+    }
+
     private static async Task<IResult> List(CrmDbContext db, HttpContext http,
         string? q, int? page, int? pageSize, CancellationToken ct)
     {
@@ -72,7 +88,8 @@ internal static class LeadEndpoints
             ExecutiveUserId = executiveId, ContactEmail = request.ContactEmail?.Trim(),
             Phone = request.Phone?.Trim(), CreatedByUserId = owner };
         db.Leads.Add(lead);
-        await db.SaveChangesAsync(ct);
+        await CrmCollectionRealtimeCommit.SaveLeadAsync(db,
+            http.RequestServices.GetRequiredService<IConfiguration>(), http.TraceIdentifier, ct);
         return Results.Created("/api/crm/leads/" + lead.Id, lead);
     }
     private static async Task<IResult> Patch(Guid id, PatchLeadRequest request, CrmDbContext db,
@@ -98,7 +115,7 @@ internal static class LeadEndpoints
         lead.UpdatedAt = DateTime.UtcNow;
         lead.UpdatedByUserId = CrmAccess.UserId(http);
         lead.RowVersion++;
-        var committed = await CrmDataEndpoints.Commit(db, ct);
+        var committed = await CommitLeadAsync(db, http, ct);
         return committed is Microsoft.AspNetCore.Http.HttpResults.Ok ? Results.Ok(lead) : committed;
     }
     private static async Task<IResult> Assign(Guid id, AssignLeadRequest request, CrmDbContext db, HttpContext http,
@@ -115,7 +132,7 @@ internal static class LeadEndpoints
         lead.UpdatedAt = DateTime.UtcNow;
         lead.UpdatedByUserId = CrmAccess.UserId(http);
         lead.RowVersion++;
-        var committed = await CrmDataEndpoints.Commit(db, ct);
+        var committed = await CommitLeadAsync(db, http, ct);
         return committed is Microsoft.AspNetCore.Http.HttpResults.Ok ? Results.Ok(lead) : committed;
     }
     private static async Task<IResult> Archive(Guid id, ArchiveAccountRequest request, CrmDbContext db, HttpContext http,
@@ -134,7 +151,7 @@ internal static class LeadEndpoints
         lead.UpdatedAt = DateTime.UtcNow;
         lead.UpdatedByUserId = CrmAccess.UserId(http);
         lead.RowVersion++;
-        var committed = await CrmDataEndpoints.Commit(db, ct);
+        var committed = await CommitLeadAsync(db, http, ct);
         return committed is Microsoft.AspNetCore.Http.HttpResults.Ok ? Results.Ok(lead) : committed;
     }
     private static async Task<IResult> Convert(Guid id, ConvertLeadRequest request, CrmDbContext db,
@@ -179,7 +196,8 @@ internal static class LeadEndpoints
             });
             try
             {
-                await db.SaveChangesAsync(ct);
+                await CrmCollectionRealtimeCommit.SaveLeadAsync(db,
+                    http.RequestServices.GetRequiredService<IConfiguration>(), http.TraceIdentifier, ct);
                 await tx.CommitAsync(ct);
                 return Results.Ok(new { leadId = id, accountId = matched.Id, alreadyConverted = false });
             }
@@ -224,7 +242,13 @@ internal static class LeadEndpoints
             ConvertedBy = owner, CreatedByUserId = owner, Notes = request.Notes });
         try
         {
-            await db.SaveChangesAsync(ct);
+            await CrmCollectionRealtimeCommit.SaveLeadAsync(db,
+                http.RequestServices.GetRequiredService<IConfiguration>(), http.TraceIdentifier, ct);
+            // Preserve production's fail-closed realtime policy.
+            if (CrmAccountRealtimeCommit.IsEnabled(
+                    http.RequestServices.GetRequiredService<IConfiguration>()))
+                await CrmCollectionRealtimeCommit.AppendCollectionAsync(db, "accountlist",
+                    account.RowVersion, http.TraceIdentifier, ct);
             await tx.CommitAsync(ct);
             return Results.Created("/api/crm/accounts/" + account.Id,
                 new { leadId = id, accountId = account.Id, alreadyConverted = false });
