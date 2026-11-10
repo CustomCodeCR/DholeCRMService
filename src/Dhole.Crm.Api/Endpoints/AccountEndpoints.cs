@@ -115,10 +115,25 @@ internal static class AccountEndpoints
             .Any(value => value is { Length: > 4096 }))
             return CrmDataEndpoints.Bad("Account filter too long");
 
+        if (q is { Length: > 220 })
+            return CrmDataEndpoints.Bad("Account search term too long");
+
         var query = CrmAccess.VisibleAccounts(db, http).AsNoTracking();
         if (!string.IsNullOrWhiteSpace(q))
-            query = query.Where(x => x.DisplayName.ToLower().Contains(q.Trim().ToLower()) ||
-                                     x.LegalName.ToLower().Contains(q.Trim().ToLower()));
+        {
+            var term = q.Trim().ToLowerInvariant();
+            // Identifications are stored normalized without spaces, dots or hyphens.
+            // Normalize the search too, supporting partial and formatted document numbers.
+            var normalizedTax = CrmDataEndpoints.NormalizeTax(q) ?? "";
+            query = query.Where(x => x.DisplayName.ToLower().Contains(term) ||
+                x.LegalName.ToLower().Contains(term) ||
+                (x.TaxId != null && x.TaxId.ToLower().Contains(term)) ||
+                (normalizedTax != "" && x.NormalizedTaxId != null &&
+                 x.NormalizedTaxId.Contains(normalizedTax)) ||
+                // Keep pre-normalization legacy accounts searchable by cédula.
+                (normalizedTax != "" && x.NormalizedTaxId == null && x.TaxId != null &&
+                 x.TaxId.ToUpper().Replace("-", "").Replace(".", "").Replace(" ", "").Contains(normalizedTax)));
+        }
 
         var types = ParseAccountFilter(customerTypeCode);
         if (types.Length > 2 || types.Any(value => value is not ("cash" or "credit")))
