@@ -12,6 +12,7 @@ public sealed record FollowupCreateRequest(Guid? AccountId,Guid? LeadId,Guid? Op
 public sealed record FollowupRescheduleRequest(long ExpectedVersion,DateTime DueAt,string Reason);
 public sealed record FollowupCompleteRequest(long ExpectedVersion,string Outcome,DateTime? NextFollowupAt);
 public sealed record FollowupCancelRequest(long ExpectedVersion,string Reason);
+public sealed record FollowupReopenRequest(long ExpectedVersion,string Reason);
 
 internal static class CrmFollowupEndpoints
 {
@@ -21,9 +22,11 @@ internal static class CrmFollowupEndpoints
         group.MapPut("/accounts/{accountId:guid}/followup-policy",UpsertPolicy);
         group.MapGet("/followups",List);
         group.MapGet("/followups/{id:guid}",Get);
+        group.MapGet("/followups/{id:guid}/origin",GetOrigin);
         group.MapPost("/followups",Create);
         group.MapPost("/followups/{id:guid}/reschedule",Reschedule);
         group.MapPost("/followups/{id:guid}/complete",Complete);
+        group.MapPost("/followups/{id:guid}/reopen",Reopen);
         group.MapPost("/followups/{id:guid}/cancel",Cancel);
         group.MapPost("/followups/{id:guid}/archive",Archive);
 
@@ -118,6 +121,37 @@ internal static class CrmFollowupEndpoints
         var x=await db.Followups.AsNoTracking().FirstOrDefaultAsync(x=>x.Id==id && x.ArchivedAt==null,ct);
         return x is null?Results.NotFound():await HasAccess(x,db,h,ct)?Results.Ok(x):CrmAccess.Denied();
     }
+    private static async Task<IResult> GetOrigin(Guid id,CrmDbContext db,HttpContext h,CancellationToken ct)
+    {
+        if(!CanReadCalendar(h))return CrmAccess.Denied();
+        var followup=await db.Followups.AsNoTracking().FirstOrDefaultAsync(x=>x.Id==id&&x.ArchivedAt==null,ct);
+        if(followup is null)return Results.NotFound();
+        if(!await HasAccess(followup,db,h,ct))return CrmAccess.Denied();
+        var origin=followup.OriginActivityId;
+        if(origin is null)
+        {
+            // Legacy follow-ups encoded the relationship in creation history.
+            var reason=await db.FollowupHistories.AsNoTracking()
+                .Where(x=>x.FollowupId==id&&x.Action=="Created")
+                .Select(x=>x.Reason).FirstOrDefaultAsync(ct);
+            const string byActivity="Acuerdo registrado en actividad comercial ";
+            const string byNote="Acuerdo de observación ";
+            if(reason?.StartsWith(byActivity,StringComparison.Ordinal)==true &&
+                Guid.TryParse(reason[byActivity.Length..],out var activityId))
+                origin=activityId;
+            else if(reason?.StartsWith(byNote,StringComparison.Ordinal)==true &&
+                Guid.TryParse(reason[byNote.Length..],out var noteId))
+                origin=await db.ActivityNotes.AsNoTracking()
+                    .Where(x=>x.Id==noteId).Select(x=>(Guid?)x.ActivityId).FirstOrDefaultAsync(ct);
+        }
+        if(origin is null)return Results.Json((object?)null);
+        var activity=await db.Activities.AsNoTracking()
+            .Where(x=>x.Id==origin&&x.ArchivedAt==null)
+            .Select(x=>new{x.Id,x.Subject,x.Type,x.Status,x.ScheduledStartAt,x.AccountId,x.LeadId})
+            .FirstOrDefaultAsync(ct);
+        return activity is null?Results.Json((object?)null):Results.Ok(activity);
+    }
+
     private static async Task<IResult> Create(FollowupCreateRequest r,CrmDbContext db,HttpContext h,
         IAuthReferenceService auth,CancellationToken ct)
     {
@@ -149,6 +183,31 @@ internal static class CrmFollowupEndpoints
         return ok is Microsoft.AspNetCore.Http.HttpResults.Ok?
             Results.Created("/api/crm/followups/"+x.Id,x):ok;
     }
+    private static async Task<IResult> Reopen(Guid id,FollowupReopenRequest r,
+        CrmDbContext db,HttpContext h,CancellationToken ct)
+    {
+        if(!Manage(h)&&!Tasks(h))return CrmAccess.Denied();
+        var x=await db.Followups.FindAsync([id],ct);
+        if(x is null||x.ArchivedAt!=null)return Results.NotFound();
+        if(!await HasAccess(x,db,h,ct))return CrmAccess.Denied();
+        if(x.RowVersion!=r.ExpectedVersion)return CrmDataEndpoints.Conflict("Concurrent followup update");
+        if(x.Status!="Completed"||string.IsNullOrWhiteSpace(r.Reason)||r.Reason.Length>500)
+            return CrmDataEndpoints.Bad("Only completed commitments can be reopened with a reason");
+        x.Status=x.DueAt<DateTime.UtcNow?"Overdue":"Pending";
+        x.CompletedAt=null;x.Outcome=null;x.NextFollowupAt=null;
+        x.RowVersion++;x.UpdatedAt=DateTime.UtcNow;x.UpdatedByUserId=CrmAccess.UserId(h);
+        db.FollowupHistories.Add(new FollowupHistory {
+            FollowupId=id,ActorUserId=CrmAccess.UserId(h),Action="Reopened",
+            Reason=r.Reason.Trim(),CreatedByUserId=CrmAccess.UserId(h)
+        });
+        if(x.DueAt>DateTime.UtcNow)
+            await CrmReminderEnqueue.QueueAsync(db,"Followup",x.Id,x.AccountId,
+                x.AssignedUserId,x.RowVersion,x.DueAt,x.ReminderLeadMinutes,
+                x.ReminderChannelStrategy,"crm.followup.reminder.v1",x.CreatedByUserId,ct);
+        var result=await CrmDataEndpoints.Commit(db,ct);
+        return result is Microsoft.AspNetCore.Http.HttpResults.Ok?Results.Ok(x):result;
+    }
+
     private static async Task<IResult> Reschedule(Guid id,FollowupRescheduleRequest r,CrmDbContext db,
         HttpContext h,CancellationToken ct)
     {
