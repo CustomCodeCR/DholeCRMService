@@ -1,7 +1,7 @@
 ## [1.7.1] - 2026-11-09
 - PATCH: add authenticated read-scope GET /api/crm/accounts/realtime-access and /api/crm/leads/realtime-access. REST endpoints return no customer or lead fields.
 - Durable transactional accountlist/leadlist invalidations for accounts and lead create/update/assign/archive/convert via existing CRM outbox and NotificationsHub, no new hub. Staging Compose sourced from DholeSystem/develop.
-- Ecosystem 1.15.5; master/production unchanged.
+- Ecosystem 1.16.1; master/production unchanged.
 
 ## [1.7.0] - 2026-11-09
 - Nuevo buscador unificado de cuentas y prospectos para cotizaciones de Pricing, limitado a registros CRM visibles y con vendedor asignado desde Auth.
