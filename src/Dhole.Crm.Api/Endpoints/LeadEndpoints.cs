@@ -20,6 +20,8 @@ internal static class LeadEndpoints
     {
         group.MapGet("/leads", List);
         group.MapGet("/leads/{id:guid}", Get);
+        group.MapGet("/leads/{id:guid}/opportunities", ListLeadOpportunities);
+        group.MapGet("/leads/{id:guid}/quotes", ListLeadQuotes);
         group.MapPost("/leads", Create);
         group.MapPatch("/leads/{id:guid}", Patch);
         group.MapPost("/leads/{id:guid}/convert", Convert);
@@ -51,6 +53,58 @@ internal static class LeadEndpoints
         if (lead is null) return Results.NotFound();
         return CrmAccess.LeadAccess(http, lead.ExecutiveUserId) ? Results.Ok(lead) : CrmAccess.Denied();
     }
+
+    private static async Task<IResult> ListLeadOpportunities(Guid id, CrmDbContext db,
+        HttpContext http, CancellationToken ct)
+    {
+        if (!CrmDataEndpoints.HasRead(http, "lead") ||
+            !CrmDataEndpoints.HasRead(http, "opportunity")) return CrmAccess.Denied();
+        var lead = await db.Leads.AsNoTracking()
+            .FirstOrDefaultAsync(x => x.Id == id && x.ArchivedAt == null, ct);
+        if (lead is null) return Results.NotFound();
+        if (!CrmAccess.LeadAccess(http, lead.ExecutiveUserId)) return CrmAccess.Denied();
+        var opportunities = db.Opportunities.AsNoTracking()
+            .Where(x => x.LeadId == id && x.ArchivedAt == null);
+        if (!CrmAccess.Scope(http, "crm.opportunity.read-all"))
+            opportunities = opportunities.Where(x => x.ExecutiveUserId == CrmAccess.UserId(http));
+        return Results.Ok(await opportunities.OrderByDescending(x => x.CreatedAt)
+            .Select(x => new { x.Id, x.Title, x.Status, x.ExecutiveUserId })
+            .ToListAsync(ct));
+    }
+
+    private static async Task<IResult> ListLeadQuotes(Guid id, CrmDbContext db,
+        HttpContext http, int? page, int? pageSize, CancellationToken ct)
+    {
+        if (!CrmDataEndpoints.HasRead(http, "lead") ||
+            !CrmDataEndpoints.HasRead(http, "opportunity") ||
+            !CrmAccess.Scope(http, "crm.quote.read")) return CrmAccess.Denied();
+        var lead = await db.Leads.AsNoTracking()
+            .FirstOrDefaultAsync(x => x.Id == id && x.ArchivedAt == null, ct);
+        if (lead is null) return Results.NotFound();
+        if (!CrmAccess.LeadAccess(http, lead.ExecutiveUserId)) return CrmAccess.Denied();
+        var opportunities = db.Opportunities.AsNoTracking()
+            .Where(x => x.LeadId == id && x.ArchivedAt == null);
+        if (!CrmAccess.Scope(http, "crm.opportunity.read-all"))
+            opportunities = opportunities.Where(x => x.ExecutiveUserId == CrmAccess.UserId(http));
+        var linked = from opportunity in opportunities
+                     join quote in db.OpportunityQuotes.AsNoTracking()
+                         on opportunity.Id equals quote.OpportunityId
+                     select new {
+                         quote.Id, quote.PricingQuoteId, quote.PricingRequestId,
+                         quote.QuoteNumberSnapshot, quote.CommercialStatusSnapshot,
+                         quote.ShipmentModeSnapshot, quote.LinkedAt, quote.LastSyncAt,
+                         opportunityId = opportunity.Id, opportunityTitle = opportunity.Title
+                     };
+        var number = Math.Max(1, page ?? 1);
+        var size = Math.Clamp(pageSize ?? 25, 1, 100);
+        var total = await linked.CountAsync(ct);
+        return Results.Ok(new {
+            items = await linked.OrderByDescending(x => x.LinkedAt)
+                .Skip((number - 1) * size).Take(size).ToListAsync(ct),
+            total, page = number, pageSize = size
+        });
+    }
+
     private static async Task<IResult> Create(CreateLeadRequest request, CrmDbContext db,
         HttpContext http, IAuthReferenceService auth, IConfigReferenceService config, CancellationToken ct)
     {
