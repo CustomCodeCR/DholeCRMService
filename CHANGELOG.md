@@ -1,3 +1,7 @@
+## [1.7.5] - 2026-11-10
+
+- PATCH DH-20261110-PRICING-CRM-REQUEST-IDENTITY-067: el selector autorizado de cuentas y prospectos permite resolver selectedClientId desde solicitudes existentes, sin perder filtros de permisos por cuenta, prospecto o vendedor y sin paginar fuera de su alcance. Release global Dhole 1.17.12, CI y staging pendientes.
+
 ## [1.7.4] - 2026-11-10
 - PATCH DH-20261110-CRM-ACTIVITY-FULL-DETAIL-066: API de solo lectura para recuperar los compromisos creados desde actividades y la actividad principal de cada seguimiento derivado. Reconstrucción de vínculos mediante historial histórico existente, sin migraciones ni pérdida de datos.
 - Respeta autorización CRM por propietario, cuenta y actividad. Endpoints GET /activities/{id}/commitments y GET /followups/{id}/parent-activity; versiones DholeWeb/DholeSystem 1.17.11; pendientes CI y staging.
