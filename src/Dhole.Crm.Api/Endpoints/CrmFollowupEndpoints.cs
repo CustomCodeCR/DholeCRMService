@@ -28,6 +28,7 @@ internal static class CrmFollowupEndpoints
         group.MapPost("/followups/{id:guid}/archive",Archive);
 
         group.MapGet("/followups/{id:guid}/history",History);
+        group.MapGet("/followups/{id:guid}/parent-activity",ParentActivity);
         group.MapGet("/reminders",ListReminders);
         group.MapGet("/messaging/outbox",ListOutbox);
         group.MapPost("/reminders/{id:guid}/replay",ReplayUndelivered);
@@ -118,6 +119,50 @@ internal static class CrmFollowupEndpoints
         var x=await db.Followups.AsNoTracking().FirstOrDefaultAsync(x=>x.Id==id && x.ArchivedAt==null,ct);
         return x is null?Results.NotFound():await HasAccess(x,db,h,ct)?Results.Ok(x):CrmAccess.Denied();
     }
+
+    // Resolve the original activity from the append-only creation history.
+    // Only return its title if the caller is also allowed to read the activity.
+    private static async Task<IResult> ParentActivity(Guid id,CrmDbContext db,HttpContext h,CancellationToken ct)
+    {
+        if(!CanReadCalendar(h))return CrmAccess.Denied();
+        var followup=await db.Followups.AsNoTracking()
+            .FirstOrDefaultAsync(x=>x.Id==id && x.ArchivedAt==null,ct);
+        if(followup is null)return Results.NotFound();
+        if(!await HasAccess(followup,db,h,ct))return CrmAccess.Denied();
+        if(!CrmDataEndpoints.HasRead(h,"activity"))return Results.Ok(new{activityId=(Guid?)null});
+        var origins=await db.FollowupHistories.AsNoTracking()
+            .Where(x=>x.FollowupId==id && x.Action=="Created")
+            .Select(x=>x.Reason).ToListAsync(ct);
+        Guid? parentId=null;
+        foreach(var origin in origins)
+        {
+            if(string.IsNullOrWhiteSpace(origin))continue;
+            const string fromActivity="Acuerdo registrado en actividad comercial ";
+            const string fromNote="Acuerdo de observación ";
+            if(origin.StartsWith(fromActivity,StringComparison.Ordinal) &&
+                Guid.TryParse(origin[fromActivity.Length..],out var directId))
+            {
+                parentId=directId;break;
+            }
+            if(origin.StartsWith(fromNote,StringComparison.Ordinal) &&
+                Guid.TryParse(origin[fromNote.Length..],out var noteId))
+            {
+                parentId=await db.ActivityNotes.AsNoTracking()
+                    .Where(x=>x.Id==noteId).Select(x=>(Guid?)x.ActivityId)
+                    .FirstOrDefaultAsync(ct);
+                if(parentId.HasValue)break;
+            }
+        }
+        if(!parentId.HasValue)return Results.Ok(new{activityId=(Guid?)null});
+        var activity=await db.Activities.AsNoTracking()
+            .FirstOrDefaultAsync(x=>x.Id==parentId.Value && x.ArchivedAt==null,ct);
+        if(activity is null || !CommercialAccess.ActivityOwns(h,activity) ||
+            (activity.AccountId.HasValue &&
+             !await CrmAccess.CanSeeAccount(db,h,activity.AccountId.Value,ct)))
+            return Results.Ok(new{activityId=(Guid?)null});
+        return Results.Ok(new{activityId=(Guid?)activity.Id,activitySubject=activity.Subject});
+    }
+
     private static async Task<IResult> Create(FollowupCreateRequest r,CrmDbContext db,HttpContext h,
         IAuthReferenceService auth,CancellationToken ct)
     {
