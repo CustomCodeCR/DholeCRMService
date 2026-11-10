@@ -2,6 +2,7 @@ using System.Text.Json;
 using Dhole.Crm.Domain;
 using Dhole.Crm.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 
 namespace Dhole.Crm.Infrastructure.Realtime;
 
