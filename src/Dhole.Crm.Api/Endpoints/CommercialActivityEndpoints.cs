@@ -39,7 +39,6 @@ internal static class CommercialActivityEndpoints
         g.MapPost("/activities/{id:guid}/cancel",Cancel);
         g.MapPost("/activities/{id:guid}/archive",Archive);
 
-        g.MapGet("/activities/{id:guid}/commitments",Commitments);
         g.MapGet("/activities/{id:guid}/notes",Notes);
         g.MapPost("/activities/{id:guid}/notes",AddNote);
         g.MapPost("/activities/{id:guid}/notes/{noteId:guid}/commitments",ScheduleExistingNote);
