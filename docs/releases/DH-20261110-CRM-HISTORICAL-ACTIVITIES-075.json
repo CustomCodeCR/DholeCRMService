@@ -1,0 +1,20 @@
+{
+  "releaseId": "DH-20261110-CRM-HISTORICAL-ACTIVITIES-075",
+  "date": "2026-11-10",
+  "kind": "PATCH",
+  "ecosystemVersion": "1.17.18",
+  "component": "DholeCRMService",
+  "previous": "1.4.5",
+  "next": "1.4.6",
+  "behavior": [
+    "Activities with end in the past are saved Completed with OccurredAt=end, preserving original UTC time.",
+    "No retroactive CRM activity reminders for historical records.",
+    "Followups and agreement commitments retain future-due validation."
+  ],
+  "schemaMigration": false,
+  "validation": {
+    "ci": "pending",
+    "staging": "pending"
+  },
+  "production": "not deployed"
+}
