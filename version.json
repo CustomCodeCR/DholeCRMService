@@ -2,9 +2,9 @@
   "schemaVersion": 1,
   "ecosystem": "Dhole",
   "component": "DholeCRMService",
-  "version": "1.4.4",
-  "ecosystemVersion": "1.17.15",
-  "releaseId": "DH-20261110-CRM-PROSPECT-ROUTES-QUOTES-069",
-  "releaseStatus": "candidate-master-ci-pending",
-  "businessReleaseId": "DH-20261110-CRM-PROSPECT-ROUTES-QUOTES-069"
+  "version": "1.5.0",
+  "ecosystemVersion": "1.18.0",
+  "releaseId": "DH-20261110-CRM-ADMIN-CALENDAR-069",
+  "releaseStatus": "candidate-master-ci-staging-pending",
+  "businessReleaseId": "DH-20261110-CRM-ADMIN-CALENDAR-069"
 }

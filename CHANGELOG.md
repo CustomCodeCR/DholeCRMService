@@ -1,3 +1,8 @@
+## [1.5.0] - 2026-11-10
+
+- MINOR DH-20261110-CRM-ADMIN-CALENDAR-069: administradores activos de Auth ven agendas y seguimientos de todos los usuarios con política, título y origen; selección de responsables desde directorio seguro. Se conservan los cambios master CRM 1.4.4 de rutas y cotizaciones de prospectos.
+- Auth 1.3.0 y Web/System 1.18.0; CI y staging pendientes.
+
 ## [1.4.4] - 2026-11-10
 
 - DH-20261110-CRM-PROSPECT-ROUTES-QUOTES-069: normalización UPPER CASE de nombres de prospectos en creación y edición, endpoints autorizados de oportunidades y cotizaciones vinculadas al prospecto.
