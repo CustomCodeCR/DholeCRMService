@@ -10,6 +10,11 @@ public static class CommercialRules
         (!startUtc.HasValue || startUtc.Value.Kind == DateTimeKind.Utc) &&
         (!endUtc.HasValue || endUtc.Value.Kind == DateTimeKind.Utc) &&
         (!startUtc.HasValue || !endUtc.HasValue || endUtc >= startUtc);
+    // A historical meeting/visit has already ended. Use its original end time
+    // as the actual occurrence instead of scheduling retroactive reminders.
+    public static bool IsHistoricalActivity(DateTime? endUtc, DateTime nowUtc) =>
+        endUtc.HasValue && endUtc.Value.Kind == DateTimeKind.Utc &&
+        nowUtc.Kind == DateTimeKind.Utc && endUtc.Value <= nowUtc;
     public static bool ValidActivityType(string? type) =>
         type is "VISIT" or "CALL" or "EMAIL" or "MEETING" or "OTHER";
     public static bool ValidStage(decimal probability, bool won, bool lost) =>
