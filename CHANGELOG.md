@@ -1,3 +1,8 @@
+## [1.8.1] - 2026-11-10
+
+- DH-20261110-CRM-PROSPECT-SELLER-072: endpoint GET /leads/assigned-executives, resuelve nombres de vendedores de prospectos mediante Auth y verifica permisos de lectura por cada registro; respeta read-all y no expone prospectos ajenos.
+- Sin migración de base de datos; creación y reasignación ya admiten executiveUserId y crm.lead.assign. Ecosistema Dhole 1.18.2.
+
 ## [1.8.0] - 2026-11-10
 
 - MINOR DH-20261110-CRM-ADMIN-CALENDAR-069: permite a administradores activos consultar todas las agendas de CRM y los seguimientos automáticos, con detalles históricos y directorio filtrado por Auth. Lectura ampliada con roles vigentes, sin alterar autorización de escritura.
