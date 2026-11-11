@@ -215,7 +215,43 @@ internal static class LeadEndpoints
             x, request.Name, request.CompanyName, request.CountryId, request.TaxId));
         if (duplicate is not null)
         {
-            await duplicateGuard.RollbackAsync(ct);
+            // Optional durable system notification to the person attempting creation.
+            // Delivery failures never turn an identity conflict into a successful insert.
+            var notificationsEnabled = http.RequestServices.GetRequiredService<IConfiguration>()
+                .GetValue("Features:CrmBackgroundTasksEnabled", false);
+            if (notificationsEnabled)
+            {
+                try
+                {
+                    var now = DateTime.UtcNow;
+                    // Throttle persistent inbox alerts; the HTTP response/toast is immediate on every attempt.
+                    var tenMinuteBucket = now.ToString("yyyyMMddHH") + (now.Minute / 10);
+                    var dedupeKey = $"crmleaddup:{duplicate.Id:N}:{owner:N}:{tenMinuteBucket}";
+                    if (!await db.Reminders.AsNoTracking().AnyAsync(x => x.DedupeKey == dedupeKey, ct))
+                    {
+                        var alert = new CrmReminder {
+                            EntityType = "Lead", EntityId = duplicate.Id,
+                            RecipientUserId = owner, Channel = "System",
+                            NotificationType = "crm.lead.duplicate.v1",
+                            DedupeKey = dedupeKey, FireAt = now,
+                            TargetVersion = duplicate.RowVersion, CreatedByUserId = owner
+                        };
+                        db.Reminders.Add(alert);
+                        db.OutboxMessages.Add(new CrmOutboxMessage {
+                            Id = alert.Id, ReminderId = alert.Id, NextAttemptAt = now
+                        });
+                        await db.SaveChangesAsync(ct);
+                    }
+                    await duplicateGuard.CommitAsync(ct);
+                }
+                catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+                catch (Exception)
+                {
+                    await duplicateGuard.RollbackAsync(CancellationToken.None);
+                    // The 409 response stays authoritative even when the alert queue is unavailable.
+                }
+            }
+            else await duplicateGuard.RollbackAsync(ct);
             string sellerName;
             try
             {
