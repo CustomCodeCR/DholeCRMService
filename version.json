@@ -3,7 +3,7 @@
   "ecosystem": "Dhole",
   "component": "DholeCRMService",
   "version": "1.12.0",
-  "ecosystemVersion": "1.23.0",
+  "ecosystemVersion": "1.24.0",
   "releaseId": "DH-20261110-CRM-ACCOUNT-CATEGORY-SCOPE-082",
   "releaseStatus": "candidate-develop-ci-staging-pending",
   "businessReleaseId": "DH-20261110-CRM-ACCOUNT-CATEGORY-SCOPE-082"
