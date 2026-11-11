@@ -1,3 +1,8 @@
+## [1.11.0] - 2026-11-10
+
+- MINOR DH-20261110-CRM-ACCOUNT-CATEGORY-SCOPE-082: La API exige el scope específico para cambiar la categoría, asigna una categoría inicial segura en altas y conversión de prospectos, y protege PATCH contra modificaciones no autorizadas.
+- Pruebas CI, staging y autorización de producción pendientes.
+
 ## [1.6.0] - 2026-11-10
 
 - MINOR DH-20261110-CRM-CONTACTS-ROLE-MULTISELECT-079: Validación de responsables con roles de ventas y SuperUsuario activos provenientes de Auth; se conserva autorización por scopes en CRM.
