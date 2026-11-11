@@ -7,7 +7,7 @@
   "components": [
     {
       "repository": "CustomCodeCR/DholeCRMService",
-      "previous": "1.20.0",
+      "previous": "1.20.1",
       "next": "1.21.0"
     },
     {

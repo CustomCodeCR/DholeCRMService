@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "releaseId": "DH-20261111-CRM-QUOTE-PREFERENCE-REALTIME-094",
+  "ecosystem": "Dhole",
+  "ecosystemVersion": "1.33.1",
+  "releaseType": "PATCH",
+  "branch": "fix/account-quote-delivery-realtime-093-develop",
+  "components": [
+    {
+      "repository": "CustomCodeCR/DholeCRMService",
+      "from": "1.20.0",
+      "to": "1.20.1"
+    },
+    {
+      "repository": "CustomCodeCR/DholeSystem",
+      "from": "1.33.0",
+      "to": "1.33.1"
+    }
+  ],
+  "changes": [
+    "Emit durable CRM account invalidation on preference update through the existing realtime outbox when enabled",
+    "Preserve REST and keep future pricing recipient preference server-authoritative"
+  ],
+  "validation": "CI/staging pending",
+  "productionDeploymentAuthorized": false
+}
