@@ -34,6 +34,7 @@ internal static class CommercialActivityEndpoints
         g.MapGet("/activities/{id:guid}",Get);
         g.MapPost("/activities",Create);
         g.MapPatch("/activities/{id:guid}",Patch);
+        g.MapPut("/activities/{id:guid}/details",ActivityDetailsEditing.Update);
         g.MapPost("/activities/{id:guid}/complete",Complete);
         g.MapPost("/activities/{id:guid}/reschedule",Reschedule);
         g.MapPost("/activities/{id:guid}/cancel",Cancel);
