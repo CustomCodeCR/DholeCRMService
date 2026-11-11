@@ -1,3 +1,8 @@
+## [1.10.0] - 2026-11-10
+
+- MINOR DH-20261110-CRM-CONTACTS-SELLERS-078: la validación de asignación comercial admite roles activos Vendedor, Vendedores, Vendedor Supervisor, Vendedor Jefe y SuperUsuario de Auth. Complementa las verificaciones de vendedor ya existentes en 1.9.3.
+- Preserva acceso de lectura, actividades previas, endpoints REST, SignalR y notificaciones.
+
 ## [1.9.3] - 2026-11-10
 
 - PATCH DH-20261110-CRM-SELLERS-COMMITMENTS-078: exige rol Vendedor para asignar actividades y seguimientos a otros usuarios. Permite completar compromisos vinculados a la actividad propia usando crm.activity.update, incluidos vínculos históricos confirmados en el historial de creación; conserva permisos, concurrencia y auditoría.
