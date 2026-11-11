@@ -16,11 +16,12 @@ public static class LeadDuplicateIdentity
 
     public static string[] LockKeys(string name, string? companyName, Guid? countryId, string? taxId)
     {
-        var country = countryId?.ToString("N") ?? "*";
+        // Global locks are intentional: an older record can omit CountryId,
+        // so two requests with different country completeness must still serialize.
         var keys = new[] {
-            $"crm:lead:name:{country}:{NormalizeName(name)}",
-            $"crm:lead:name:{country}:{NormalizeName(companyName)}",
-            $"crm:lead:tax:{country}:{NormalizeTax(taxId)}"
+            $"crm:lead:name:{NormalizeName(name)}",
+            $"crm:lead:name:{NormalizeName(companyName)}",
+            $"crm:lead:tax:{NormalizeTax(taxId)}"
         };
         return keys.Where(x => !x.EndsWith(':')).Distinct(StringComparer.Ordinal)
             .OrderBy(x => x, StringComparer.Ordinal).ToArray();
