@@ -1,3 +1,8 @@
+## [1.12.0] - 2026-11-10
+
+- MINOR DH-20261110-CRM-ACCOUNT-CATEGORY-SCOPE-082: El API de CRM impide cambiar la categoría sin crm.account.category.manage, incluso en solicitudes directas y conversiones; el alta sin permiso asigna nivel inicial seguro.
+- CI y validación en staging pendientes; sin despliegue de producción autorizado.
+
 ## [1.11.0] - 2026-11-10
 
 - MINOR DH-20261110-CRM-ACCOUNT-PROCEDURES-080: registra múltiples procedimientos específicos por cuenta con nombre, detalle y equipo asignado, CRUD REST autorizado por cuenta y concurrencia optimista.
