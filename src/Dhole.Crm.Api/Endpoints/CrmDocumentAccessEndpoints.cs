@@ -32,6 +32,18 @@ internal static class CrmDocumentAccessEndpoints
                     && await CrmAccess.CanSeeAccount(db, http, id, ct);
                 upload = CrmAccess.Scope(http, "crm.account.update");
                 break;
+            case "procedure":
+                // A procedure inherits the visibility of its parent account.
+                // Never reveal attachments for an inaccessible or deleted record.
+                var procedureAccountId = await db.AccountSpecificProcedures.AsNoTracking()
+                    .Where(x => x.Id == id)
+                    .Select(x => (Guid?)x.AccountId)
+                    .SingleOrDefaultAsync(ct);
+                allowed = procedureAccountId.HasValue
+                    && CrmDataEndpoints.HasRead(http, "account")
+                    && await CrmAccess.CanSeeAccount(db, http, procedureAccountId.Value, ct);
+                upload = CrmAccess.Scope(http, "crm.account.update");
+                break;
             case "lead":
                 allowed = CrmDataEndpoints.HasRead(http, "lead")
                     && await db.Leads.AsNoTracking().AnyAsync(x => x.Id == id
