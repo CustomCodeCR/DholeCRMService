@@ -280,7 +280,7 @@ internal static class AccountEndpoints
 
     private static async Task<IResult> PutQuoteDeliveryPreference(
         Guid id, UpdateQuoteDeliveryPreferenceRequest request,
-        CrmDbContext db, HttpContext http, CancellationToken ct)
+        CrmDbContext db, HttpContext http, IConfiguration configuration, CancellationToken ct)
     {
         if (!CrmAccess.Scope(http, "crm.account.update"))
             return CrmAccess.Denied();
@@ -323,15 +323,23 @@ internal static class AccountEndpoints
         account.RowVersion++;
         account.UpdatedAt = DateTime.UtcNow;
         account.UpdatedByUserId = CrmAccess.UserId(http);
-        var result = await CrmDataEndpoints.Commit(db, ct);
-        return result is Microsoft.AspNetCore.Http.HttpResults.Ok
-            ? Results.Ok(new
+        // Publish the same idempotent account invalidation used by other CRM mutations
+        // only when the universal realtime release is enabled and approved.
+        if (CrmAccountRealtimeCommit.IsEnabled(configuration))
+            await CrmAccountRealtimeCommit.PersistUpdatedAccountAsync(
+                db, account, $"crm:account-quote-delivery:{id:N}:{account.RowVersion}", ct);
+        else
+        {
+            var result = await CrmDataEndpoints.Commit(db, ct);
+            if (result is not Microsoft.AspNetCore.Http.HttpResults.Ok) return result;
+        }
+        return Results.Ok(new
             {
                 deliveryTarget = account.QuoteDeliveryTarget,
                 contactId = account.QuoteDeliveryContactId,
                 updatedAtUtc = account.QuoteDeliveryUpdatedAtUtc,
                 rowVersion = account.RowVersion
-            }) : result;
+            });
     }
 
     private static async Task<IResult> AssignedExecutive(Guid id, CrmDbContext db,
