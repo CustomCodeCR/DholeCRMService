@@ -14,9 +14,12 @@ public sealed record ActivityCreateRequest(Guid? AccountId,Guid? LeadId,Guid? Op
     string? NextCommitment = null,DateTime? CommitmentDueAt = null,
     IReadOnlyList<AgreementCommitmentRequest>? AgreementCommitments = null,
     int? RepeatEveryDays = null, int? ReminderRepeatMinutes = null,
-    string? Minutes = null, IReadOnlyList<Guid>? ParticipantContactIds = null);
+    string? Minutes = null, IReadOnlyList<Guid>? ParticipantContactIds = null,
+    decimal? LocationLatitude = null, decimal? LocationLongitude = null);
 public sealed record ActivityPatchRequest(long ExpectedVersion,string Subject,string? LocationText,
-    int? RepeatEveryDays = null,int? ReminderLeadMinutes = null,int? ReminderRepeatMinutes = null);
+    int? RepeatEveryDays = null,int? ReminderLeadMinutes = null,int? ReminderRepeatMinutes = null,
+    decimal? LocationLatitude = null, decimal? LocationLongitude = null,
+    bool UpdateVisitCoordinates = false);
 public sealed record ActivityCompleteRequest(long ExpectedVersion,string Outcome,DateTime OccurredAt,string? Note);
 public sealed record ActivityRescheduleRequest(long ExpectedVersion,DateTime ScheduledStartAt,
     DateTime? ScheduledEndAt,string Reason);
@@ -98,6 +101,7 @@ internal static class CommercialActivityEndpoints
             (r.ReminderRepeatMinutes.HasValue && r.ReminderRepeatMinutes.Value is not (0 or 5 or 15 or 30 or 60 or 240 or 1440)) ||
             (r.ReminderChannelStrategy is not null && r.ReminderChannelStrategy is not ("BOTH" or "EMAIL" or "SYSTEM"))||
             !CommercialRules.ValidActivityType(r.Type)||
+            !ActivityVisitLocationRules.IsValid(r.Type,r.LocationLatitude,r.LocationLongitude)||
             string.IsNullOrWhiteSpace(r.Subject)||r.Subject.Length>250||
             !CommercialRules.ValidActivitySchedule(r.ScheduledStartAt,r.ScheduledEndAt)||
             (r.OccurredAt.HasValue&&r.OccurredAt.Value.Kind!=DateTimeKind.Utc)||
@@ -148,7 +152,8 @@ internal static class CommercialActivityEndpoints
             ScheduledStartAt=r.ScheduledStartAt,ScheduledEndAt=r.ScheduledEndAt,
             OccurredAt=occurredAt,Status=occurredAt.HasValue?"Completed":"Scheduled",
             Outcome=occurredAt.HasValue?"COMPLETED":null,
-            LocationText=r.LocationText,CreatedByUserId=current,
+            LocationText=r.LocationText,LocationLatitude=r.LocationLatitude,
+            LocationLongitude=r.LocationLongitude,CreatedByUserId=current,
             ReminderLeadMinutes=r.ReminderLeadMinutes,ReminderChannelStrategy=r.ReminderChannelStrategy,
             RepeatEveryDays=r.RepeatEveryDays is > 0 ? r.RepeatEveryDays : null,
             ReminderRepeatMinutes=r.ReminderRepeatMinutes is > 0 ? r.ReminderRepeatMinutes : null
@@ -238,7 +243,20 @@ internal static class CommercialActivityEndpoints
             (r.RepeatEveryDays.HasValue && r.RepeatEveryDays.Value is not (0 or 1 or 7 or 14 or 30)) ||
             (r.ReminderRepeatMinutes.HasValue && r.ReminderRepeatMinutes.Value is not (0 or 5 or 15 or 30 or 60 or 240 or 1440)))
             return CommercialAccess.Invalid("Invalid activity subject or reminder recurrence");
+        if(r.UpdateVisitCoordinates && !ActivityVisitLocationRules.IsValid(a.Type,r.LocationLatitude,r.LocationLongitude))
+            return CommercialAccess.Invalid("Invalid visit coordinates");
+        var locationChanged = !string.Equals(a.LocationText,r.LocationText,StringComparison.Ordinal);
         a.Subject=r.Subject.Trim();a.LocationText=r.LocationText;
+        if(r.UpdateVisitCoordinates)
+        {
+            a.LocationLatitude=r.LocationLatitude;
+            a.LocationLongitude=r.LocationLongitude;
+        }
+        else if(locationChanged)
+        {
+            a.LocationLatitude=null;
+            a.LocationLongitude=null;
+        }
         if(r.ReminderLeadMinutes.HasValue)a.ReminderLeadMinutes=r.ReminderLeadMinutes;
         if(r.RepeatEveryDays.HasValue)a.RepeatEveryDays=r.RepeatEveryDays is > 0 ? r.RepeatEveryDays : null;
         if(r.ReminderRepeatMinutes.HasValue)a.ReminderRepeatMinutes=r.ReminderRepeatMinutes is > 0 ? r.ReminderRepeatMinutes : null;

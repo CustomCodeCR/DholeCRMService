@@ -151,6 +151,8 @@ public sealed partial class CrmDbContext
             e.Property(x => x.Type).HasMaxLength(24);
             e.Property(x => x.Status).HasMaxLength(24);
             e.Property(x => x.Subject).HasMaxLength(250);
+            e.Property(x => x.LocationLatitude).HasPrecision(9, 6);
+            e.Property(x => x.LocationLongitude).HasPrecision(9, 6);
             e.Property(x => x.ReminderChannelStrategy).HasMaxLength(12);
             e.HasIndex(x => x.RecurrenceParentId).IsUnique()
                 .HasFilter("recurrence_parent_id IS NOT NULL");
