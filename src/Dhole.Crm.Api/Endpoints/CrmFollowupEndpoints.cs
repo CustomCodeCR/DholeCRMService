@@ -186,8 +186,11 @@ internal static class CrmFollowupEndpoints
            !CrmAccess.CanManageAgendaAcrossUsers(h)&&
            !CrmAccess.Scope(h,"crm.account.read-all")&&!CrmAccess.Scope(h,"crm.opportunity.assign"))
             return CrmAccess.Denied();
-        if(await auth.GetActiveAsync(r.AssignedUserId,ct) is null)
+        var activeOwner=await auth.GetActiveAsync(r.AssignedUserId,ct);
+        if(activeOwner is null)
             return CrmDataEndpoints.Bad("Assignee is not active");
+        if(r.AssignedUserId!=CrmAccess.UserId(h) && !CrmAccess.CanOwnCommercialAgenda(activeOwner))
+            return CrmDataEndpoints.Bad("El vendedor responsable debe tener rol Vendedor o SuperUsuario.");
         var x=new Followup {AccountId=r.AccountId,LeadId=r.LeadId,OpportunityId=r.OpportunityId,
             AssignedUserId=r.AssignedUserId,Channel=r.Channel,DueAt=r.DueAt,
             Subject=r.Subject?.Trim(),ReminderLeadMinutes=r.ReminderLeadMinutes,
