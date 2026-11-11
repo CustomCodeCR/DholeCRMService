@@ -1,3 +1,8 @@
+## [1.10.0] - 2026-11-10
+
+- MINOR DH-20261110-CRM-AGENDA-UNIFIED-077: autorización CRM de agendas por scopes de lectura global, creación de actividades en agenda de otros vendedores, participantes/contactos, minuta y compromisos vinculados.
+- CI, pruebas y staging pendientes; producción no autorizada. REST y realtime existentes conservados.
+
 ## [1.9.1] - 2026-11-10
 
 - PATCH DH-20261110-CRM-HISTORICAL-ACTIVITIES-075: permite registrar actividades CRM con fechas anteriores, conservando fechas UTC y marcando como completadas las que ya finalizaron. Las actividades completadas no generan recordatorios retroactivos. Mantiene reglas de fechas futuras de compromisos y seguimientos, permisos, minutas y las APIs existentes.
