@@ -1,3 +1,8 @@
+## [1.19.0] - 2026-11-11
+
+- MINOR DH-20261111-CRM-GEOAPIFY-VISIT-089: coordenadas geográficas para visitas CRM mediante migración PostgreSQL nullable, validaciones y actualización de endpoints REST. Compatible con registros previos, realtime y DholeWeb 1.31.0.
+- Ecosistema Dhole 1.32.0. CI y staging pendientes; despliegue productivo no autorizado.
+
 ## [1.18.0] - 2026-11-11
 
 - MINOR DH-20261111-CRM-ACTIVITY-COMPLETE-EDIT-088: endpoint transaccional PUT para edición completa de actividades, minutas, acuerdos y compromisos, incluso finalizadas; autorización por scope y visibilidad, versiones optimistas, auditoría de cambios y recordatorios idempotentes.
