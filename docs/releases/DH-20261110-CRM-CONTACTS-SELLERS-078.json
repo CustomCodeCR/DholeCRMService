@@ -1,0 +1,43 @@
+{
+  "releaseId": "DH-20261110-CRM-CONTACTS-SELLERS-078",
+  "date": "2026-11-10",
+  "kind": "MINOR",
+  "ecosystemVersion": "1.21.0",
+  "target": "develop",
+  "components": [
+    {
+      "repository": "CustomCodeCR/DholeWeb",
+      "previous": "1.20.1",
+      "next": "1.21.0"
+    },
+    {
+      "repository": "CustomCodeCR/DholeAuthService",
+      "previous": "1.6.4",
+      "next": "1.7.0"
+    },
+    {
+      "repository": "CustomCodeCR/DholeCRMService",
+      "previous": "1.9.3",
+      "next": "1.10.0"
+    },
+    {
+      "repository": "CustomCodeCR/DholeSystem",
+      "previous": "1.20.1",
+      "next": "1.21.0"
+    }
+  ],
+  "features": [
+    "DhMultiSelect de contactos vinculados en creación de actividad",
+    "DhMultiSelect para agregar participantes desde contacto de cuenta",
+    "Vendedor / Vendedores / Vendedor Supervisor / Vendedor Jefe / SuperUsuario en directorio Auth y validación CRM"
+  ],
+  "safeguards": {
+    "noSchemaMigration": true,
+    "realtimeUnchanged": true,
+    "productionDeploymentAuthorized": false
+  },
+  "validation": {
+    "CI": "pending",
+    "staging": "pending"
+  }
+}
