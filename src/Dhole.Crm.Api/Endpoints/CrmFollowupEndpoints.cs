@@ -241,7 +241,10 @@ internal static class CrmFollowupEndpoints
         if(!await CommercialAccess.SubjectCanRead(db,h,r.AccountId,r.LeadId,r.OpportunityId,ct))
             return CrmAccess.Denied();
         if(r.AssignedUserId!=CrmAccess.UserId(h)&&
-           !CrmAccess.Scope(h,"crm.account.read-all")&&!CrmAccess.Scope(h,"crm.opportunity.assign"))
+           !CrmAccess.Scope(h,"crm.account.read-all")&&
+            !CrmAccess.Scope(h,"crm.lead.read-all")&&
+            !CrmAccess.Scope(h,"crm.opportunity.assign")&&
+            !CrmAccess.IsCalendarAdministrator(h))
             return CrmAccess.Denied();
         if(await auth.GetActiveAsync(r.AssignedUserId,ct) is null)
             return CrmDataEndpoints.Bad("Assignee is not active");
