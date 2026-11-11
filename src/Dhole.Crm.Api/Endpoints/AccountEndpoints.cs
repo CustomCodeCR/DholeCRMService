@@ -372,8 +372,9 @@ internal static class AccountEndpoints
         if (!await CrmAccess.CanSeeAccount(db, http, account.Id, ct)) return CrmAccess.Denied();
         if (account.RowVersion != request.ExpectedVersion) return CrmDataEndpoints.Conflict("Stale row version");
         // Editing a client is not authority to reclassify it, even via a forged PATCH.
-        if (!CrmAccess.Scope(http, CrmDataEndpoints.AccountCategoryManageScope) &&
-            (account.CategoryType != request.CategoryType || account.CategoryCode != request.CategoryCode))
+        if (!AccountCategoryPolicy.CanUpdate(account.CategoryType, account.CategoryCode,
+                request.CategoryType, request.CategoryCode,
+                CrmAccess.Scope(http, CrmDataEndpoints.AccountCategoryManageScope)))
             return CrmAccess.Denied();
         if (string.IsNullOrWhiteSpace(request.DisplayName) || request.DisplayName.Length > 220 ||
             string.IsNullOrWhiteSpace(request.LegalName) || request.LegalName.Length > 220 ||
