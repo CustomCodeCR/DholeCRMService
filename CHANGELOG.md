@@ -1,3 +1,8 @@
+## [1.17.0] - 2026-11-11
+
+- MINOR DH-20261111-CRM-LEAD-INSTITUTIONAL-087: permite seleccionar Castro Fallas como vendedor institucional de prospectos y reasignarlos, manteniendo un Auth responsable, scopes y auditoría.
+- Migración aditiva del indicador, listado y duplicados con etiqueta institucional, conversión segura de prospecto a cuenta; conserva cambios de responsables por scopes de 1.16.1, REST y SignalR. Ecosistema Dhole 1.29.0. CI/staging pendientes, producción no autorizada.
+
 ## [1.16.1] - 2026-11-11
 
 - PATCH DH-20261111-CRM-RESPONSIBLES-SCOPES-086: responsables de actividades y seguimientos validados mediante scopes efectivos de Auth (crm.activity.read, crm.activity.read-all, crm.followup.manage) sin exigir rol comercial; preserva controles de delegación y corrige comprobaciones nulas de calendario.
