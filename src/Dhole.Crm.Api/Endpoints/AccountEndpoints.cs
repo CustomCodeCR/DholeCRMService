@@ -40,6 +40,7 @@ internal static class AccountEndpoints
         group.MapPatch("/accounts/{id:guid}/logo", SetLogo);
         group.MapGet("/accounts/{id:guid}/assignments", Assignments);
         group.MapGet("/accounts/{id:guid}/assigned-executive", AssignedExecutive);
+        group.MapAccountQuoteDelivery();
         group.MapGet("/accounts/assigned-executives", AssignedExecutives);
         group.MapGet("/accounts/{id:guid}/business-activities", Activities);
         group.MapPost("/accounts/{id:guid}/business-activities", AddActivity);
