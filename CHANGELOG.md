@@ -1,3 +1,8 @@
+## [1.13.0] - 2026-11-10
+
+- MINOR DH-20261110-CRM-LEAD-DUPLICATE-083: Bloquea prospectos duplicados entre vendedores por identificación fiscal o nombre comercial, devuelve HTTP 409 con vendedor asignado, protección transaccional y aviso durable por outbox.
+- Ecosistema Dhole 1.25.0; validaciones CI y staging pendientes. Sin despliegue de producción aprobado.
+
 ## [1.12.0] - 2026-11-10
 
 - MINOR DH-20261110-CRM-ACCOUNT-CATEGORY-SCOPE-082: El API de CRM impide cambiar la categoría sin crm.account.category.manage, incluso en solicitudes directas y conversiones; el alta sin permiso asigna nivel inicial seguro.
