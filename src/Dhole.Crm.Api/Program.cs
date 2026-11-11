@@ -47,6 +47,7 @@ app.MapGet("/health/ready", async (IDependencyVerifier verifier, CancellationTok
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapCrmDataEndpoints();
+app.MapInternalAccountQuoteDelivery();
 app.MapGrpcService<CrmDiagnosticsService>();
 app.MapGrpcService<CrmAccountReadGrpcService>();
 app.MapGrpcService<CrmOpportunityReadGrpcService>();
