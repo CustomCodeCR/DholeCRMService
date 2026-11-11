@@ -13,7 +13,7 @@ internal static class CommercialAccess
         OpportunityOwns(h,o) && (!o.AccountId.HasValue ||
             await CrmAccess.CanSeeAccount(db,h,o.AccountId.Value,ct));
     public static bool ActivityOwns(HttpContext h, Activity a) =>
-        a.OwnerUserId == CrmAccess.UserId(h) || CrmAccess.Scope(h, "crm.activity.read-all");
+        a.OwnerUserId == CrmAccess.UserId(h) || CrmAccess.CanManageAgendaAcrossUsers(h);
     public static bool AnalysisOwns(HttpContext h, CommercialAnalysis a) =>
         a.OwnerUserId == CrmAccess.UserId(h) ||
         (a.OpportunityId is not null && CrmAccess.Scope(h,"crm.opportunity.read-all")) ||

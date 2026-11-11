@@ -1,0 +1,13 @@
+{
+  "releaseId": "DH-20261110-CRM-GLOBAL-AGENDAS-076",
+  "component": "DholeCRMService",
+  "componentVersion": "1.4.7",
+  "ecosystemVersion": "1.19.5",
+  "releaseType": "PATCH",
+  "date": "2026-11-10",
+  "status": "candidate",
+  "changes": [
+    "Authorized global calendar access with BOTH subject read-all scopes",
+    "Cross-user assignment plus service-key-protected Auth directory"
+  ]
+}
