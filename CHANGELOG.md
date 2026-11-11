@@ -1,3 +1,8 @@
+## [1.12.0] - 2026-11-10
+
+- MINOR DH-20261110-CRM-ACCOUNT-CATEGORY-SCOPE-082: CRM protege la categoría en creación, edición y conversión de prospectos; sin crm.account.category.manage asigna categoría inicial conservadora y rechaza cambios no autorizados.
+- Tests CI obligatorios y staging por validar. Merge a master autorizado expresamente.
+
 ## [1.11.0] - 2026-11-10
 
 - MINOR DH-20261110-CRM-ACCOUNT-PROCEDURES-080 (master backport): CRUD REST autorizado por cuenta, múltiples procedimientos (nombre, detalle, equipo asignado), concurrencia optimista y migración PostgreSQL aditiva.
