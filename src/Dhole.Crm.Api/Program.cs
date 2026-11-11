@@ -4,6 +4,21 @@ using Dhole.Crm.Api.Endpoints;
 using Dhole.Crm.Application.Health;
 using Dhole.Crm.Infrastructure.DependencyInjection;
 
+// Container health checks reuse the compiled .NET runtime instead of apt/curl.
+if (args.Length == 1 && args[0] == "--container-healthcheck")
+{
+    try
+    {
+        using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(5) };
+        using var response = await client.GetAsync("http://127.0.0.1:8080/health/ready");
+        Environment.Exit(response.IsSuccessStatusCode ? 0 : 1);
+    }
+    catch
+    {
+        Environment.Exit(1);
+    }
+}
+
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddCrmInfrastructure();
 builder.Services.AddHttpClient();
