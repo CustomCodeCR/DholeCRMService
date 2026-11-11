@@ -15,7 +15,22 @@ internal static class CrmCalendarLabelsEndpoints
     public static RouteGroupBuilder MapCalendarLabels(this RouteGroupBuilder group)
     {
         group.MapGet("/calendar/labels", Get);
+        group.MapGet("/calendar/users", GetUserDirectory);
         return group;
+    }
+
+
+    private static async Task<IResult> GetUserDirectory(int? page,int? pageSize,string? search,
+        HttpContext http,IAuthReferenceService auth,CancellationToken ct)
+    {
+        if(!CrmAccess.Scope(http,"crm.activity.read-all") &&
+           !CrmAccess.Scope(http,"crm.account.read-all") &&
+           !CrmAccess.Scope(http,"crm.lead.read-all"))return CrmAccess.Denied();
+        if(search?.Length>100)return Results.BadRequest(new{error="Search too long"});
+        var n=Math.Max(1,page??1);
+        var size=Math.Clamp(pageSize??100,1,100);
+        var result=await auth.GetDirectoryAsync(n,size,search,ct);
+        return Results.Ok(result);
     }
 
     private static Guid[] Parse(string? values)
