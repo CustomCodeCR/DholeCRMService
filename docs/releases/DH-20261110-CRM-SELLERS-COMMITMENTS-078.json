@@ -1,0 +1,15 @@
+{
+  "releaseId": "DH-20261110-CRM-SELLERS-COMMITMENTS-078",
+  "releaseType": "PATCH",
+  "date": "2026-11-10",
+  "component": "DholeCRMService",
+  "from": "1.9.2",
+  "to": "1.9.3",
+  "ecosystemVersion": "1.20.1",
+  "status": "candidate",
+  "changes": [
+    "Validate seller role when assigning other user",
+    "Enable completion of parent-activity commitments with scoped write authorization",
+    "Retain optimistic concurrency and audit trail"
+  ]
+}
