@@ -1,3 +1,8 @@
+## [1.15.0] - 2026-11-11
+
+- MINOR DH-20261111-CRM-PROCEDURE-ATTACHMENTS-085: autorización por procedimiento específico para documentos almacenados en Dhole Storage, con comprobación de visibilidad de la cuenta y permiso crm.account.update.
+- Backport selectivo a master del release aprobado en develop/staging, preservando APIs REST, SignalR y releases anteriores.
+
 ## [1.14.0] - 2026-11-11
 
 - MINOR DH-20261111-CRM-DOCUMENTS-084: autorización por registro CRM para consultar y adjuntar documentos vinculados a cuentas, prospectos, contactos, actividades y seguimientos; mantiene compatibilidad REST/SignalR y scopes de Storage.
