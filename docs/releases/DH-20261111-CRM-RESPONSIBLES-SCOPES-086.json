@@ -1,0 +1,33 @@
+{
+  "releaseId": "DH-20261111-CRM-RESPONSIBLES-SCOPES-086",
+  "date": "2026-11-11",
+  "kind": "PATCH",
+  "ecosystemVersion": "1.28.1",
+  "branch": "feature/crm-responsibles-scopes-086-develop",
+  "components": [
+    {
+      "repository": "CustomCodeCR/DholeAuthService",
+      "previous": "1.8.0",
+      "next": "1.8.1"
+    },
+    {
+      "repository": "CustomCodeCR/DholeCRMService",
+      "previous": "1.16.0",
+      "next": "1.16.1"
+    },
+    {
+      "repository": "CustomCodeCR/DholeWeb",
+      "previous": "1.28.0",
+      "next": "1.28.1"
+    }
+  ],
+  "changes": [
+    "Allow CRM calendar responsible users with any crm.activity.read, crm.activity.read-all or crm.followup.manage effective scopes",
+    "Assistants permitted without salesperson roles; preserves access restrictions and realtime/REST"
+  ],
+  "validation": {
+    "CI": "pending",
+    "staging": "pending"
+  },
+  "productionDeploymentAuthorized": false
+}

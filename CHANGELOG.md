@@ -1,3 +1,8 @@
+## [1.16.1] - 2026-11-11
+
+- PATCH DH-20261111-CRM-RESPONSIBLES-SCOPES-086: responsables de actividades y seguimientos validados mediante scopes efectivos de Auth (crm.activity.read, crm.activity.read-all, crm.followup.manage) sin exigir rol comercial; preserva controles de delegación y corrige comprobaciones nulas de calendario.
+- Ecosistema 1.28.1, REST/SignalR compatibles; CI/staging pendientes, sin autorización productiva.
+
 ## [1.16.0] - 2026-11-11
 
 - MINOR DH-20261111-CRM-DOCUMENT-DROPZONE-086: soporte autorizado de documentos por procedimiento y su cuenta, compatible con drag & drop sin límite fijo de archivos; conserva REST/SignalR y permisos CRM.
