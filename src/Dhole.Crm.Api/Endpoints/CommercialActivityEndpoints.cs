@@ -46,7 +46,7 @@ internal static class CommercialActivityEndpoints
         g.MapPost("/activities/{id:guid}/participants",AddParticipant);
         return g;
     }
-    private static bool CanRead(HttpContext h)=>CrmDataEndpoints.HasRead(h,"activity");
+    private static bool CanRead(HttpContext h)=>CrmDataEndpoints.HasRead(h,"activity") || CrmAccess.CanManageAgendaAcrossUsers(h);
     private static async Task<Activity?> FindAllowed(Guid id,CrmDbContext db,HttpContext h,CancellationToken ct)
     {
         var a=await db.Activities.FirstOrDefaultAsync(x=>x.Id==id&&x.ArchivedAt==null,ct);
@@ -61,7 +61,7 @@ internal static class CommercialActivityEndpoints
         var visibleAccounts=CrmAccess.VisibleAccounts(db,h).Select(a=>a.Id);
         var query=db.Activities.AsNoTracking().Where(x=>x.ArchivedAt==null &&
             (!x.AccountId.HasValue || visibleAccounts.Contains(x.AccountId.Value)));
-        if(!CrmAccess.Scope(h,"crm.activity.read-all"))
+        if(!CrmAccess.CanManageAgendaAcrossUsers(h))
             query=query.Where(x=>x.OwnerUserId==CrmAccess.UserId(h));
         if(accountId is { } a)query=query.Where(x=>x.AccountId==a);
         if(leadId is { } l)query=query.Where(x=>x.LeadId==l);
@@ -99,7 +99,7 @@ internal static class CommercialActivityEndpoints
             return CommercialAccess.Invalid("Invalid activity type, schedule or authorized subject");
         var current=CrmAccess.UserId(h);
         var owner=r.OwnerUserId??current;
-        if(owner!=current&&!CrmAccess.Scope(h,"crm.activity.read-all"))
+        if(owner!=current&&!CrmAccess.CanManageAgendaAcrossUsers(h))
             return CrmAccess.Denied();
         if(await auth.GetActiveAsync(owner,ct) is null)return CommercialAccess.Invalid("Activity owner inactive in Auth");
         if(!await config.IsActiveCodeAsync("crm-activity-types",r.Type,ct))

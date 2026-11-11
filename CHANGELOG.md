@@ -1,3 +1,8 @@
+## [1.4.7] - 2026-11-10
+
+- PATCH DH-20261110-CRM-GLOBAL-AGENDAS-076: lectura y creación de actividades de otros usuarios con crm.activity.read-all o ambos scopes crm.account.read-all y crm.lead.read-all; directorio Auth interno protegido para vendedores activos, preservando controles por registro, uso de usuarios activos y REST.
+- Ecosistema Dhole 1.19.5; CI y staging pendientes, sin despliegue de producción.
+
 ## [1.4.6] - 2026-11-10
 
 - PATCH DH-20261110-CRM-HISTORICAL-ACTIVITIES-075: permite registrar actividades CRM con fechas anteriores, conservando fechas UTC y marcando como completadas las que ya finalizaron. Las actividades completadas no generan recordatorios retroactivos. Mantiene reglas de fechas futuras de compromisos y seguimientos, permisos, minutas y las APIs existentes.

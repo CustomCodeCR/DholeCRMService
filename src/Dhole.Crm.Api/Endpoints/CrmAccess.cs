@@ -19,6 +19,10 @@ internal static class CrmAccess
         var scopes = http.Items["crm.effective-scopes"] as HashSet<string>;
         return scopes?.Contains(scope) == true;
     }
+    // Read-all activity access is explicit, or requires BOTH global CRM subject scopes.
+    public static bool CanManageAgendaAcrossUsers(HttpContext http) =>
+        Scope(http, "crm.activity.read-all") ||
+        (Scope(http, "crm.account.read-all") && Scope(http, "crm.lead.read-all"));
     // The assigned Auth user of a house account is operational, not an access grant.
     // Never infer permission from the institutional account's ExecutiveUserId.
     public static IQueryable<Account> VisibleAccounts(CrmDbContext db, HttpContext http)
