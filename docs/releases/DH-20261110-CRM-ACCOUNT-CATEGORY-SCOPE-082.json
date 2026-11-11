@@ -1,0 +1,40 @@
+{
+  "releaseId": "DH-20261110-CRM-ACCOUNT-CATEGORY-SCOPE-082",
+  "date": "2026-11-10",
+  "kind": "MINOR",
+  "ecosystemVersion": "1.22.0",
+  "branch": "feature/crm-category-scope-080-develop",
+  "components": [
+    {
+      "repository": "CustomCodeCR/DholeAuthService",
+      "previous": "1.7.0",
+      "next": "1.8.0"
+    },
+    {
+      "repository": "CustomCodeCR/DholeCRMService",
+      "previous": "1.10.0",
+      "next": "1.11.0"
+    },
+    {
+      "repository": "CustomCodeCR/DholeWeb",
+      "previous": "1.21.0",
+      "next": "1.22.0"
+    },
+    {
+      "repository": "CustomCodeCR/DholeSystem",
+      "previous": "1.21.0",
+      "next": "1.22.0"
+    }
+  ],
+  "changes": [
+    "Auth: create crm.account.category.manage without automatically granting to ordinary sales roles",
+    "CRM: server-enforced category scope in account POST, PATCH and lead conversion; conservative category default for unprivileged users",
+    "Web: disable category selectors in account creation, editing and prospect conversion unless authorized",
+    "Regression tests for authorized and unauthorized users; existing REST and realtime contracts unchanged"
+  ],
+  "validation": {
+    "CI": "pending",
+    "staging": "pending"
+  },
+  "productionDeploymentAuthorized": false
+}
