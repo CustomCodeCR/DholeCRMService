@@ -1,3 +1,8 @@
+## [1.6.0] - 2026-11-10
+
+- MINOR DH-20261110-CRM-CONTACTS-ROLE-MULTISELECT-079: Validación de responsables con roles de ventas y SuperUsuario activos provenientes de Auth; se conserva autorización por scopes en CRM.
+- Se mantienen API REST y realtime existentes. Validación por CI y staging antes de confirmar despliegue.
+
 ## [1.5.1] - 2026-11-10
 
 - PATCH DH-20261110-CRM-SELLERS-COMMITMENTS-078: la asignación a otro usuario exige rol Vendedor. Los compromisos vinculados a actividades pueden marcarse completos con crm.activity.update del responsable y autorización de registro, respetando historial antiguo y concurrencia.
