@@ -1,3 +1,8 @@
+## [1.5.0] - 2026-11-10
+
+- MINOR DH-20261110-CRM-AGENDA-UNIFIED-077: guarda minuta detallada y contactos participantes de actividades, admite creación para otros vendedores autorizados y filtra calendarios por vendedor; conserva lectura de agendas con crm.account.read-all y crm.lead.read-all.
+- Sin migraciones de base ni cambios en contratos realtime; CI y staging previos a la promoción a master.
+
 ## [1.4.7] - 2026-11-10
 
 - PATCH DH-20261110-CRM-GLOBAL-AGENDAS-076: lectura y creación de actividades de otros usuarios con crm.activity.read-all o ambos scopes crm.account.read-all y crm.lead.read-all; directorio Auth interno protegido para vendedores activos, preservando controles por registro, uso de usuarios activos y REST.
