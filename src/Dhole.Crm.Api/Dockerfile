@@ -9,10 +9,9 @@ RUN --mount=type=secret,id=github_token,required=true \
     dotnet restore src/Dhole.Crm.Api/Dhole.Crm.Api.csproj --configfile NuGet.Config && \
     dotnet publish src/Dhole.Crm.Api/Dhole.Crm.Api.csproj -c Release --no-restore -o /publish /p:UseAppHost=false
 FROM mcr.microsoft.com/dotnet/aspnet:10.0
-RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certificates && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY --from=publish /publish ./
 USER $APP_UID
 EXPOSE 8080 8081
-HEALTHCHECK --interval=30s --timeout=10s --start-period=30s CMD curl -fsS http://127.0.0.1:8080/health/ready >/dev/null || exit 1
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s CMD ["dotnet", "Dhole.Crm.Api.dll", "--container-healthcheck"]
 ENTRYPOINT ["dotnet","Dhole.Crm.Api.dll"]

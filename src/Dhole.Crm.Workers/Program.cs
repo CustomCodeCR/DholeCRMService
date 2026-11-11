@@ -5,6 +5,21 @@ using Dhole.Crm.Workers.Followups;
 using Dhole.Crm.Workers;
 using CustomCodeFramework.Redis.Streams.Abstractions;
 
+// Container health checks reuse the compiled .NET runtime instead of apt/curl.
+if (args.Length == 1 && args[0] == "--container-healthcheck")
+{
+    try
+    {
+        using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(5) };
+        using var response = await client.GetAsync("http://127.0.0.1:8082/health/ready");
+        Environment.Exit(response.IsSuccessStatusCode ? 0 : 1);
+    }
+    catch
+    {
+        Environment.Exit(1);
+    }
+}
+
 var builder = WebApplication.CreateBuilder(args);
 builder.WebHost.UseUrls("http://0.0.0.0:8082");
 builder.Services.AddCrmInfrastructure();
