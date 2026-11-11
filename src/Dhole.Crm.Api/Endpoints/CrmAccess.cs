@@ -23,7 +23,7 @@ internal static class CrmAccess
     // Responsibility for a commercial agenda is limited to active Auth sales roles.
     // Never infer the role from the name of the user, their team or the client.
     private static readonly HashSet<string> CommercialAgendaRoles = new(
-        ["Vendedor", "Vendedor Supervisor", "Vendedor Jefe", "SuperUsuario"],
+        ["Vendedor", "Vendedores", "Vendedor Supervisor", "Vendedor Jefe", "SuperUsuario"],
         StringComparer.OrdinalIgnoreCase);
     public static bool CanOwnCommercialAgenda(AuthUserReference? user) =>
         user is { Active: true } &&
