@@ -1,0 +1,32 @@
+{
+  "releaseId": "DH-20261111-CRM-ACTIVITY-COMPLETE-EDIT-088",
+  "date": "2026-11-11",
+  "type": "MINOR",
+  "ecosystem": "Dhole",
+  "ecosystemVersion": "1.30.0",
+  "components": [
+    {
+      "repository": "CustomCodeCR/DholeCRMService",
+      "previous": "1.17.1",
+      "next": "1.18.0"
+    },
+    {
+      "repository": "CustomCodeCR/DholeWeb",
+      "previous": "1.29.1",
+      "next": "1.30.0"
+    }
+  ],
+  "changes": [
+    "Edición integral de título, tipo, ubicación, agenda y recordatorios de actividades incluso completadas",
+    "Edición de minutas, observaciones y acuerdos sin sobrescribir histórico",
+    "Actualizar, completar, reabrir y retirar pendientes vinculados a la actividad con historial de seguimiento",
+    "Migración aditiva a notas PostgreSQL TEXT, reencolado de recordatorios y compatibilidad REST/SignalR"
+  ],
+  "releaseBranch": "feature/crm-activity-complete-edit-20261111-master",
+  "validation": {
+    "CI": "pending",
+    "staging": "pending",
+    "rollback": "Revertir cambios de aplicación; preservar columna TEXT para no truncar minutas"
+  },
+  "productionDeploymentAuthorized": false
+}
