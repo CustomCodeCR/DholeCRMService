@@ -170,7 +170,7 @@ public sealed partial class CrmDbContext
         b.Entity<ActivityNote>(e =>
         {
             e.HasOne<Activity>().WithMany().HasForeignKey(x => x.ActivityId).OnDelete(DeleteBehavior.Restrict);
-            e.Property(x => x.NoteText).HasMaxLength(8000);
+            e.Property(x => x.NoteText).HasColumnType("text");
             e.HasIndex(x => new {x.ActivityId,x.CreatedAt});
         });
         b.Entity<CommercialAnalysis>(e =>
