@@ -1,3 +1,4 @@
+using Dhole.Crm.Workers.Realtime;
 using Dhole.Crm.Infrastructure.DependencyInjection;
 using Dhole.Crm.Workers.Health;
 using Dhole.Crm.Workers.Followups;
@@ -11,6 +12,8 @@ builder.Services.AddCrmReminderRedis(builder.Configuration);
 builder.Services.AddHostedService<CrmFollowupSchedulerWorker>();
 builder.Services.AddHostedService<CrmReminderDispatcherWorker>();
 builder.Services.AddHostedService<CrmPricingInboxWorker>();
+// Durable publisher, inactive until coordinated realtime flags are on.
+builder.Services.AddHostedService<CrmRealtimeOutboxWorker>();
 builder.Services.AddHostedService<CrmContractRenewalWorker>();
 builder.Services.AddHostedService<CrmCreditReviewWorker>();
 builder.Services.AddSingleton<WorkerHeartbeatState>();

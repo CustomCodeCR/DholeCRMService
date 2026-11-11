@@ -1,6 +1,7 @@
 using System.Text.RegularExpressions;
 using Dhole.Crm.Domain;
 using Dhole.Crm.Infrastructure.Persistence;
+using Dhole.Crm.Infrastructure.Realtime;
 using Dhole.Crm.Infrastructure.References;
 using Microsoft.EntityFrameworkCore;
 
@@ -18,6 +19,7 @@ public static class CrmDataEndpoints
         group.MapAccountCommercialOverview();
         group.MapAccountRouteEvidence();
         group.MapAccountBusinessProfile();
+        group.MapAccountSpecificProcedures();
         group.MapAccountCommercialBenefits();
         group.MapLeads();
         group.MapPricingClientOptions();
@@ -54,6 +56,37 @@ public static class CrmDataEndpoints
     internal static IResult Conflict(string title) => Results.Problem(statusCode: 409, title: title);
     internal static IResult Bad(string title) => Results.Problem(statusCode: 400, title: title);
     internal static IResult Unavailable() => Results.Problem(statusCode: 503, title: "Reference service unavailable");
+
+    // F6.01: account lifecycle mutations share one transactional durable producer.
+    // With batch flags OFF, preserve the existing REST-only save path.
+    internal static async Task<IResult> CommitAccount(
+        CrmDbContext db, Dhole.Crm.Domain.Account account,
+        HttpContext http, IConfiguration flags, string eventType,
+        CancellationToken ct)
+    {
+        if (!CrmAccountRealtimeCommit.IsEnabled(flags))
+            return await Commit(db, ct);
+        try
+        {
+            await CrmAccountRealtimeCommit.PersistUpdatedAccountAsync(
+                db, account, http.TraceIdentifier, ct, eventType);
+            return Results.Ok();
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return Conflict("Record modified concurrently");
+        }
+        catch (DbUpdateException)
+        {
+            return Conflict("Conflicting or invalid CRM record");
+        }
+        catch (Npgsql.NpgsqlException)
+        {
+            // A missing Outbox migration must not silently lose a committed event.
+            return Results.Problem(statusCode: 503,
+                title: "CRM realtime persistence unavailable");
+        }
+    }
 
     internal static async Task<IResult> Commit(CrmDbContext db, CancellationToken ct)
     {
