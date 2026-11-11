@@ -1,3 +1,8 @@
+## [1.14.0] - 2026-11-11
+
+- MINOR DH-20261111-CRM-DOCUMENTS-084: autorización por registro CRM para consultar y adjuntar documentos vinculados a cuentas, prospectos, contactos, actividades y seguimientos; mantiene compatibilidad REST/SignalR y scopes de Storage.
+- Ecosistema 1.26.0; compilación, CI y staging pendientes; sin autorización de despliegue a producción.
+
 ## [1.13.0] - 2026-11-10
 
 - MINOR DH-20261110-CRM-LEAD-DUPLICATE-083: Bloquea prospectos duplicados entre vendedores por identificación fiscal o identidad comercial; 409 estructurado con propietario desde Auth; bloqueo transaccional, alertas idempotentes en outbox y compatibilidad REST/realtime.
