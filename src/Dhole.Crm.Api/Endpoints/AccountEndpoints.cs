@@ -288,7 +288,7 @@ internal static class AccountEndpoints
         if (account is null) return Results.NotFound();
         var ids = account.QuoteDeliveryTarget == "client"
             ? ParseQuoteContactIds(account.QuoteDeliveryContactIdsJson, account.QuoteDeliveryContactId)
-            : [];
+            : Array.Empty<Guid>();
         return Results.Ok(new
         {
             deliveryTarget = account.QuoteDeliveryTarget,
@@ -309,8 +309,8 @@ internal static class AccountEndpoints
             return Results.BadRequest(new { error = "Seleccione vendedor o cliente." });
 
         // Accept legacy contactId in existing REST integrations, but prefer contactIds.
-        var contactIds = request.ContactIds ??
-            (request.ContactId is Guid legacyId ? [legacyId] : []);
+        Guid[] contactIds = request.ContactIds ??
+            (request.ContactId is Guid legacyId ? [legacyId] : Array.Empty<Guid>());
         if (contactIds.Length > 100 || contactIds.Contains(Guid.Empty) ||
             contactIds.Distinct().Count() != contactIds.Length)
             return Results.BadRequest(new { error = "La selección contiene contactos duplicados o no válidos." });
