@@ -1,0 +1,35 @@
+{
+  "releaseId": "DH-20261110-CRM-LEAD-DUPLICATE-083",
+  "date": "2026-11-10",
+  "kind": "MINOR",
+  "ecosystemVersion": "1.25.0",
+  "sourceBranch": "feature/crm-lead-duplicate-20261110-master",
+  "components": [
+    {
+      "repository": "CustomCodeCR/DholeCRMService",
+      "previous": "1.12.0",
+      "next": "1.13.0"
+    },
+    {
+      "repository": "CustomCodeCR/DholeWeb",
+      "previous": "1.24.0",
+      "next": "1.25.0"
+    },
+    {
+      "repository": "CustomCodeCR/DholeNotificationsService",
+      "previous": "1.2.1",
+      "next": "1.3.0"
+    }
+  ],
+  "changes": [
+    "Reject duplicate CRM prospects against all sellers by exact normalized tax ID or names in the matching country",
+    "Return typed HTTP 409 with assigned seller name resolved via Auth without exposing other lead details",
+    "Show immediate DholeWeb warning and queue durable idempotent Notifications inbox alert when CRM background dispatcher is enabled",
+    "Preserve REST, SignalR and existing per-service realtime behavior"
+  ],
+  "validation": {
+    "CI": "pending",
+    "staging": "pending"
+  },
+  "productionDeploymentAuthorized": false
+}
