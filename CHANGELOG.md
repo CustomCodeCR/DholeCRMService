@@ -1,3 +1,8 @@
+## [1.19.0] - 2026-11-11
+
+- MINOR DH-20261111-CRM-ACCOUNT-FUTURE-QUOTE-DELIVERY-093: Añade una regla por cuenta (vendedor o contacto vinculado) persistida en PostgreSQL con migración, controles de acceso, actualización optimista, endpoint GET/PUT y lectura privada con clave de servicio.
+- Versión 1.18.0 → 1.19.0; ecosistema global 1.33.0. CI/staging pendientes; sin promoción a producción antes de validaciones.
+
 ## [1.18.0] - 2026-11-11
 
 - MINOR DH-20261111-CRM-ACTIVITY-COMPLETE-EDIT-088: endpoint transaccional PUT para edición completa de actividades, minutas, acuerdos y compromisos, incluso finalizadas; autorización por scope y visibilidad, versiones optimistas, auditoría de cambios y recordatorios idempotentes.
