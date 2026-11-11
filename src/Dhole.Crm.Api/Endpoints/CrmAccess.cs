@@ -23,10 +23,11 @@ internal static class CrmAccess
     public static bool CanManageAgendaAcrossUsers(HttpContext http) =>
         Scope(http, "crm.activity.read-all") ||
         (Scope(http, "crm.account.read-all") && Scope(http, "crm.lead.read-all"));
+    private static readonly HashSet<string> CommercialAgendaRoles = new(
+        ["Vendedor", "Vendedores", "Vendedor Supervisor", "Vendedor Jefe", "SuperUsuario"],
+        StringComparer.OrdinalIgnoreCase);
     public static bool IsSeller(AuthUserReference user) =>
-        (user.Roles ?? []).Any(role =>
-            string.Equals(role, "Vendedor", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(role, "Vendedores", StringComparison.OrdinalIgnoreCase));
+        user.Active && (user.Roles ?? []).Any(role => CommercialAgendaRoles.Contains(role));
 
     // The assigned Auth user of a house account is operational, not an access grant.
     // Never infer permission from the institutional account's ExecutiveUserId.
