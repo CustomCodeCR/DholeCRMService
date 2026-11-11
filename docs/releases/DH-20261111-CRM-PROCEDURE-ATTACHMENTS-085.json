@@ -3,9 +3,8 @@
   "date": "2026-11-11",
   "kind": "MINOR",
   "ecosystemVersion": "1.27.0",
-  "sourceBranches": [
-    "feature/crm-procedure-attachments-20261111-085"
-  ],
+  "targetBranch": "master",
+  "sourceBranch": "feature/crm-procedure-attachments-085-master-backport-20261111",
   "components": [
     {
       "repository": "CustomCodeCR/DholeCRMService",
@@ -16,17 +15,23 @@
       "repository": "CustomCodeCR/DholeWeb",
       "previous": "1.26.0",
       "next": "1.27.0"
+    },
+    {
+      "repository": "CustomCodeCR/DholeSystem",
+      "previous": "1.25.3",
+      "next": "1.27.0"
     }
   ],
   "changes": [
-    "Associate Storage documents with an individual customer-specific CRM procedure; upload multiple files during creation and editing.",
-    "List, preview and download procedure attachments using shared CRM Documents panel and StorageFileViewer.",
-    "Enforce CRM visibility of the parent account before revealing a procedure's document access and retain Storage scope checks.",
-    "Reuse the existing CRM REST and realtime architecture and retry failed uploads without duplicating saved procedures."
+    "Associate multiple Dhole Storage documents with individual customer-specific procedures",
+    "Allow preview of PDFs, images and text, and download the original documents",
+    "Apply parent account access authorization; retry failed file uploads without duplicate CRM procedures",
+    "Preserve all unrelated master functionality, REST and existing realtime contracts"
   ],
   "validation": {
-    "CI": "pending",
-    "staging": "pending"
+    "developCI": "passed",
+    "developStaging": "passed",
+    "masterBackportCI": "pending"
   },
-  "productionDeploymentAuthorized": false
+  "productionDeploymentAuthorizedForThisBusinessRelease": true
 }

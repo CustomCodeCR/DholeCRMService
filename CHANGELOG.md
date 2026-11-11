@@ -1,11 +1,12 @@
 ## [1.16.0] - 2026-11-11
 
-- MINOR DH-20261111-CRM-DOCUMENT-DROPZONE-086: soporte autorizado de documentos por procedimiento y su cuenta, compatible con drag & drop sin límite fijo de archivos; conserva REST/SignalR y permisos CRM.
-- Ecosistema Dhole 1.28.0; DholeWeb 1.28.0. CI y staging pendientes, producción no autorizada.
+- MINOR DH-20261111-CRM-DOCUMENT-DROPZONE-086: mantiene validación de permisos por procedimiento específico, cuenta visible y scopes de edición; compatible con carga múltiple drag & drop en Web 1.28.0.
+- Ecosistema Dhole 1.28.0, CRM 1.16.0; mantiene REST, Storage y SignalR, con CI/staging pendientes y producción no autorizada.
 
 ## [1.15.0] - 2026-11-11
 
-- MINOR DH-20261111-CRM-PROCEDURE-ATTACHMENTS-085: los documentos de procedimientos específicos se autorizan por la cuenta visible y crm.account.update; mantiene contratos REST y SignalR existentes.
+- MINOR DH-20261111-CRM-PROCEDURE-ATTACHMENTS-085: autorización por procedimiento específico para documentos almacenados en Dhole Storage, con comprobación de visibilidad de la cuenta y permiso crm.account.update.
+- Backport selectivo a master del release aprobado en develop/staging, preservando APIs REST, SignalR y releases anteriores.
 
 ## [1.14.0] - 2026-11-11
 

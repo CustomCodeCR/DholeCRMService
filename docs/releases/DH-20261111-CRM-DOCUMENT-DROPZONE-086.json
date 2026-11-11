@@ -6,12 +6,12 @@
   "components": [
     {
       "repository": "CustomCodeCR/DholeCRMService",
-      "previous": "1.14.0",
+      "previous": "1.15.0",
       "next": "1.16.0"
     },
     {
       "repository": "CustomCodeCR/DholeWeb",
-      "previous": "1.26.0",
+      "previous": "1.27.0",
       "next": "1.28.0"
     }
   ],
