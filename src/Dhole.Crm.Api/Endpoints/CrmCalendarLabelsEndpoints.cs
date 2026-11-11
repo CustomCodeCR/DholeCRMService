@@ -22,7 +22,10 @@ internal static class CrmCalendarLabelsEndpoints
     private static async Task<IResult> GetUserDirectory(int? page,int? pageSize,string? search,
         HttpContext http,IAuthReferenceService auth,CancellationToken ct)
     {
-        if(!CrmAccess.IsCalendarAdministrator(http))return CrmAccess.Denied();
+        if(!CrmAccess.IsCalendarAdministrator(http) &&
+           !CrmAccess.Scope(http,"crm.activity.read-all") &&
+           !CrmAccess.Scope(http,"crm.account.read-all") &&
+           !CrmAccess.Scope(http,"crm.lead.read-all"))return CrmAccess.Denied();
         if(search?.Length>100)return Results.BadRequest(new{error="Search too long"});
         var n=Math.Max(1,page??1);
         var size=Math.Clamp(pageSize??100,1,100);
@@ -46,6 +49,8 @@ internal static class CrmCalendarLabelsEndpoints
            !CrmAccess.Scope(http,"crm.task.manage") &&
            !CrmAccess.Scope(http,"crm.followup.manage") &&
            !CrmAccess.Scope(http,"crm.activity.read-all") &&
+           !CrmAccess.Scope(http,"crm.account.read-all") &&
+           !CrmAccess.Scope(http,"crm.lead.read-all") &&
            !CrmAccess.IsCalendarAdministrator(http))
             return CrmAccess.Denied();
         Guid[] wantedAccounts,wantedLeads,wantedOwners;
@@ -78,7 +83,8 @@ internal static class CrmCalendarLabelsEndpoints
             .Where(a=>a.ArchivedAt==null && wantedOwners.Contains(a.OwnerUserId) &&
                 ((a.AccountId.HasValue&&validAccounts.Contains(a.AccountId.Value))||
                  (a.LeadId.HasValue&&validLeads.Contains(a.LeadId.Value))) &&
-                (a.OwnerUserId==actor||allActivities))
+                (a.OwnerUserId==actor||allActivities||
+                 (allAccounts&&a.AccountId.HasValue)||(allLeads&&a.LeadId.HasValue)))
             .Select(a=>a.OwnerUserId).Distinct().ToListAsync(ct);
         var ownersFromFollowups=await db.Followups.AsNoTracking()
             .Where(f=>f.ArchivedAt==null && wantedOwners.Contains(f.AssignedUserId) &&
