@@ -3,6 +3,17 @@
 - MINOR DH-20261111-CRM-VISIT-LOCATIONS-096: nuevo registro seguro de ubicaciones para prospectos, con endpoint de consulta/creación/edición, migración PostgreSQL aditiva y eventos existentes de lista de prospectos por outbox.
 - DholeWeb 1.34.0 consulta direcciones de cuentas y prospectos y recupera búsqueda Geoapify con fallback. Ecosistema Dhole 1.34.0; pruebas de staging pendientes.
 
+## [1.20.1] - 2026-11-11
+
+- PATCH DH-20261111-CRM-QUOTE-PREFERENCE-REALTIME-094: la preferencia de destinatarios de cotizaciones por cuenta emite invalidación de CRM mediante Outbox/SignalR existente cuando las flags del release realtime están aprobadas; mantiene REST e idempotencia.
+- Completa el release 093 con System/global 1.33.1. CI y staging pendientes.
+
+## [1.20.0] - 2026-11-11
+
+- MINOR DH-20261111-CRM-ACCOUNT-QUOTE-DELIVERY-093: configura por cuenta destinatarios de todas las próximas cotizaciones: vendedor únicamente o contacto del cliente con copia al vendedor asignado.
+- La preferencia se guarda en CRM, se valida en Pricing en cada envío y se edita sin seleccionar QUO. REST, SignalR, Outbox y el procesamiento idempotente se mantienen.
+- Versión global Dhole 1.33.0. CI y staging pendientes; producción no autorizada hasta validación.
+
 ## [1.19.0] - 2026-11-11
 
 - MINOR DH-20261111-CRM-GEOAPIFY-VISIT-089: coordenadas geográficas para visitas CRM mediante migración PostgreSQL nullable, validaciones y actualización de endpoints REST. Compatible con registros previos, realtime y DholeWeb 1.31.0.

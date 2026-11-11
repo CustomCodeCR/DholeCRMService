@@ -28,6 +28,10 @@ public sealed class Account : CrmRecord
     public Guid ExecutiveUserId { get; set; }
     // Explicit institutional seller; ExecutiveUserId remains the accountable Auth user.
     public bool IsCastroFallasExecutive { get; set; }
+    // Account-level default applied to every future quotation dispatch.
+    public string QuoteDeliveryTarget { get; set; } = "seller";
+    public Guid? QuoteDeliveryContactId { get; set; }
+    public DateTime? QuoteDeliveryUpdatedAtUtc { get; set; }
     public string VerificationStatus { get; set; } = "Pending";
     public DateTime? HaciendaVerifiedAt { get; set; }
     public string Status { get; set; } = "Active";

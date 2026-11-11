@@ -95,6 +95,7 @@ public sealed partial class CrmDbContext(DbContextOptions<CrmDbContext> options)
             e.Property(x => x.RelationshipTypeCode).HasMaxLength(256);
             e.Property(x => x.CategoryType).HasMaxLength(12);
             e.Property(x => x.CategoryCode).HasMaxLength(1);
+            e.Property(x => x.QuoteDeliveryTarget).HasMaxLength(16).HasDefaultValue("seller");
             e.HasIndex(x => new { x.CountryId, x.TaxIdTypeCode, x.NormalizedTaxId }).IsUnique()
               .HasFilter("normalized_tax_id IS NOT NULL AND archived_at IS NULL");
             e.HasIndex(x => x.ExecutiveUserId);

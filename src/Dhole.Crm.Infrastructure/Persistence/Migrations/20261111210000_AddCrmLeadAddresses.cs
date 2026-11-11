@@ -2,7 +2,7 @@ using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
 namespace Dhole.Crm.Infrastructure.Persistence.Migrations;
 [DbContext(typeof(CrmDbContext))]
-[Migration("20261111190000_AddCrmLeadAddresses")]
+[Migration("20261111210000_AddCrmLeadAddresses")]
 public sealed class AddCrmLeadAddresses : Migration
 {
     protected override void Up(MigrationBuilder migrationBuilder)
