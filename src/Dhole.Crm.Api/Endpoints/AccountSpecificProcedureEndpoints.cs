@@ -54,7 +54,8 @@ internal static class AccountSpecificProcedureEndpoints
         account.RowVersion++;
         account.UpdatedAt = DateTime.UtcNow;
         account.UpdatedByUserId = CrmAccess.UserId(http);
-        var result = await CrmDataEndpoints.Commit(db, ct);
+        var result = await CrmDataEndpoints.CommitAccount(db, account, http, flags,
+            "crm.account.updated.v1", ct);
         return result is IStatusCodeHttpResult { StatusCode: 200 } ? success : result;
     }
 

@@ -1,7 +1,7 @@
 ## [1.11.0] - 2026-11-10
 
 - MINOR DH-20261110-CRM-ACCOUNT-PROCEDURES-080 (master backport): CRUD REST autorizado por cuenta, múltiples procedimientos (nombre, detalle, equipo asignado), concurrencia optimista y migración PostgreSQL aditiva.
-- Promoción aislada desde staging del feature 080 para no mezclar cambios de develop 1.24.0. El CRM master aún no incluye el pipeline de realtime universal de develop; conservará REST, y requiere sincronización de realtime en release coordinado posterior.
+- Promoción aislada desde staging del feature 080 para no mezclar cambios de develop 1.24.0. Incluye base opt-in de Outbox/Redis Streams compatible con SignalR (esquema, productor y worker) sin activar flags de despliegue ni alterar contratos REST. Eventos de cuentas por transacción, idempotentes para los consumidores.
 - Build y pruebas CI requeridos antes de despliegue automático en producción.
 
 ## [1.6.0] - 2026-11-10
