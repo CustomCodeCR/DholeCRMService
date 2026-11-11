@@ -1,3 +1,8 @@
+## [1.21.0] - 2026-11-11
+
+- MINOR DH-20261111-CRM-VISIT-LOCATIONS-096: ubicaciones registradas de prospectos, endpoint REST protegido por scopes y titularidad, migración aditiva crm_lead_addresses, coordenadas opcionales y notificación de cambios de prospecto mediante outbox existente.
+- Selector de ubicaciones desde clientes y prospectos en DholeWeb 1.34.0, geocodificación Geoapify con fallback de búsqueda y mensajes de diagnóstico. Ecosistema 1.34.0; pendiente validación integrada y staging.
+
 ## [1.20.0] - 2026-11-11
 
 - MINOR DH-20261111-CRM-ACCOUNT-QUOTE-DELIVERY-093: configura por cuenta destinatarios de todas las próximas cotizaciones: vendedor únicamente o contacto del cliente con copia al vendedor asignado.
