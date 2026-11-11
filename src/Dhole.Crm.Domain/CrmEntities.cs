@@ -35,6 +35,8 @@ public sealed class Account : CrmRecord
 }
 public sealed class Lead : CrmRecord
 {
+    // Track institutional representation separately from the accountable Auth user.
+    public bool IsCastroFallasExecutive { get; set; }
     public string Name { get; set; } = "";
     public string? CompanyName { get; set; }
     public Guid? CountryId { get; set; }
