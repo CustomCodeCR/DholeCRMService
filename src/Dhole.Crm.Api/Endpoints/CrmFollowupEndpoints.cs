@@ -234,7 +234,9 @@ internal static class CrmFollowupEndpoints
     private static async Task<IResult> Create(FollowupCreateRequest r,CrmDbContext db,HttpContext h,
         IAuthReferenceService auth,CancellationToken ct)
     {
-        if(!Manage(h)&&!Tasks(h))return CrmAccess.Denied();
+        if(!Manage(h)&&!Tasks(h)&&
+            !(CrmAccess.Scope(h,"crm.activity.create") && CrmAccess.CanManageAgendaAcrossUsers(h)))
+            return CrmAccess.Denied();
         if(!Utc(r.DueAt)||r.DueAt<DateTime.UtcNow.AddDays(-1)||
             r.Subject?.Length>250||r.ReminderLeadMinutes is < 0 or > 10080||
             (r.ReminderChannelStrategy is not null && r.ReminderChannelStrategy is not ("BOTH" or "EMAIL" or "SYSTEM"))||
