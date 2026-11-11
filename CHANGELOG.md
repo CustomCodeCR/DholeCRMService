@@ -1,3 +1,8 @@
+## [1.11.0] - 2026-11-10
+
+- MINOR DH-20261110-CRM-ACCOUNT-PROCEDURES-080: registra múltiples procedimientos específicos por cuenta con nombre, detalle y equipo asignado, CRUD REST autorizado por cuenta y concurrencia optimista.
+- Migración PostgreSQL aditiva; las mutaciones reutilizan la invalidación duradera de la cuenta por Outbox/SignalR cuando está habilitada. Requiere validación CI y staging antes de promover a master.
+
 ## [1.10.0] - 2026-11-10
 
 - MINOR DH-20261110-CRM-CONTACTS-SELLERS-078: la validación de asignación comercial admite roles activos Vendedor, Vendedores, Vendedor Supervisor, Vendedor Jefe y SuperUsuario de Auth. Complementa las verificaciones de vendedor ya existentes en 1.9.3.
