@@ -59,10 +59,12 @@ internal static class CommercialActivityEndpoints
     {
         var activity=await db.Activities.AsNoTracking()
             .FirstOrDefaultAsync(x=>x.Id==id && x.ArchivedAt==null,ct);
-        return activity is not null &&
-            (CommercialAccess.ActivityOwns(h,activity)||CrmAccess.IsCalendarAdministrator(h)) &&
-            (!activity.AccountId.HasValue || await CrmAccess.CanSeeCalendarAccount(db,h,activity.AccountId.Value,ct))
-            ? activity : null;
+        if (activity is null) return null;
+        if (!CommercialAccess.ActivityOwns(h,activity) &&
+            !CrmAccess.IsCalendarAdministrator(h)) return null;
+        if (activity.AccountId.HasValue &&
+            !await CrmAccess.CanSeeCalendarAccount(db,h,activity.AccountId.Value,ct)) return null;
+        return activity;
     }
     private static async Task<IResult> List(CrmDbContext db,HttpContext h,
         Guid? accountId,Guid? leadId,Guid? opportunityId,Guid? ownerId,string? type,string? status,
@@ -121,8 +123,8 @@ internal static class CommercialActivityEndpoints
             return CrmAccess.Denied();
         var activeOwner=await auth.GetActiveAsync(owner,ct);
         if(activeOwner is null)return CommercialAccess.Invalid("Activity owner inactive in Auth");
-        if(owner!=current && !CrmAccess.IsSeller(activeOwner))
-            return CommercialAccess.Invalid("Activity owner must have the Vendedor role in Auth");
+        if(!CrmAccess.CanOwnAgenda(activeOwner))
+            return CommercialAccess.Invalid("Activity owner requires crm.activity.read, crm.activity.read-all or crm.followup.manage");
         if(!await config.IsActiveCodeAsync("crm-activity-types",r.Type,ct))
             return CommercialAccess.Invalid("Unknown activity type in Config");
         if(r.OccurredAt is not null&&r.OccurredAt>DateTime.UtcNow)

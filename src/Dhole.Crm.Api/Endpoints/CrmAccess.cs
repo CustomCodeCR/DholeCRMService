@@ -22,11 +22,11 @@ internal static class CrmAccess
     public static bool CanManageAgendaAcrossUsers(HttpContext http) =>
         Scope(http, "crm.activity.read-all") ||
         (Scope(http, "crm.account.read-all") && Scope(http, "crm.lead.read-all"));
-    private static readonly HashSet<string> CommercialAgendaRoles = new(
-        ["Vendedor", "Vendedores", "Vendedor Supervisor", "Vendedor Jefe", "SuperUsuario"],
+    private static readonly HashSet<string> AgendaAssigneeScopes = new(
+        ["crm.activity.read", "crm.activity.read-all", "crm.followup.manage"],
         StringComparer.OrdinalIgnoreCase);
-    public static bool IsSeller(AuthUserReference user) =>
-        user.Active && (user.Roles ?? []).Any(role => CommercialAgendaRoles.Contains(role));
+    public static bool CanOwnAgenda(AuthUserReference user) =>
+        user.Active && (user.Scopes ?? []).Any(AgendaAssigneeScopes.Contains);
 
     // Role names are from the internal Auth active-user lookup, not from client
     // headers or unrefreshed JWT role claims. This grant is CALENDAR READ ONLY.

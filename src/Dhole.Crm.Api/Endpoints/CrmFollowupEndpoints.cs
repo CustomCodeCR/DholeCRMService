@@ -192,10 +192,10 @@ internal static class CrmFollowupEndpoints
         if(!parentId.HasValue)return Results.Ok(new{activityId=(Guid?)null,sourceType="MANUAL"});
         var activity=await db.Activities.AsNoTracking()
             .FirstOrDefaultAsync(x=>x.Id==parentId.Value && x.ArchivedAt==null,ct);
-        if(activity is null ||
-            (!CommercialAccess.ActivityOwns(h,activity) && !CrmAccess.IsCalendarAdministrator(h)) ||
-            (activity.AccountId.HasValue &&
-             !await CrmAccess.CanSeeCalendarAccount(db,h,activity.AccountId.Value,ct)))
+        if(activity is null) return Results.Ok(new{activityId=(Guid?)null});
+        if((!CommercialAccess.ActivityOwns(h,activity) && !CrmAccess.IsCalendarAdministrator(h)) ||
+           (activity.AccountId.HasValue &&
+            !await CrmAccess.CanSeeCalendarAccount(db,h,activity.AccountId.Value,ct)))
             return Results.Ok(new{activityId=(Guid?)null});
         return Results.Ok(new{activityId=(Guid?)activity.Id,activitySubject=activity.Subject,sourceType="ACTIVITY"});
     }
@@ -250,8 +250,8 @@ internal static class CrmFollowupEndpoints
             return CrmAccess.Denied();
         var activeAssignee=await auth.GetActiveAsync(r.AssignedUserId,ct);
         if(activeAssignee is null)return CrmDataEndpoints.Bad("Assignee is not active");
-        if(r.AssignedUserId!=CrmAccess.UserId(h) && !CrmAccess.IsSeller(activeAssignee))
-            return CrmDataEndpoints.Bad("Assignee must have the Vendedor role in Auth");
+        if(!CrmAccess.CanOwnAgenda(activeAssignee))
+            return CrmDataEndpoints.Bad("Assignee requires crm.activity.read, crm.activity.read-all or crm.followup.manage");
         var x=new Followup {AccountId=r.AccountId,LeadId=r.LeadId,OpportunityId=r.OpportunityId,
             AssignedUserId=r.AssignedUserId,Channel=r.Channel,DueAt=r.DueAt,
             Subject=r.Subject?.Trim(),ReminderLeadMinutes=r.ReminderLeadMinutes,
