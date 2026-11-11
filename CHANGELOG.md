@@ -1,3 +1,8 @@
+## [1.18.0] - 2026-11-11
+
+- MINOR DH-20261111-CRM-ACTIVITY-COMPLETE-EDIT-088: endpoint transaccional PUT para edición completa de actividades, minutas, acuerdos y compromisos, incluso finalizadas; autorización por scope y visibilidad, versiones optimistas, auditoría de cambios y recordatorios idempotentes.
+- Ampliación sin pérdida de datos de crm_activity_notes a TEXT, compatible con REST y outbox/realtime existentes. Ecosistema Dhole 1.30.0; CI/staging pendientes; producción no autorizada.
+
 ## [1.17.0] - 2026-11-11
 
 - MINOR DH-20261111-CRM-LEAD-INSTITUTIONAL-087: permite seleccionar Castro Fallas como vendedor institucional de prospectos y reasignarlos, manteniendo un Auth responsable, scopes y auditoría.
