@@ -1,3 +1,8 @@
+## [1.20.0] - 2026-11-11
+
+- MINOR DH-20261111-CRM-ACCOUNT-FUTURE-QUOTE-DELIVERY-093: Añade una regla por cuenta (vendedor o contacto vinculado) persistida en PostgreSQL con migración, controles de acceso, actualización optimista, endpoint GET/PUT y lectura privada con clave de servicio.
+- Versión 1.19.0 → 1.20.0; ecosistema global 1.33.0. CI/staging pendientes; sin promoción a producción antes de validaciones.
+
 ## [1.19.0] - 2026-11-11
 
 - MINOR DH-20261111-CRM-GEOAPIFY-VISIT-089: coordenadas geográficas para visitas CRM mediante migración PostgreSQL nullable, validaciones y actualización de endpoints REST. Compatible con registros previos, realtime y DholeWeb 1.31.0.
