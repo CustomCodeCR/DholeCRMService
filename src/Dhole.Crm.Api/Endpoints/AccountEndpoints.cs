@@ -21,7 +21,7 @@ public sealed record ArchiveAccountRequest(long ExpectedVersion, string? Reason 
 public sealed record SetAccountLogoRequest(long ExpectedVersion, Guid? LogoFileId);
 public sealed record AddBusinessActivityRequest(string ActivityCode, string? Description, string Source);
 public sealed record UpdateQuoteDeliveryPreferenceRequest(
-    string DeliveryTarget, Guid? ContactId, long ExpectedVersion);
+    string DeliveryTarget, Guid? ContactId, long ExpectedVersion, Guid[]? ContactIds = null);
 
 internal static class AccountEndpoints
 {
@@ -257,6 +257,22 @@ internal static class AccountEndpoints
 
     // Read a single account's durable default. The same authenticated CRM endpoint
     // is used by Pricing immediately before every future quote enters the Outbox.
+    private static Guid[] ParseQuoteContactIds(string? json, Guid? legacyId)
+    {
+        try
+        {
+            if (!string.IsNullOrWhiteSpace(json))
+            {
+                var ids = System.Text.Json.JsonSerializer.Deserialize<Guid[]>(json);
+                if (ids is { Length: > 0 })
+                    return ids.Where(id => id != Guid.Empty).Distinct().ToArray();
+            }
+        }
+        catch (System.Text.Json.JsonException) { /* Fallback to the legacy contact. */ }
+        return legacyId.HasValue && legacyId.Value != Guid.Empty ? [legacyId.Value] : [];
+    }
+
+    // Pricing reads the saved account-wide preference for every new quotation.
     private static async Task<IResult> GetQuoteDeliveryPreference(
         Guid id, CrmDbContext db, HttpContext http, CancellationToken ct)
     {
@@ -266,13 +282,18 @@ internal static class AccountEndpoints
         var account = await CrmAccess.VisibleAccounts(db, http).AsNoTracking()
             .Where(x => x.Id == id).Select(x => new
             {
-                x.QuoteDeliveryTarget, x.QuoteDeliveryContactId,
+                x.QuoteDeliveryTarget, x.QuoteDeliveryContactId, x.QuoteDeliveryContactIdsJson,
                 x.QuoteDeliveryUpdatedAtUtc, x.RowVersion
             }).FirstOrDefaultAsync(ct);
-        return account is null ? Results.NotFound() : Results.Ok(new
+        if (account is null) return Results.NotFound();
+        var ids = account.QuoteDeliveryTarget == "client"
+            ? ParseQuoteContactIds(account.QuoteDeliveryContactIdsJson, account.QuoteDeliveryContactId)
+            : Array.Empty<Guid>();
+        return Results.Ok(new
         {
             deliveryTarget = account.QuoteDeliveryTarget,
-            contactId = account.QuoteDeliveryContactId,
+            contactIds = ids,
+            contactId = ids.Length > 0 ? (Guid?)ids[0] : null, // Old clients
             updatedAtUtc = account.QuoteDeliveryUpdatedAtUtc,
             rowVersion = account.RowVersion
         });
@@ -286,45 +307,51 @@ internal static class AccountEndpoints
             return CrmAccess.Denied();
         if (request.DeliveryTarget is not ("seller" or "client"))
             return Results.BadRequest(new { error = "Seleccione vendedor o cliente." });
-        if (request.DeliveryTarget == "client" &&
-            (!request.ContactId.HasValue || request.ContactId == Guid.Empty))
-            return Results.BadRequest(new { error = "Seleccione un contacto del cliente." });
-        if (request.DeliveryTarget == "seller" && request.ContactId.HasValue)
-            return Results.BadRequest(new { error = "Solo al vendedor no admite contacto." });
+
+        // Accept legacy contactId in existing REST integrations, but prefer contactIds.
+        Guid[] contactIds = request.ContactIds ??
+            (request.ContactId is Guid legacyId ? [legacyId] : Array.Empty<Guid>());
+        if (contactIds.Length > 100 || contactIds.Contains(Guid.Empty) ||
+            contactIds.Distinct().Count() != contactIds.Length)
+            return Results.BadRequest(new { error = "La selección contiene contactos duplicados o no válidos." });
+        if (request.DeliveryTarget == "client" && contactIds.Length == 0)
+            return Results.BadRequest(new { error = "Seleccione al menos un contacto del cliente." });
+        if (request.DeliveryTarget == "seller" && contactIds.Length > 0)
+            return Results.BadRequest(new { error = "Solo al vendedor no admite contactos." });
 
         var account = await db.Accounts.FindAsync([id], ct);
-        if (account is null || account.ArchivedAt != null)
-            return Results.NotFound();
-        if (!await CrmAccess.CanSeeAccount(db, http, id, ct))
-            return CrmAccess.Denied();
+        if (account is null || account.ArchivedAt != null) return Results.NotFound();
+        if (!await CrmAccess.CanSeeAccount(db, http, id, ct)) return CrmAccess.Denied();
         if (account.RowVersion != request.ExpectedVersion)
             return Results.Conflict(new { error = "La cuenta se actualizó; recargue y vuelva a guardar." });
 
         if (request.DeliveryTarget == "client")
         {
-            var linked = await (from rel in db.AccountContacts.AsNoTracking()
+            var linkedContacts = await (from rel in db.AccountContacts.AsNoTracking()
                 join contact in db.Contacts.AsNoTracking() on rel.ContactId equals contact.Id
-                where rel.AccountId == id && rel.ContactId == request.ContactId &&
-                      rel.ActiveTo == null && contact.ArchivedAt == null &&
-                      contact.Email != null && contact.Email != ""
-                select contact.Email).FirstOrDefaultAsync(ct);
-            if (string.IsNullOrWhiteSpace(linked) ||
-                !System.Net.Mail.MailAddress.TryCreate(linked.Trim(), out var mail) ||
-                !string.Equals(mail.Address, linked.Trim(), StringComparison.OrdinalIgnoreCase))
+                where rel.AccountId == id && contactIds.Contains(rel.ContactId) &&
+                    rel.ActiveTo == null && contact.ArchivedAt == null &&
+                    contact.Status == "Active"
+                select new { contact.Id, contact.Email }).ToListAsync(ct);
+            if (linkedContacts.Count != contactIds.Length ||
+                linkedContacts.Any(item =>
+                    string.IsNullOrWhiteSpace(item.Email) ||
+                    !System.Net.Mail.MailAddress.TryCreate(item.Email.Trim(), out var mail) ||
+                    !string.Equals(mail.Address, item.Email.Trim(), StringComparison.OrdinalIgnoreCase)))
                 return Results.BadRequest(new
                 {
-                    error = "El contacto no pertenece a la cuenta o no tiene correo válido."
+                    error = "Todos los contactos seleccionados deben pertenecer a la cuenta, estar activos y tener un correo válido."
                 });
         }
 
         account.QuoteDeliveryTarget = request.DeliveryTarget;
-        account.QuoteDeliveryContactId = request.DeliveryTarget == "client" ? request.ContactId : null;
+        account.QuoteDeliveryContactId = contactIds.Length > 0 ? contactIds[0] : null;
+        account.QuoteDeliveryContactIdsJson =
+            System.Text.Json.JsonSerializer.Serialize(contactIds);
         account.QuoteDeliveryUpdatedAtUtc = DateTime.UtcNow;
         account.RowVersion++;
         account.UpdatedAt = DateTime.UtcNow;
         account.UpdatedByUserId = CrmAccess.UserId(http);
-        // Publish the same idempotent account invalidation used by other CRM mutations
-        // only when the universal realtime release is enabled and approved.
         if (CrmAccountRealtimeCommit.IsEnabled(configuration))
             await CrmAccountRealtimeCommit.PersistUpdatedAccountAsync(
                 db, account, $"crm:account-quote-delivery:{id:N}:{account.RowVersion}", ct);
@@ -334,12 +361,13 @@ internal static class AccountEndpoints
             if (result is not Microsoft.AspNetCore.Http.HttpResults.Ok) return result;
         }
         return Results.Ok(new
-            {
-                deliveryTarget = account.QuoteDeliveryTarget,
-                contactId = account.QuoteDeliveryContactId,
-                updatedAtUtc = account.QuoteDeliveryUpdatedAtUtc,
-                rowVersion = account.RowVersion
-            });
+        {
+            deliveryTarget = account.QuoteDeliveryTarget,
+            contactIds,
+            contactId = account.QuoteDeliveryContactId,
+            updatedAtUtc = account.QuoteDeliveryUpdatedAtUtc,
+            rowVersion = account.RowVersion
+        });
     }
 
     private static async Task<IResult> AssignedExecutive(Guid id, CrmDbContext db,
