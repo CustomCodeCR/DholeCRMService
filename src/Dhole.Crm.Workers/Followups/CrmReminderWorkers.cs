@@ -75,6 +75,9 @@ internal sealed class CrmReminderDispatcherWorker(IServiceScopeFactory scopes,IC
             // Re-check source on every retry, preventing stale reminders after manual edits.
             bool active=reminder.EntityType switch
             {
+                "Lead" when reminder.NotificationType=="crm.lead.duplicate.v1" =>
+                    await db.Leads.AsNoTracking().AnyAsync(x=>x.Id==reminder.EntityId &&
+                        x.RowVersion==reminder.TargetVersion && x.ArchivedAt==null,ct),
                 "Followup"=>await db.Followups.AsNoTracking().AnyAsync(x=>x.Id==reminder.EntityId&&
                     x.RowVersion==reminder.TargetVersion&&(x.Status=="Pending"||x.Status=="Overdue"),ct),
                 "Activity"=>await db.Activities.AsNoTracking().AnyAsync(x=>x.Id==reminder.EntityId&&
@@ -94,6 +97,7 @@ internal sealed class CrmReminderDispatcherWorker(IServiceScopeFactory scopes,IC
                     throw new InvalidOperationException("CRM reminder has no active recipient email");
                 var subject=reminder.NotificationType switch
                 {
+                    "crm.lead.duplicate.v1"=>"Prospecto ya registrado",
                     "crm.visit.reminder.v1"=>"Próxima visita comercial",
                     "crm.call.reminder.v1"=>"Próxima llamada comercial",
                     "crm.meeting.reminder.v1"=>"Próxima reunión comercial",
@@ -124,8 +128,17 @@ internal sealed class CrmReminderDispatcherWorker(IServiceScopeFactory scopes,IC
                 var owner=reminder.NotificationType=="crm.commitment.escalated.v1" && ownerId.HasValue
                     ? await auth.GetActiveAsync(ownerId.Value,ct) : null;
                 var ownerName=owner?.DisplayName??"Vendedor asignado";
+                var relatedProspect=reminder.NotificationType=="crm.lead.duplicate.v1"
+                    ? await db.Leads.AsNoTracking().FirstOrDefaultAsync(x=>x.Id==reminder.EntityId,ct) : null;
+                var prospectSeller=relatedProspect is not null
+                    ? await auth.GetActiveAsync(relatedProspect.ExecutiveUserId,ct) : null;
+                var prospectSellerName=string.IsNullOrWhiteSpace(prospectSeller?.DisplayName)
+                    ? "Vendedor no disponible" : prospectSeller.DisplayName.Trim();
                 var body=reminder.NotificationType switch
                 {
+                    "crm.lead.duplicate.v1" =>
+                        $"El prospecto '{relatedProspect?.Name??"sin nombre"}' ya existe en CRM y " +
+                        $"está asignado a {prospectSellerName}. No se creó otro prospecto.",
                     "crm.commitment.escalated.v1" =>
                         $"El vendedor {ownerName} no registró la atención del compromiso \"{title}\" dentro del plazo. " +
                         $"Vencimiento: {localDate??"sin fecha"} (Costa Rica). Revise la agenda CRM y dé seguimiento.",
@@ -146,7 +159,8 @@ internal sealed class CrmReminderDispatcherWorker(IServiceScopeFactory scopes,IC
                     entityType=reminder.EntityType,
                     entityId=reminder.EntityId.ToString(),
                     subject,body,maxAttempts=5,
-                    payload=new { crmReminderId=reminder.Id, source="DholeCRMService" },
+                    payload=new { crmReminderId=reminder.Id, source="DholeCRMService",
+                        prospectName=relatedProspect?.Name, sellerName=prospectSellerName },
                     recipients=new [] {new {userId=reminder.RecipientUserId.ToString(),
                         address=reminder.Channel=="Email"?user.Email??"":"",
                         displayName=user.DisplayName??""}}
