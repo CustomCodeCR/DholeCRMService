@@ -9,10 +9,9 @@ RUN --mount=type=secret,id=github_token,required=true \
     dotnet restore src/Dhole.Crm.Workers/Dhole.Crm.Workers.csproj --configfile NuGet.Config && \
     dotnet publish src/Dhole.Crm.Workers/Dhole.Crm.Workers.csproj -c Release --no-restore -o /publish /p:UseAppHost=false
 FROM mcr.microsoft.com/dotnet/aspnet:10.0
-RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certificates && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY --from=publish /publish ./
 USER $APP_UID
 EXPOSE 8082
-HEALTHCHECK --interval=30s --timeout=10s --start-period=40s CMD curl -fsS http://127.0.0.1:8082/health/ready >/dev/null || exit 1
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s CMD ["dotnet", "Dhole.Crm.Workers.dll", "--container-healthcheck"]
 ENTRYPOINT ["dotnet","Dhole.Crm.Workers.dll"]
