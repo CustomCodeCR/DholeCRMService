@@ -23,6 +23,11 @@ internal static class CrmAccess
     public static bool CanManageAgendaAcrossUsers(HttpContext http) =>
         Scope(http, "crm.activity.read-all") ||
         (Scope(http, "crm.account.read-all") && Scope(http, "crm.lead.read-all"));
+    public static bool IsSeller(AuthUserReference user) =>
+        (user.Roles ?? []).Any(role =>
+            string.Equals(role, "Vendedor", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(role, "Vendedores", StringComparison.OrdinalIgnoreCase));
+
     // The assigned Auth user of a house account is operational, not an access grant.
     // Never infer permission from the institutional account's ExecutiveUserId.
     public static IQueryable<Account> VisibleAccounts(CrmDbContext db, HttpContext http)
