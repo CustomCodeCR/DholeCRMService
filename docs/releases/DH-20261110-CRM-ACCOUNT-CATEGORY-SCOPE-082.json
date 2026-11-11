@@ -2,7 +2,7 @@
   "releaseId": "DH-20261110-CRM-ACCOUNT-CATEGORY-SCOPE-082",
   "date": "2026-11-10",
   "kind": "MINOR",
-  "ecosystemVersion": "1.23.0",
+  "ecosystemVersion": "1.24.0",
   "branch": "feature/crm-category-scope-080-master",
   "components": [
     {
@@ -18,12 +18,12 @@
     {
       "repository": "CustomCodeCR/DholeWeb",
       "previous": "1.21.0",
-      "next": "1.23.0"
+      "next": "1.24.0"
     },
     {
       "repository": "CustomCodeCR/DholeSystem",
       "previous": "1.21.0",
-      "next": "1.23.0"
+      "next": "1.24.0"
     }
   ],
   "changes": [
