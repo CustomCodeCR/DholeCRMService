@@ -1,3 +1,8 @@
+## [1.17.1] - 2026-11-11
+
+- PATCH DH-20261111-CRM-RESPONSIBLES-SCOPES-086: los responsables de actividades y seguimientos son usuarios activos habilitados por crm.activity.read, crm.activity.read-all o crm.followup.manage, según los permisos efectivos de Auth. No se exige rol Vendedor. Mantiene autorización para asignar a terceros, REST y SignalR.
+- Ecosistema Dhole 1.29.1. CI de master en validación, staging aprobado y publicación productiva autorizada.
+
 ## [1.17.0] - 2026-11-11
 
 - MINOR DH-20261111-CRM-LEAD-INSTITUTIONAL-087: backport sobre master para asignar Castro Fallas a prospectos en creación, reasignación y conversión a cuentas con vendedor institucional separado del usuario Auth.

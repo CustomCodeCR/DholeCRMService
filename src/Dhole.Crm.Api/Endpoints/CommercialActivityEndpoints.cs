@@ -109,8 +109,8 @@ internal static class CommercialActivityEndpoints
             return CrmAccess.Denied();
         var activeOwner=await auth.GetActiveAsync(owner,ct);
         if(activeOwner is null)return CommercialAccess.Invalid("Activity owner inactive in Auth");
-        if(owner!=current && !CrmAccess.IsSeller(activeOwner))
-            return CommercialAccess.Invalid("Activity owner must have the Vendedor role in Auth");
+        if(!CrmAccess.CanOwnAgenda(activeOwner))
+            return CommercialAccess.Invalid("Activity owner requires crm.activity.read, crm.activity.read-all or crm.followup.manage");
         if(!await config.IsActiveCodeAsync("crm-activity-types",r.Type,ct))
             return CommercialAccess.Invalid("Unknown activity type in Config");
         if(r.OccurredAt is not null&&r.OccurredAt>DateTime.UtcNow)
