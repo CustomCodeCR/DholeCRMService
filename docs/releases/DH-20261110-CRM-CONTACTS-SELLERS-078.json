@@ -1,0 +1,48 @@
+{
+  "releaseId": "DH-20261110-CRM-CONTACTS-SELLERS-078",
+  "date": "2026-11-10",
+  "kind": "MINOR",
+  "ecosystemVersion": "1.21.0",
+  "targetBranch": "develop",
+  "branch": "feature/crm-contact-multiselect-seller-roles-078-develop",
+  "components": [
+    {
+      "repository": "CustomCodeCR/DholeWeb",
+      "previous": "1.20.0",
+      "next": "1.21.0"
+    },
+    {
+      "repository": "CustomCodeCR/DholeCRMService",
+      "previous": "1.9.2",
+      "next": "1.10.0"
+    },
+    {
+      "repository": "CustomCodeCR/DholeAuthService",
+      "previous": "1.6.3",
+      "next": "1.7.0"
+    },
+    {
+      "repository": "CustomCodeCR/DholeSystem",
+      "previous": "1.20.0",
+      "next": "1.21.0"
+    }
+  ],
+  "features": [
+    "CRM activity creation uses shared DhMultiSelect for account contacts",
+    "Existing commercial activity details allow multiple linked contacts",
+    "Only active Vendedor, Vendedor Supervisor, Vendedor Jefe and SuperUsuario Auth role members are selectable as sellers",
+    "CRM rejects cross-user assignments when target lacks commercial role"
+  ],
+  "compatibility": {
+    "breakingChanges": false,
+    "databaseMigration": false,
+    "realtimeUnchanged": true
+  },
+  "validation": {
+    "build": "pending",
+    "tests": "pending",
+    "ci": "pending",
+    "staging": "pending"
+  },
+  "productionDeploymentAuthorized": false
+}
