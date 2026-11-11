@@ -40,10 +40,12 @@ public static class CrmDataEndpoints
     internal static string? NormalizeTax(string? value) =>
         string.IsNullOrWhiteSpace(value) ? null :
         Regex.Replace(value.Trim().ToUpperInvariant(), @"[\s.\-]", "");
+    internal const string AccountCategoryManageScope = "crm.account.category.manage";
+    internal static string CategoryOnCreate(HttpContext http, string type, string requestedCode) =>
+        AccountCategoryPolicy.ResolveOnCreate(type, requestedCode,
+            CrmAccess.Scope(http, AccountCategoryManageScope));
     internal static bool CategoryValid(string type, string code) =>
-        (type == "CUSTOMER" && "ABCD".Contains(code, StringComparison.Ordinal)) ||
-        (type == "NVOCC" && "AB".Contains(code, StringComparison.Ordinal)) ||
-        (type == "LITTLE" && code == "A");
+        AccountCategoryPolicy.Valid(type, code);
     internal static bool IsEmailValid(string? address) =>
         string.IsNullOrWhiteSpace(address) ||
         (System.Net.Mail.MailAddress.TryCreate(address, out var parsed) &&
