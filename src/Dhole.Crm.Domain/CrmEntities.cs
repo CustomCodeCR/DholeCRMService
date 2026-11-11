@@ -123,6 +123,25 @@ public sealed class Address : CrmRecord
     public string? Admin3Name { get; set; }
     public string? PostalCode { get; set; }
 }
+public sealed class LeadAddress : CrmRecord
+{
+    public Guid LeadId { get; set; }
+    public Guid? CountryId { get; set; }
+    public string AddressType { get; set; } = "WORK";
+    public string AddressText { get; set; } = "";
+    public string? Location { get; set; }
+    public string? CountryCode { get; set; }
+    public string? Admin1Code { get; set; }
+    public string? Admin1Name { get; set; }
+    public string? Admin2Code { get; set; }
+    public string? Admin2Name { get; set; }
+    public string? Admin3Code { get; set; }
+    public string? Admin3Name { get; set; }
+    public string? PostalCode { get; set; }
+    public decimal? LocationLatitude { get; set; }
+    public decimal? LocationLongitude { get; set; }
+}
+
 public sealed class ContactPreference : CrmRecord
 {
     public Guid ContactId { get; set; }
