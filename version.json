@@ -2,9 +2,9 @@
   "schemaVersion": 1,
   "ecosystem": "Dhole",
   "component": "DholeCRMService",
-  "version": "1.19.0",
-  "ecosystemVersion": "1.32.0",
-  "releaseId": "DH-20261111-CRM-GEOAPIFY-VISIT-089",
+  "version": "1.20.0",
+  "ecosystemVersion": "1.33.0",
+  "releaseId": "DH-20261111-CRM-ACCOUNT-FUTURE-QUOTE-DELIVERY-093",
   "releaseStatus": "candidate-ci-and-staging-pending",
-  "businessReleaseId": "DH-20261111-CRM-GEOAPIFY-VISIT-089"
+  "businessReleaseId": "DH-20261111-CRM-ACCOUNT-FUTURE-QUOTE-DELIVERY-093"
 }
