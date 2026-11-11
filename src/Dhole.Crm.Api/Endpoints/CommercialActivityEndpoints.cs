@@ -13,7 +13,8 @@ public sealed record ActivityCreateRequest(Guid? AccountId,Guid? LeadId,Guid? Op
     string? Involved = null,string? Agreements = null,
     string? NextCommitment = null,DateTime? CommitmentDueAt = null,
     IReadOnlyList<AgreementCommitmentRequest>? AgreementCommitments = null,
-    int? RepeatEveryDays = null, int? ReminderRepeatMinutes = null);
+    int? RepeatEveryDays = null, int? ReminderRepeatMinutes = null,
+    string? Minutes = null, IReadOnlyList<Guid>? ParticipantContactIds = null);
 public sealed record ActivityPatchRequest(long ExpectedVersion,string Subject,string? LocationText,
     int? RepeatEveryDays = null,int? ReminderLeadMinutes = null,int? ReminderRepeatMinutes = null);
 public sealed record ActivityCompleteRequest(long ExpectedVersion,string Outcome,DateTime OccurredAt,string? Note);
@@ -46,11 +47,14 @@ internal static class CommercialActivityEndpoints
         g.MapPost("/activities/{id:guid}/participants",AddParticipant);
         return g;
     }
-    private static bool CanRead(HttpContext h)=>CrmDataEndpoints.HasRead(h,"activity");
+    private static bool CanRead(HttpContext h)=>CrmDataEndpoints.HasRead(h,"activity") ||
+        CrmAccess.Scope(h,"crm.account.read-all") || CrmAccess.Scope(h,"crm.lead.read-all");
     private static async Task<Activity?> FindAllowed(Guid id,CrmDbContext db,HttpContext h,CancellationToken ct)
     {
         var a=await db.Activities.FirstOrDefaultAsync(x=>x.Id==id&&x.ArchivedAt==null,ct);
-        return a is not null && CommercialAccess.ActivityOwns(h,a) &&
+        return a is not null && (CommercialAccess.ActivityOwns(h,a) ||
+             (a.AccountId.HasValue && CrmAccess.Scope(h,"crm.account.read-all")) ||
+             (a.LeadId.HasValue && CrmAccess.Scope(h,"crm.lead.read-all"))) &&
             (!a.AccountId.HasValue || await CrmAccess.CanSeeAccount(db,h,a.AccountId.Value,ct)) ? a : null;
     }
     private static async Task<IResult> List(CrmDbContext db,HttpContext h,
@@ -62,7 +66,13 @@ internal static class CommercialActivityEndpoints
         var query=db.Activities.AsNoTracking().Where(x=>x.ArchivedAt==null &&
             (!x.AccountId.HasValue || visibleAccounts.Contains(x.AccountId.Value)));
         if(!CrmAccess.Scope(h,"crm.activity.read-all"))
-            query=query.Where(x=>x.OwnerUserId==CrmAccess.UserId(h));
+        {
+            var actor=CrmAccess.UserId(h);
+            var accounts=CrmAccess.Scope(h,"crm.account.read-all");
+            var leads=CrmAccess.Scope(h,"crm.lead.read-all");
+            query=query.Where(x=>x.OwnerUserId==actor ||
+                (accounts&&x.AccountId.HasValue) || (leads&&x.LeadId.HasValue));
+        }
         if(accountId is { } a)query=query.Where(x=>x.AccountId==a);
         if(leadId is { } l)query=query.Where(x=>x.LeadId==l);
         if(opportunityId is { } o)query=query.Where(x=>x.OpportunityId==o);
@@ -99,14 +109,16 @@ internal static class CommercialActivityEndpoints
             return CommercialAccess.Invalid("Invalid activity type, schedule or authorized subject");
         var current=CrmAccess.UserId(h);
         var owner=r.OwnerUserId??current;
-        if(owner!=current&&!CrmAccess.Scope(h,"crm.activity.read-all"))
+        if(owner!=current && !CrmAccess.Scope(h,"crm.activity.read-all") &&
+           !(r.AccountId.HasValue && CrmAccess.Scope(h,"crm.account.read-all")) &&
+           !(r.LeadId.HasValue && CrmAccess.Scope(h,"crm.lead.read-all")))
             return CrmAccess.Denied();
         if(await auth.GetActiveAsync(owner,ct) is null)return CommercialAccess.Invalid("Activity owner inactive in Auth");
         if(!await config.IsActiveCodeAsync("crm-activity-types",r.Type,ct))
             return CommercialAccess.Invalid("Unknown activity type in Config");
         if(r.OccurredAt is not null&&r.OccurredAt>DateTime.UtcNow)
             return CommercialAccess.Invalid("Cannot record future actual occurrence");
-        if(r.Involved?.Length>1500 || r.Agreements?.Length>6000 ||
+        if(r.Involved?.Length>1500 || r.Minutes?.Length>20000 || r.Agreements?.Length>6000 ||
             r.NextCommitment?.Length>250 ||
             (string.IsNullOrWhiteSpace(r.NextCommitment) != !r.CommitmentDueAt.HasValue) ||
             (r.CommitmentDueAt is { } commitmentDue &&
@@ -122,6 +134,12 @@ internal static class CommercialActivityEndpoints
                 x.DueAt < DateTime.UtcNow ||
                 (r.ScheduledStartAt.HasValue && x.DueAt < r.ScheduledStartAt.Value)))
             return CommercialAccess.Invalid("Agreement commitments require a title and a valid future date.");
+        var contactIds=r.ParticipantContactIds?.Distinct().ToArray() ?? [];
+        if(contactIds.Length>50 || contactIds.Any(x=>x==Guid.Empty))
+            return CommercialAccess.Invalid("Too many or invalid activity contacts");
+        foreach(var contactId in contactIds)
+            if(!await CommercialAccess.ContactBelongsTo(db,contactId,r.AccountId,r.OpportunityId,ct))
+                return CommercialAccess.Invalid("Participant contact does not belong to this account");
         var createdAtUtc=DateTime.UtcNow;
         var occurredAt=r.OccurredAt ??
             (CommercialRules.IsHistoricalActivity(r.ScheduledEndAt,createdAtUtc)
@@ -138,6 +156,16 @@ internal static class CommercialActivityEndpoints
             ReminderRepeatMinutes=r.ReminderRepeatMinutes is > 0 ? r.ReminderRepeatMinutes : null
         };
         db.Activities.Add(activity);
+        foreach(var contactId in contactIds)
+            db.ActivityParticipants.Add(new ActivityParticipant {
+                ActivityId=activity.Id,ContactId=contactId,Role="ATTENDEE",
+                CreatedByUserId=current
+            });
+        if(!string.IsNullOrWhiteSpace(r.Minutes))
+            db.ActivityNotes.Add(new ActivityNote {
+                ActivityId=activity.Id,AuthorUserId=current,CreatedByUserId=current,
+                NoteText="Minuta:\n"+r.Minutes.Trim()
+            });
         // Reuse the existing notes/participants and followup models rather than
         // storing agreements only in the browser. Save everything atomically.
         var summary=string.Join("\n\n",new[] {
