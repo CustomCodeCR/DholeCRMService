@@ -9,12 +9,12 @@ namespace Dhole.Crm.Api.Endpoints;
 
 public sealed record CreateLeadRequest(string Name, string? CompanyName, Guid? CountryId, string? TaxId,
     string? SourceCode, string? RelationshipTypeCode, Guid? ExecutiveUserId,
-    string? ContactEmail, string? Phone);
+    string? ContactEmail, string? Phone, bool AssignToCastroFallas = false);
 public sealed record PatchLeadRequest(long ExpectedVersion, string Name, string? CompanyName, string? SourceCode,
     string? RelationshipTypeCode, string QualificationStatus, string? ContactEmail, string? Phone);
 public sealed record ConvertLeadRequest(Guid? ExistingAccountId, string? Notes,
     string? TaxIdTypeCode, string CustomerTypeCode, string CategoryType, string CategoryCode);
-public sealed record AssignLeadRequest(long ExpectedVersion, Guid ExecutiveUserId);
+public sealed record AssignLeadRequest(long ExpectedVersion, Guid? ExecutiveUserId, bool AssignToCastroFallas = false);
 
 internal static class LeadEndpoints
 {
@@ -65,8 +65,8 @@ internal static class LeadEndpoints
             .Where(x => x.ArchivedAt == null && requested.Contains(x.Id));
         if (!CrmAccess.Scope(http, "crm.lead.read-all"))
             query = query.Where(x => x.ExecutiveUserId == CrmAccess.UserId(http));
-        var visible = await query.Select(x => new { x.Id, x.ExecutiveUserId }).ToArrayAsync(ct);
-        var sellerIds = visible.Where(x => x.ExecutiveUserId != Guid.Empty)
+        var visible = await query.Select(x => new { x.Id, x.ExecutiveUserId, x.IsCastroFallasExecutive }).ToArrayAsync(ct);
+        var sellerIds = visible.Where(x => !x.IsCastroFallasExecutive && x.ExecutiveUserId != Guid.Empty)
             .Select(x => x.ExecutiveUserId).Distinct().ToArray();
 
         using var gate = new SemaphoreSlim(4);
@@ -95,7 +95,8 @@ internal static class LeadEndpoints
         }));
         var resolved = names.ToDictionary(x => x.Id, x => x.Name);
         var sellers = visible.ToDictionary(x => x.Id.ToString("D"),
-            x => x.ExecutiveUserId == Guid.Empty ? "Sin asignar"
+            x => x.IsCastroFallasExecutive ? "Castro Fallas"
+                : x.ExecutiveUserId == Guid.Empty ? "Sin asignar"
                 : resolved.TryGetValue(x.ExecutiveUserId, out var name)
                     ? name : "Vendedor no disponible");
         return Results.Ok(new { sellers });
@@ -181,8 +182,11 @@ internal static class LeadEndpoints
     {
         if (!CrmAccess.Scope(http, "crm.lead.create")) return CrmAccess.Denied();
         var owner = CrmAccess.UserId(http);
-        var executiveId = request.ExecutiveUserId ?? owner;
-        if (executiveId != owner && !CrmAccess.Scope(http, "crm.lead.assign")) return CrmAccess.Denied();
+        if (request.AssignToCastroFallas && request.ExecutiveUserId.HasValue)
+            return CrmDataEndpoints.Bad("Select either Castro Fallas or an Auth executive");
+        var executiveId = request.AssignToCastroFallas ? owner : request.ExecutiveUserId ?? owner;
+        if ((request.AssignToCastroFallas || executiveId != owner) &&
+            !CrmAccess.Scope(http, "crm.lead.assign")) return CrmAccess.Denied();
         if (string.IsNullOrWhiteSpace(request.Name) || request.Name.Length > 220 ||
             !CrmDataEndpoints.IsEmailValid(request.ContactEmail) ||
             request.ContactEmail?.Length > 254 || request.Phone?.Length > 60)
@@ -252,16 +256,19 @@ internal static class LeadEndpoints
                 }
             }
             else await duplicateGuard.RollbackAsync(ct);
-            string sellerName;
-            try
+            string sellerName = "Castro Fallas";
+            if (!duplicate.IsCastroFallasExecutive)
             {
-                sellerName = (await auth.GetActiveAsync(duplicate.ExecutiveUserId, ct))?.DisplayName?.Trim()
-                    ?? "Vendedor no disponible";
-            }
-            catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
-            catch (Exception)
-            {
-                sellerName = "Vendedor no disponible";
+                try
+                {
+                    sellerName = (await auth.GetActiveAsync(duplicate.ExecutiveUserId, ct))?.DisplayName?.Trim()
+                        ?? "Vendedor no disponible";
+                }
+                catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+                catch (Exception)
+                {
+                    sellerName = "Vendedor no disponible";
+                }
             }
             return Results.Json(new {
                 code = "CRM_LEAD_DUPLICATE",
@@ -275,7 +282,8 @@ internal static class LeadEndpoints
         var lead = new Lead { Name = request.Name.Trim().ToUpperInvariant(), CompanyName = request.CompanyName?.Trim().ToUpperInvariant(),
             CountryId = request.CountryId, TaxId = request.TaxId?.Trim(),
             SourceCode = request.SourceCode?.Trim(), RelationshipTypeCode = request.RelationshipTypeCode?.Trim(),
-            ExecutiveUserId = executiveId, ContactEmail = request.ContactEmail?.Trim(),
+            ExecutiveUserId = executiveId, IsCastroFallasExecutive = request.AssignToCastroFallas,
+            ContactEmail = request.ContactEmail?.Trim(),
             Phone = request.Phone?.Trim(), CreatedByUserId = owner };
         db.Leads.Add(lead);
         await CrmCollectionRealtimeCommit.SaveLeadAsync(db,
@@ -317,9 +325,19 @@ internal static class LeadEndpoints
         if (lead is null || lead.ArchivedAt != null) return Results.NotFound();
         if (lead.RowVersion != request.ExpectedVersion) return CrmDataEndpoints.Conflict("Stale row version");
         if (lead.ConvertedAt is not null) return CrmDataEndpoints.Conflict("Converted lead cannot be reassigned");
-        if (await auth.GetActiveAsync(request.ExecutiveUserId, ct) is null)
+        if (request.AssignToCastroFallas && request.ExecutiveUserId.HasValue)
+            return CrmDataEndpoints.Bad("Select either Castro Fallas or an Auth executive");
+        if (!request.AssignToCastroFallas &&
+            (!request.ExecutiveUserId.HasValue || request.ExecutiveUserId == Guid.Empty))
+            return CrmDataEndpoints.Bad("Valid Auth executive required");
+        var executiveId = request.AssignToCastroFallas
+            ? CrmAccess.UserId(http) : request.ExecutiveUserId!.Value;
+        if (await auth.GetActiveAsync(executiveId, ct) is null)
             return CrmDataEndpoints.Bad("Executive not active in Auth");
-        lead.ExecutiveUserId = request.ExecutiveUserId;
+        if (lead.ExecutiveUserId == executiveId &&
+            lead.IsCastroFallasExecutive == request.AssignToCastroFallas) return Results.Ok(lead);
+        lead.ExecutiveUserId = executiveId;
+        lead.IsCastroFallasExecutive = request.AssignToCastroFallas;
         lead.UpdatedAt = DateTime.UtcNow;
         lead.UpdatedByUserId = CrmAccess.UserId(http);
         lead.RowVersion++;
@@ -419,11 +437,13 @@ internal static class LeadEndpoints
             CustomerTypeCode = request.CustomerTypeCode, CategoryType = request.CategoryType,
             CategoryCode = categoryCode, SourceCode = lead.SourceCode,
             RelationshipTypeCode = lead.RelationshipTypeCode, ExecutiveUserId = lead.ExecutiveUserId,
+            IsCastroFallasExecutive = lead.IsCastroFallasExecutive,
             CreatedByUserId = owner
         };
         db.Accounts.Add(account);
         db.AccountAssignments.Add(new AccountAssignment { AccountId = account.Id,
-            ExecutiveUserId = lead.ExecutiveUserId, AssignedBy = owner, CreatedByUserId = owner });
+            ExecutiveUserId = lead.ExecutiveUserId, IsCastroFallasExecutive = lead.IsCastroFallasExecutive,
+            AssignedBy = owner, CreatedByUserId = owner });
         lead.ConvertedAt = DateTime.UtcNow;
         lead.ConvertedAccountId = account.Id;
         lead.QualificationStatus = "Converted";
