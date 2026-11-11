@@ -41,7 +41,7 @@ internal static class CrmFollowupEndpoints
     private static bool Tasks(HttpContext h)=>CrmAccess.Scope(h,"crm.task.manage");
     private static bool CanReadCalendar(HttpContext h)=>Manage(h)||Tasks(h)||
         CrmDataEndpoints.HasRead(h,"activity")||
-        CrmAccess.Scope(h,"crm.activity.read-all")||
+        CrmAccess.CanManageAgendaAcrossUsers(h)||
         CrmAccess.Scope(h,"crm.account.read-all") ||
         CrmAccess.IsCalendarAdministrator(h);
     private static bool Utc(DateTime dt)=>dt.Kind==DateTimeKind.Utc;
@@ -49,7 +49,8 @@ internal static class CrmFollowupEndpoints
         await CrmAccess.CanSeeAccount(db,h,id,ct);
     private static async Task<bool> HasAccess(Followup x,CrmDbContext db,HttpContext h,CancellationToken ct) =>
         (!x.AccountId.HasValue || await CrmAccess.CanSeeAccount(db,h,x.AccountId.Value,ct)) &&
-        (x.AssignedUserId==CrmAccess.UserId(h) ||
+        (CrmAccess.CanManageAgendaAcrossUsers(h) ||
+         x.AssignedUserId==CrmAccess.UserId(h) ||
          (x.AccountId.HasValue && CrmAccess.Scope(h,"crm.account.read-all")) ||
          (x.LeadId.HasValue && CrmAccess.Scope(h,"crm.lead.read-all")) ||
          (x.OpportunityId.HasValue && CrmAccess.Scope(h,"crm.opportunity.read-all")));
@@ -109,7 +110,7 @@ internal static class CrmFollowupEndpoints
         var accounts=CrmAccess.Scope(h,"crm.account.read-all");
         var leads=CrmAccess.Scope(h,"crm.lead.read-all");
         var opportunities=CrmAccess.Scope(h,"crm.opportunity.read-all");
-        if(!CrmAccess.IsCalendarAdministrator(h))
+        if(!CrmAccess.IsCalendarAdministrator(h) && !CrmAccess.CanManageAgendaAcrossUsers(h))
             query=query.Where(x=>x.AssignedUserId==actor ||
                 (accounts && x.AccountId!=null) ||
                 (leads && x.LeadId!=null) ||
@@ -117,6 +118,7 @@ internal static class CrmFollowupEndpoints
         if(ownerId.HasValue)
         {
             if(ownerId.Value!=actor && !CrmAccess.IsCalendarAdministrator(h) &&
+                !CrmAccess.CanManageAgendaAcrossUsers(h) &&
                 !accounts && !leads && !opportunities)return CrmAccess.Denied();
             query=query.Where(x=>x.AssignedUserId==ownerId.Value);
         }
@@ -232,7 +234,9 @@ internal static class CrmFollowupEndpoints
     private static async Task<IResult> Create(FollowupCreateRequest r,CrmDbContext db,HttpContext h,
         IAuthReferenceService auth,CancellationToken ct)
     {
-        if(!Manage(h)&&!Tasks(h))return CrmAccess.Denied();
+        if(!Manage(h)&&!Tasks(h)&&
+            !(CrmAccess.Scope(h,"crm.activity.create") && CrmAccess.CanManageAgendaAcrossUsers(h)))
+            return CrmAccess.Denied();
         if(!Utc(r.DueAt)||r.DueAt<DateTime.UtcNow.AddDays(-1)||
             r.Subject?.Length>250||r.ReminderLeadMinutes is < 0 or > 10080||
             (r.ReminderChannelStrategy is not null && r.ReminderChannelStrategy is not ("BOTH" or "EMAIL" or "SYSTEM"))||
@@ -241,6 +245,7 @@ internal static class CrmFollowupEndpoints
         if(!await CommercialAccess.SubjectCanRead(db,h,r.AccountId,r.LeadId,r.OpportunityId,ct))
             return CrmAccess.Denied();
         if(r.AssignedUserId!=CrmAccess.UserId(h)&&
+           !CrmAccess.CanManageAgendaAcrossUsers(h)&&
            !CrmAccess.Scope(h,"crm.account.read-all")&&!CrmAccess.Scope(h,"crm.opportunity.assign"))
             return CrmAccess.Denied();
         if(await auth.GetActiveAsync(r.AssignedUserId,ct) is null)

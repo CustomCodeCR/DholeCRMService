@@ -22,7 +22,7 @@ internal static class CrmCalendarLabelsEndpoints
     private static async Task<IResult> GetUserDirectory(int? page,int? pageSize,string? search,
         HttpContext http,IAuthReferenceService auth,CancellationToken ct)
     {
-        if(!CrmAccess.IsCalendarAdministrator(http))return CrmAccess.Denied();
+        if(!CrmAccess.IsCalendarAdministrator(http) && !CrmAccess.CanManageAgendaAcrossUsers(http))return CrmAccess.Denied();
         if(search?.Length>100)return Results.BadRequest(new{error="Search too long"});
         var n=Math.Max(1,page??1);
         var size=Math.Clamp(pageSize??100,1,100);
@@ -46,7 +46,8 @@ internal static class CrmCalendarLabelsEndpoints
            !CrmAccess.Scope(http,"crm.task.manage") &&
            !CrmAccess.Scope(http,"crm.followup.manage") &&
            !CrmAccess.Scope(http,"crm.activity.read-all") &&
-           !CrmAccess.IsCalendarAdministrator(http))
+           !CrmAccess.IsCalendarAdministrator(http) &&
+           !CrmAccess.CanManageAgendaAcrossUsers(http))
             return CrmAccess.Denied();
         Guid[] wantedAccounts,wantedLeads,wantedOwners;
         try
@@ -71,7 +72,7 @@ internal static class CrmCalendarLabelsEndpoints
         var validAccounts=accounts.Select(a=>a.Id).ToArray();
         var validLeads=leads.Select(l=>l.Id).ToArray();
         // Resolve only owners who have an event linked to a visible client/lead.
-        var allActivities=CrmAccess.Scope(http,"crm.activity.read-all") || CrmAccess.IsCalendarAdministrator(http);
+        var allActivities=CrmAccess.CanManageAgendaAcrossUsers(http) || CrmAccess.IsCalendarAdministrator(http);
         var allAccounts=CrmAccess.Scope(http,"crm.account.read-all") || CrmAccess.IsCalendarAdministrator(http);
         var allLeads=CrmAccess.Scope(http,"crm.lead.read-all") || CrmAccess.IsCalendarAdministrator(http);
         var ownersFromActivities=await db.Activities.AsNoTracking()

@@ -19,6 +19,9 @@ internal static class CrmAccess
         var scopes = http.Items["crm.effective-scopes"] as HashSet<string>;
         return scopes?.Contains(scope) == true;
     }
+    public static bool CanManageAgendaAcrossUsers(HttpContext http) =>
+        Scope(http, "crm.activity.read-all") ||
+        (Scope(http, "crm.account.read-all") && Scope(http, "crm.lead.read-all"));
     // Role names are from the internal Auth active-user lookup, not from client
     // headers or unrefreshed JWT role claims. This grant is CALENDAR READ ONLY.
     private static readonly HashSet<string> CalendarAdministratorRoles = new(

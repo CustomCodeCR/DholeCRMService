@@ -1,3 +1,8 @@
+## [1.9.2] - 2026-11-10
+
+- PATCH DH-20261110-CRM-GLOBAL-AGENDAS-076: autoriza consultar agendas y crear actividades de otros vendedores con crm.activity.read-all o la combinación crm.account.read-all + crm.lead.read-all; mantiene la verificación de clientes/prospectos, usuarios activos y permisos de escritura. Habilita directorio interno protegido para estos scopes.
+- Ecosistema 1.19.5; pruebas de compilación, CI y staging pendientes.
+
 ## [1.9.1] - 2026-11-10
 
 - PATCH DH-20261110-CRM-HISTORICAL-ACTIVITIES-075: permite registrar actividades CRM con fechas anteriores, conservando fechas UTC y marcando como completadas las que ya finalizaron. Las actividades completadas no generan recordatorios retroactivos. Mantiene reglas de fechas futuras de compromisos y seguimientos, permisos, minutas y las APIs existentes.
