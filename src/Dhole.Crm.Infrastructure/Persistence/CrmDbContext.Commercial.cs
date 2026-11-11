@@ -71,6 +71,15 @@ public sealed partial class CrmDbContext
             e.Property(x => x.TradeAgreementNotes).HasMaxLength(2000);
             e.Property(x => x.WebCustomerReference).HasMaxLength(200);
         });
+        ConfigureRecord<AccountSpecificProcedure>(b, "crm_account_specific_procedures");
+        b.Entity<AccountSpecificProcedure>(e =>
+        {
+            e.HasOne<Account>().WithMany().HasForeignKey(x => x.AccountId).OnDelete(DeleteBehavior.Restrict);
+            e.HasIndex(x => new { x.AccountId, x.UpdatedAt });
+            e.Property(x => x.Name).HasMaxLength(160).IsRequired();
+            e.Property(x => x.Detail).HasMaxLength(8000);
+            e.Property(x => x.AssignedTeam).HasMaxLength(500);
+        });
         ConfigureRecord<AccountRouteEvidence>(b, "crm_account_route_evidence");
         b.Entity<AccountRouteEvidence>(e =>
         {

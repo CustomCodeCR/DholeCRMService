@@ -1,3 +1,9 @@
+## [1.11.0] - 2026-11-10
+
+- MINOR DH-20261110-CRM-ACCOUNT-PROCEDURES-080 (master backport): CRUD REST autorizado por cuenta, múltiples procedimientos (nombre, detalle, equipo asignado), concurrencia optimista y migración PostgreSQL aditiva.
+- Promoción aislada desde staging del feature 080 para no mezclar cambios de develop 1.24.0. El CRM master aún no incluye el pipeline de realtime universal de develop; conservará REST, y requiere sincronización de realtime en release coordinado posterior.
+- Build y pruebas CI requeridos antes de despliegue automático en producción.
+
 ## [1.6.0] - 2026-11-10
 
 - MINOR DH-20261110-CRM-CONTACTS-ROLE-MULTISELECT-079: Validación de responsables con roles de ventas y SuperUsuario activos provenientes de Auth; se conserva autorización por scopes en CRM.
