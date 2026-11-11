@@ -1,0 +1,30 @@
+{
+  "releaseId": "DH-20261111-CRM-GEOAPIFY-VISIT-089",
+  "date": "2026-11-11",
+  "type": "MINOR",
+  "ecosystem": "Dhole",
+  "ecosystemVersion": "1.31.0",
+  "components": [
+    {
+      "repository": "CustomCodeCR/DholeCRMService",
+      "previous": "1.18.0",
+      "next": "1.19.0"
+    },
+    {
+      "repository": "CustomCodeCR/DholeWeb",
+      "previous": "1.30.0",
+      "next": "1.31.0"
+    }
+  ],
+  "changes": [
+    "Visitas con búsqueda Geoapify y mapa interactivo",
+    "Latitud y longitud conservadas para edición y consulta; migración aditiva",
+    "Sin cambios incompatibles en clientes REST o eventos SignalR"
+  ],
+  "validation": {
+    "CI": "pending",
+    "staging": "pending"
+  },
+  "productionDeploymentAuthorized": false,
+  "releaseBranch": "feature/crm-geoapify-visits-20261111-develop"
+}

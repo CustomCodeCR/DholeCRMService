@@ -15,7 +15,9 @@ public sealed record ActivityDetailsRequest(long ExpectedVersion, string Subject
     int? ReminderLeadMinutes, string? ReminderChannelStrategy,
     int? RepeatEveryDays, int? ReminderRepeatMinutes,
     IReadOnlyList<ActivityEditedNote>? Notes,
-    IReadOnlyList<ActivityEditedCommitment>? Commitments);
+    IReadOnlyList<ActivityEditedCommitment>? Commitments,
+    decimal? LocationLatitude = null, decimal? LocationLongitude = null,
+    bool UpdateVisitCoordinates = false);
 
 internal static class ActivityDetailsEditing
 {
@@ -39,6 +41,8 @@ internal static class ActivityDetailsEditing
             !await config.IsActiveCodeAsync("crm-activity-types", request.Type, ct) ||
             !CommercialRules.ValidActivitySchedule(request.ScheduledStartAt, request.ScheduledEndAt) ||
             request.LocationText?.Length > 2000 ||
+             (request.UpdateVisitCoordinates &&
+              !ActivityVisitLocationRules.IsValid(request.Type,request.LocationLatitude,request.LocationLongitude)) ||
             request.ReminderLeadMinutes is < 0 or > 10080 ||
             (request.RepeatEveryDays.HasValue && request.RepeatEveryDays.Value is not (0 or 1 or 7 or 14 or 30)) ||
             (request.ReminderRepeatMinutes.HasValue && request.ReminderRepeatMinutes.Value is not (0 or 5 or 15 or 30 or 60 or 240 or 1440)) ||
@@ -88,6 +92,16 @@ internal static class ActivityDetailsEditing
         activity.Subject = request.Subject.Trim();
         activity.Type = request.Type;
         activity.LocationText = request.LocationText?.Trim();
+        if (request.Type != "VISIT")
+        {
+            activity.LocationLatitude = null;
+            activity.LocationLongitude = null;
+        }
+        else if (request.UpdateVisitCoordinates)
+        {
+            activity.LocationLatitude = request.LocationLatitude;
+            activity.LocationLongitude = request.LocationLongitude;
+        }
         activity.ScheduledStartAt = request.ScheduledStartAt;
         activity.ScheduledEndAt = request.ScheduledEndAt;
         activity.ReminderLeadMinutes = request.ReminderLeadMinutes;
