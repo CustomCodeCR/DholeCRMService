@@ -19,6 +19,15 @@ internal static class CrmAccess
         var scopes = http.Items["crm.effective-scopes"] as HashSet<string>;
         return scopes?.Contains(scope) == true;
     }
+    // Responsibility for a commercial agenda is limited to active Auth sales roles.
+    // Never infer the role from the name of the user, their team or the client.
+    private static readonly HashSet<string> CommercialAgendaRoles = new(
+        ["Vendedor", "Vendedor Supervisor", "Vendedor Jefe", "SuperUsuario"],
+        StringComparer.OrdinalIgnoreCase);
+    public static bool CanOwnCommercialAgenda(AuthUserReference? user) =>
+        user is { Active: true } &&
+        user.Roles?.Any(role => CommercialAgendaRoles.Contains(role)) == true;
+
     public static bool CanManageAgendaAcrossUsers(HttpContext http) =>
         Scope(http, "crm.activity.read-all") ||
         (Scope(http, "crm.account.read-all") && Scope(http, "crm.lead.read-all"));
