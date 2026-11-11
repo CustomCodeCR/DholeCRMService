@@ -297,9 +297,10 @@ internal static class LeadEndpoints
                 return CrmDataEndpoints.Conflict("Prospect already converted concurrently");
             }
         }
+        var categoryCode = CrmDataEndpoints.CategoryOnCreate(http, request.CategoryType, request.CategoryCode);
         if (string.IsNullOrWhiteSpace(request.CustomerTypeCode) ||
             request.CustomerTypeCode is not ("cash" or "credit") ||
-            !CrmDataEndpoints.CategoryValid(request.CategoryType, request.CategoryCode))
+            !CrmDataEndpoints.CategoryValid(request.CategoryType, categoryCode))
             return CrmDataEndpoints.Bad("Invalid account classification");
         if (!await CrmDataEndpoints.ValidCountry(config, lead.CountryId, ct))
             return CrmDataEndpoints.Bad("Unknown country");
@@ -316,7 +317,7 @@ internal static class LeadEndpoints
             CountryId = lead.CountryId, TaxId = lead.TaxId,
             NormalizedTaxId = tax, TaxIdTypeCode = request.TaxIdTypeCode,
             CustomerTypeCode = request.CustomerTypeCode, CategoryType = request.CategoryType,
-            CategoryCode = request.CategoryCode, SourceCode = lead.SourceCode,
+            CategoryCode = categoryCode, SourceCode = lead.SourceCode,
             RelationshipTypeCode = lead.RelationshipTypeCode, ExecutiveUserId = lead.ExecutiveUserId,
             CreatedByUserId = owner
         };

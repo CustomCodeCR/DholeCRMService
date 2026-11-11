@@ -1,0 +1,40 @@
+{
+  "releaseId": "DH-20261110-CRM-ACCOUNT-CATEGORY-SCOPE-082",
+  "date": "2026-11-10",
+  "kind": "MINOR",
+  "ecosystemVersion": "1.24.0",
+  "branch": "release/crm-category-scope-082-master-rebased",
+  "components": [
+    {
+      "repository": "CustomCodeCR/DholeAuthService",
+      "previous": "1.3.0",
+      "next": "1.8.0"
+    },
+    {
+      "repository": "CustomCodeCR/DholeCRMService",
+      "previous": "1.11.0",
+      "next": "1.12.0"
+    },
+    {
+      "repository": "CustomCodeCR/DholeWeb",
+      "previous": "1.23.0",
+      "next": "1.24.0"
+    },
+    {
+      "repository": "CustomCodeCR/DholeSystem",
+      "previous": "1.23.0",
+      "next": "1.24.0"
+    }
+  ],
+  "changes": [
+    "Authorize CRM account category management only with crm.account.category.manage",
+    "On create and lead conversion, unprivileged actors receive server-controlled conservative category",
+    "On PATCH, unauthorized reclassification returns 403; Web disables category selectors",
+    "Retain existing REST, SignalR and currently released master features"
+  ],
+  "validation": {
+    "CI": "pending",
+    "staging": "pending"
+  },
+  "productionDeploymentAuthorized": true
+}
