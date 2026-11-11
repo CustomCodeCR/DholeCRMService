@@ -284,6 +284,7 @@ internal static class AccountEndpoints
     {
         if (!CrmAccess.Scope(http, "crm.account.create")) return CrmAccess.Denied();
         var id = CrmAccess.UserId(http);
+        var categoryCode = CrmDataEndpoints.CategoryOnCreate(http, request.CategoryType, request.CategoryCode);
         if (request.AssignToCastroFallas && request.ExecutiveUserId.HasValue)
             return CrmDataEndpoints.Bad("Select either Castro Fallas or an Auth executive");
         var executiveId = request.AssignToCastroFallas ? id : request.ExecutiveUserId ?? id;
@@ -291,7 +292,7 @@ internal static class AccountEndpoints
             return CrmAccess.Denied();
         if (string.IsNullOrWhiteSpace(request.DisplayName) || request.DisplayName.Length > 220 ||
             string.IsNullOrWhiteSpace(request.LegalName) || request.LegalName.Length > 220 ||
-            !CrmDataEndpoints.CategoryValid(request.CategoryType, request.CategoryCode) ||
+            !CrmDataEndpoints.CategoryValid(request.CategoryType, categoryCode) ||
             request.CustomerTypeCode is not ("cash" or "credit"))
             return CrmDataEndpoints.Bad("Invalid account identity/category/customer type");
         if (!ValidRelationships(request.RelationshipTypeCode))
@@ -328,7 +329,7 @@ internal static class AccountEndpoints
             TaxIdTypeCode = request.TaxIdTypeCode?.Trim(), TaxId = request.TaxId?.Trim(),
             NormalizedTaxId = tax, CustomerTypeCode = request.CustomerTypeCode,
             SourceCode = request.SourceCode?.Trim(), RelationshipTypeCode = request.RelationshipTypeCode?.Trim(),
-            CategoryType = request.CategoryType, CategoryCode = request.CategoryCode,
+            CategoryType = request.CategoryType, CategoryCode = categoryCode,
             VerificationStatus = verifiedTaxpayer is null ? "Pending" : "Verified",
             HaciendaVerifiedAt = verifiedTaxpayer?.VerifiedAt.UtcDateTime
         };
@@ -370,6 +371,11 @@ internal static class AccountEndpoints
         if (account is null || account.ArchivedAt is not null) return Results.NotFound();
         if (!await CrmAccess.CanSeeAccount(db, http, account.Id, ct)) return CrmAccess.Denied();
         if (account.RowVersion != request.ExpectedVersion) return CrmDataEndpoints.Conflict("Stale row version");
+        // Editing a client is not authority to reclassify it, even via a forged PATCH.
+        if (!AccountCategoryPolicy.CanUpdate(account.CategoryType, account.CategoryCode,
+                request.CategoryType, request.CategoryCode,
+                CrmAccess.Scope(http, CrmDataEndpoints.AccountCategoryManageScope)))
+            return CrmAccess.Denied();
         if (string.IsNullOrWhiteSpace(request.DisplayName) || request.DisplayName.Length > 220 ||
             string.IsNullOrWhiteSpace(request.LegalName) || request.LegalName.Length > 220 ||
             request.CustomerTypeCode is not ("cash" or "credit") ||
