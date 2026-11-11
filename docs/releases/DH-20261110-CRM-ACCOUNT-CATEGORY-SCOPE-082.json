@@ -2,7 +2,7 @@
   "releaseId": "DH-20261110-CRM-ACCOUNT-CATEGORY-SCOPE-082",
   "date": "2026-11-10",
   "kind": "MINOR",
-  "ecosystemVersion": "1.23.0",
+  "ecosystemVersion": "1.24.0",
   "branch": "feature/crm-category-scope-082-develop-v2",
   "components": [
     {
@@ -17,20 +17,20 @@
     },
     {
       "repository": "CustomCodeCR/DholeWeb",
-      "previous": "1.22.0",
-      "next": "1.23.0"
+      "previous": "1.23.0",
+      "next": "1.24.0"
     },
     {
       "repository": "CustomCodeCR/DholeSystem",
-      "previous": "1.22.0",
-      "next": "1.23.0"
+      "previous": "1.23.0",
+      "next": "1.24.0"
     }
   ],
   "changes": [
-    "Scope crm.account.category.manage added to Auth: sellers are not granted this automatically",
-    "CRM API checks scope for changes and enforces initial safe category on new accounts and converted leads",
-    "DholeWeb restricts category selectors for creation, editing and prospect conversion",
-    "REST and realtime preserved; previous release changes remain intact"
+    "Auth adds crm.account.category.manage, not granted to ordinary sales roles",
+    "CRM enforces scope on creating and updating accounts and on prospect conversion with safe initial category",
+    "Web restricts category selectors in all workflows; regression tests added",
+    "Preserve REST, SignalR and all unrelated changes"
   ],
   "validation": {
     "CI": "pending",
