@@ -35,6 +35,8 @@ public sealed class Account : CrmRecord
 }
 public sealed class Lead : CrmRecord
 {
+    // Keep a real Auth owner for accountability and a separate institutional seller identity.
+    public bool IsCastroFallasExecutive { get; set; }
     public string Name { get; set; } = "";
     public string? CompanyName { get; set; }
     public Guid? CountryId { get; set; }
