@@ -233,7 +233,7 @@ internal static class CrmFollowupEndpoints
         HttpContext h,CancellationToken ct)
     {
         if(!CrmAccess.Scope(h,"crm.activity.update"))return false;
-        Guid? origin=followup.OriginActivityId;
+        Guid? origin=null; // master legacy commitments retain origin only in Created history
         if(!origin.HasValue)
         {
             var reasons=await db.FollowupHistories.AsNoTracking()
