@@ -175,6 +175,51 @@ internal static class LeadEndpoints
             return CrmDataEndpoints.Bad("Unknown country");
         if (await auth.GetActiveAsync(executiveId, ct) is null)
             return CrmDataEndpoints.Bad("Unknown or inactive executive");
+        // Check the entire CRM collection, never only the requesting seller's visible leads.
+        // Advisory transaction locks prevent concurrent POSTs from creating the same prospect.
+        var normalizedName = LeadDuplicateIdentity.NormalizeName(request.Name);
+        var normalizedCompany = LeadDuplicateIdentity.NormalizeName(request.CompanyName);
+        var normalizedTax = LeadDuplicateIdentity.NormalizeTax(request.TaxId);
+        var compactNames = new[] { normalizedName.Replace(" ", ""), normalizedCompany.Replace(" ", "") }
+            .Where(x => x.Length > 0).Distinct().ToArray();
+        await using var duplicateGuard = await db.Database.BeginTransactionAsync(ct);
+        foreach (var key in LeadDuplicateIdentity.LockKeys(request.Name, request.CompanyName, request.CountryId, request.TaxId))
+            await db.Database.ExecuteSqlInterpolatedAsync(
+                $"SELECT pg_advisory_xact_lock(842711, hashtext({key}))", ct);
+
+        var candidates = await db.Leads.AsNoTracking()
+            .Where(x => x.ArchivedAt == null &&
+                (!request.CountryId.HasValue || x.CountryId == null || x.CountryId == request.CountryId) &&
+                (compactNames.Contains(x.Name.Replace(" ", "").ToUpper()) ||
+                 (x.CompanyName != null && compactNames.Contains(x.CompanyName.Replace(" ", "").ToUpper())) ||
+                 (normalizedTax.Length > 0 && x.TaxId != null &&
+                  x.TaxId.Replace(" ", "").Replace("-", "").Replace(".", "").ToUpper() == normalizedTax)))
+            .OrderBy(x => x.CreatedAt).ToListAsync(ct);
+        var duplicate = candidates.FirstOrDefault(x => LeadDuplicateIdentity.Matches(
+            x, request.Name, request.CompanyName, request.CountryId, request.TaxId));
+        if (duplicate is not null)
+        {
+            await duplicateGuard.RollbackAsync(ct);
+            string sellerName;
+            try
+            {
+                sellerName = (await auth.GetActiveAsync(duplicate.ExecutiveUserId, ct))?.DisplayName?.Trim()
+                    ?? "Vendedor no disponible";
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+            catch (Exception)
+            {
+                sellerName = "Vendedor no disponible";
+            }
+            return Results.Json(new {
+                code = "CRM_LEAD_DUPLICATE",
+                message = $"El prospecto '{duplicate.Name}' ya existe y pertenece al vendedor {sellerName}.",
+                prospectName = duplicate.Name,
+                sellerName,
+                existingProspectId = duplicate.Id
+            }, statusCode: StatusCodes.Status409Conflict);
+        }
+
         var lead = new Lead { Name = request.Name.Trim().ToUpperInvariant(), CompanyName = request.CompanyName?.Trim().ToUpperInvariant(),
             CountryId = request.CountryId, TaxId = request.TaxId?.Trim(),
             SourceCode = request.SourceCode?.Trim(), RelationshipTypeCode = request.RelationshipTypeCode?.Trim(),
@@ -182,6 +227,7 @@ internal static class LeadEndpoints
             Phone = request.Phone?.Trim(), CreatedByUserId = owner };
         db.Leads.Add(lead);
         await db.SaveChangesAsync(ct);
+        await duplicateGuard.CommitAsync(ct);
         return Results.Created("/api/crm/leads/" + lead.Id, lead);
     }
     private static async Task<IResult> Patch(Guid id, PatchLeadRequest request, CrmDbContext db,
