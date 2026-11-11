@@ -1,0 +1,43 @@
+{
+  "schemaVersion": 1,
+  "ecosystem": "Dhole",
+  "releaseId": "DH-20261111-CRM-QUOTE-MULTI-CONTACTS-102",
+  "releaseType": "MINOR",
+  "ecosystemVersion": "1.35.0",
+  "createdAt": "2026-11-11",
+  "sourceBranch": "feature/quote-multi-contacts-20261111-master",
+  "components": [
+    {
+      "repository": "CustomCodeCR/DholeCRMService",
+      "component": "DholeCRMService",
+      "version": "1.22.0"
+    },
+    {
+      "repository": "CustomCodeCR/DholePricingService",
+      "component": "DholePricingService",
+      "version": "1.13.0"
+    },
+    {
+      "repository": "CustomCodeCR/DholeWeb",
+      "component": "DholeWeb",
+      "version": "1.35.0"
+    },
+    {
+      "repository": "CustomCodeCR/DholeSystem",
+      "component": "DholeSystem",
+      "version": "1.35.0"
+    }
+  ],
+  "changes": [
+    "Remove single-QUO selection; persist default delivery per account",
+    "Select multiple linked active CRM contacts with DhMultiSelect, maintaining existing legacy contactId API",
+    "Validate all saved contacts and email each customer via existing idempotent Outbox with assigned seller CC",
+    "Preserve REST and realtime SignalR infrastructure"
+  ],
+  "validation": {
+    "ci": "pending",
+    "staging": "pending",
+    "production": "not-authorized"
+  },
+  "productionDeploymentAuthorized": false
+}
