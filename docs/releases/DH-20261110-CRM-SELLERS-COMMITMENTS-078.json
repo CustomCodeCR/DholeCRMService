@@ -1,0 +1,14 @@
+{
+  "releaseId": "DH-20261110-CRM-SELLERS-COMMITMENTS-078",
+  "releaseType": "PATCH",
+  "date": "2026-11-10",
+  "component": "DholeCRMService",
+  "from": "1.5.0",
+  "to": "1.5.1",
+  "ecosystemVersion": "1.20.1",
+  "status": "candidate",
+  "changes": [
+    "Validate Vendedor role on cross-user creation",
+    "Complete parent-linked commitment using activity.update and audited followup completion"
+  ]
+}

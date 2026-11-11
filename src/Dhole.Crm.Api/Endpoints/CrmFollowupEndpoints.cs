@@ -186,8 +186,10 @@ internal static class CrmFollowupEndpoints
            !CrmAccess.CanManageAgendaAcrossUsers(h)&&
            !CrmAccess.Scope(h,"crm.account.read-all")&&!CrmAccess.Scope(h,"crm.opportunity.assign"))
             return CrmAccess.Denied();
-        if(await auth.GetActiveAsync(r.AssignedUserId,ct) is null)
-            return CrmDataEndpoints.Bad("Assignee is not active");
+        var activeAssignee=await auth.GetActiveAsync(r.AssignedUserId,ct);
+        if(activeAssignee is null)return CrmDataEndpoints.Bad("Assignee is not active");
+        if(r.AssignedUserId!=CrmAccess.UserId(h) && !CrmAccess.IsSeller(activeAssignee))
+            return CrmDataEndpoints.Bad("Assignee must have the Vendedor role in Auth");
         var x=new Followup {AccountId=r.AccountId,LeadId=r.LeadId,OpportunityId=r.OpportunityId,
             AssignedUserId=r.AssignedUserId,Channel=r.Channel,DueAt=r.DueAt,
             Subject=r.Subject?.Trim(),ReminderLeadMinutes=r.ReminderLeadMinutes,
@@ -224,12 +226,55 @@ internal static class CrmFollowupEndpoints
         var ok=await CrmDataEndpoints.Commit(db,ct);
         return ok is Microsoft.AspNetCore.Http.HttpResults.Ok?Results.Ok(x):ok;
     }
+    // Completing a commitment from its parent activity is an activity-write action.
+    // This covers salespeople without crm.task.manage, but never grants blanket followup mutation.
+    // Older CRM commitments can identify their origin through their immutable Created history.
+    private static async Task<bool> CanCompleteActivityCommitment(Followup followup,CrmDbContext db,
+        HttpContext h,CancellationToken ct)
+    {
+        if(!CrmAccess.Scope(h,"crm.activity.update"))return false;
+        Guid? origin=null; // master legacy commitments retain origin only in Created history
+        if(!origin.HasValue)
+        {
+            var reasons=await db.FollowupHistories.AsNoTracking()
+                .Where(history=>history.FollowupId==followup.Id && history.Action=="Created")
+                .Select(history=>history.Reason).ToListAsync(ct);
+            const string activityPrefix="Acuerdo registrado en actividad comercial ";
+            const string notePrefix="Acuerdo de observación ";
+            foreach(var reason in reasons)
+            {
+                if(reason is null)continue;
+                if(reason.StartsWith(activityPrefix,StringComparison.Ordinal) &&
+                   Guid.TryParse(reason[activityPrefix.Length..],out var parentId))
+                {origin=parentId;break;}
+                if(reason.StartsWith(notePrefix,StringComparison.Ordinal) &&
+                   Guid.TryParse(reason[notePrefix.Length..],out var noteId))
+                {
+                    origin=await db.ActivityNotes.AsNoTracking().Where(n=>n.Id==noteId)
+                        .Select(n=>(Guid?)n.ActivityId).FirstOrDefaultAsync(ct);
+                    if(origin.HasValue)break;
+                }
+            }
+        }
+        if(!origin.HasValue)return false;
+        var activity=await db.Activities.AsNoTracking()
+            .FirstOrDefaultAsync(a=>a.Id==origin && a.ArchivedAt==null,ct);
+        return activity is not null && CommercialAccess.ActivityOwns(h,activity) &&
+            activity.AccountId==followup.AccountId && activity.LeadId==followup.LeadId &&
+            activity.OpportunityId==followup.OpportunityId &&
+            await CommercialAccess.SubjectCanRead(db,h,activity.AccountId,
+                activity.LeadId,activity.OpportunityId,ct);
+    }
+
     private static async Task<IResult> Complete(Guid id,FollowupCompleteRequest r,
         CrmDbContext db,HttpContext h,CancellationToken ct)
     {
-        if(!Manage(h)&&!Tasks(h))return CrmAccess.Denied();
         var x=await db.Followups.FindAsync([id],ct);if(x is null)return Results.NotFound();
-        if(!await HasAccess(x,db,h,ct))return CrmAccess.Denied();
+        if(Manage(h)||Tasks(h))
+        {
+            if(!await HasAccess(x,db,h,ct))return CrmAccess.Denied();
+        }
+        else if(!await CanCompleteActivityCommitment(x,db,h,ct))return CrmAccess.Denied();
         if(x.RowVersion!=r.ExpectedVersion)return CrmDataEndpoints.Conflict("Concurrent followup update");
         if(x.Status is not ("Pending" or "Overdue")||string.IsNullOrWhiteSpace(r.Outcome)||
             r.Outcome.Length>2000||(r.NextFollowupAt is not null&&!Utc(r.NextFollowupAt.Value)))
