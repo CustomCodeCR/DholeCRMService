@@ -26,8 +26,9 @@ internal static class ActivityDetailsEditing
         var activity = await db.Activities.FirstOrDefaultAsync(x => x.Id == id && x.ArchivedAt == null, ct);
         if (activity is null) return Results.NotFound();
         if (!CommercialAccess.ActivityOwns(http, activity) ||
-            !await CommercialAccess.SubjectCanRead(db, http, activity.AccountId,
-                activity.LeadId, activity.OpportunityId, ct)) return CrmAccess.Denied();
+            (activity.AccountId is { } accountId &&
+             !await CrmAccess.CanSeeAccount(db, http, accountId, ct)))
+            return CrmAccess.Denied();
         if (activity.RowVersion != request.ExpectedVersion)
             return CommercialAccess.Conflict("Stale activity version. Reload the activity before saving.");
 
