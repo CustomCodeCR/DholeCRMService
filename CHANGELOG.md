@@ -1,3 +1,8 @@
+## [1.9.3] - 2026-11-10
+
+- PATCH DH-20261110-CRM-SELLERS-COMMITMENTS-078: exige rol Vendedor para asignar actividades y seguimientos a otros usuarios. Permite completar compromisos vinculados a la actividad propia usando crm.activity.update, incluidos vínculos históricos confirmados en el historial de creación; conserva permisos, concurrencia y auditoría.
+- Release global 1.20.1; contratos REST existentes y realtime conservados; CI y staging pendientes.
+
 ## [1.9.2] - 2026-11-10
 
 - PATCH DH-20261110-CRM-GLOBAL-AGENDAS-076: autoriza consultar agendas y crear actividades de otros vendedores con crm.activity.read-all o la combinación crm.account.read-all + crm.lead.read-all; mantiene la verificación de clientes/prospectos, usuarios activos y permisos de escritura. Habilita directorio interno protegido para estos scopes.
