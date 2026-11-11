@@ -1,3 +1,8 @@
+## [1.11.0] - 2026-11-10
+
+- MINOR DH-20261110-CRM-ACCOUNT-CATEGORY-SCOPE-082: La API exige el scope específico para cambiar la categoría, asigna una categoría inicial segura en altas y conversión de prospectos, y protege PATCH contra modificaciones no autorizadas.
+- Pruebas CI, staging y autorización de producción pendientes.
+
 ## [1.10.0] - 2026-11-10
 
 - MINOR DH-20261110-CRM-CONTACTS-SELLERS-078: la validación de asignación comercial admite roles activos Vendedor, Vendedores, Vendedor Supervisor, Vendedor Jefe y SuperUsuario de Auth. Complementa las verificaciones de vendedor ya existentes en 1.9.3.
