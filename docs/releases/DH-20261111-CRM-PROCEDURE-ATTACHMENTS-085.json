@@ -1,0 +1,32 @@
+{
+  "releaseId": "DH-20261111-CRM-PROCEDURE-ATTACHMENTS-085",
+  "date": "2026-11-11",
+  "kind": "MINOR",
+  "ecosystemVersion": "1.27.0",
+  "sourceBranches": [
+    "feature/crm-procedure-attachments-20261111-085"
+  ],
+  "components": [
+    {
+      "repository": "CustomCodeCR/DholeCRMService",
+      "previous": "1.14.0",
+      "next": "1.15.0"
+    },
+    {
+      "repository": "CustomCodeCR/DholeWeb",
+      "previous": "1.26.0",
+      "next": "1.27.0"
+    }
+  ],
+  "changes": [
+    "Associate Storage documents with an individual customer-specific CRM procedure; upload multiple files during creation and editing.",
+    "List, preview and download procedure attachments using shared CRM Documents panel and StorageFileViewer.",
+    "Enforce CRM visibility of the parent account before revealing a procedure's document access and retain Storage scope checks.",
+    "Reuse the existing CRM REST and realtime architecture and retry failed uploads without duplicating saved procedures."
+  ],
+  "validation": {
+    "CI": "pending",
+    "staging": "pending"
+  },
+  "productionDeploymentAuthorized": false
+}

@@ -1,3 +1,8 @@
+## [1.15.0] - 2026-11-11
+
+- MINOR DH-20261111-CRM-PROCEDURE-ATTACHMENTS-085: autorización CRM de documentos específicos por procedimiento y cuenta visible, sin exponer archivos de cuentas ajenas; validación del permiso crm.account.update para carga en Storage.
+- Reutiliza endpoints REST y Outbox/SignalR existentes. Ecosistema 1.27.0; CI/staging pendientes y despliegue productivo no autorizado.
+
 ## [1.14.0] - 2026-11-11
 
 - MINOR DH-20261111-CRM-DOCUMENTS-084: autorización por registro CRM para consultar y adjuntar documentos vinculados a cuentas, prospectos, contactos, actividades y seguimientos; mantiene compatibilidad REST/SignalR y scopes de Storage.
