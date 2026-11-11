@@ -1,3 +1,8 @@
+## [1.17.0] - 2026-11-11
+
+- MINOR DH-20261111-CRM-LEAD-INSTITUTIONAL-087: backport sobre master para asignar Castro Fallas a prospectos en creación, reasignación y conversión a cuentas con vendedor institucional separado del usuario Auth.
+- Incluye migración aditiva y pruebas; conserva registros existentes, REST y SignalR. Ecosistema 1.29.0, CI/staging pendientes, producción no autorizada.
+
 ## [1.16.0] - 2026-11-11
 
 - MINOR DH-20261111-CRM-DOCUMENT-DROPZONE-086: mantiene validación de permisos por procedimiento específico, cuenta visible y scopes de edición; compatible con carga múltiple drag & drop en Web 1.28.0.
