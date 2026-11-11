@@ -1,0 +1,44 @@
+{
+  "releaseId": "DH-20261110-CRM-AGENDA-UNIFIED-077",
+  "date": "2026-11-10",
+  "kind": "MINOR",
+  "ecosystemVersion": "1.20.0",
+  "branch": "master",
+  "components": [
+    {
+      "repository": "CustomCodeCR/DholeWeb",
+      "previous": "1.19.5",
+      "next": "1.20.0"
+    },
+    {
+      "repository": "CustomCodeCR/DholeCRMService",
+      "previous": "1.4.7",
+      "next": "1.5.0"
+    },
+    {
+      "repository": "CustomCodeCR/DholeSystem",
+      "previous": "1.19.5",
+      "next": "1.20.0"
+    },
+    {
+      "repository": "CustomCodeCR/DholeAuthService",
+      "version": "1.2.5",
+      "changed": false
+    }
+  ],
+  "features": [
+    "Nueva actividad unificada",
+    "Participantes de contactos de la cuenta",
+    "Minuta expandible",
+    "Compromisos completos con checkbox",
+    "Asignación de otros vendedores mediante scopes globales",
+    "Actividad principal asociada a acuerdos secundarios"
+  ],
+  "migrations": [],
+  "validation": {
+    "build": "pending",
+    "CI": "pending",
+    "staging": "pending"
+  },
+  "productionDeploymentAuthorized": false
+}
