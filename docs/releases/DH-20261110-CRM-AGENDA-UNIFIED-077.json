@@ -1,0 +1,42 @@
+{
+  "releaseId": "DH-20261110-CRM-AGENDA-UNIFIED-077",
+  "date": "2026-11-10",
+  "kind": "MINOR",
+  "ecosystemVersion": "1.20.0",
+  "component": "DholeCRMService",
+  "componentVersion": "1.10.0",
+  "branch": "develop",
+  "components": [
+    {
+      "repository": "CustomCodeCR/DholeWeb",
+      "previous": "1.19.4",
+      "next": "1.20.0"
+    },
+    {
+      "repository": "CustomCodeCR/DholeCRMService",
+      "previous": "1.9.1",
+      "next": "1.10.0"
+    },
+    {
+      "repository": "CustomCodeCR/DholeSystem",
+      "previous": "1.19.4",
+      "next": "1.20.0"
+    }
+  ],
+  "features": [
+    "Crear actividad con un botón unificado",
+    "Participantes desde contactos de cuenta y minuta redimensionable",
+    "Checklist de compromisos vinculados",
+    "Asignar y consultar agendas de otros vendedores con scopes",
+    "Mostrar actividad principal de compromisos secundarios"
+  ],
+  "migrations": [],
+  "validation": {
+    "typeCheck": "pending",
+    "build": "pending",
+    "tests": "pending",
+    "CI": "pending",
+    "staging": "pending"
+  },
+  "productionDeploymentAuthorized": false
+}
