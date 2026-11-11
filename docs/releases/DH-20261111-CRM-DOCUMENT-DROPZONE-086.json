@@ -1,0 +1,33 @@
+{
+  "releaseId": "DH-20261111-CRM-DOCUMENT-DROPZONE-086",
+  "date": "2026-11-11",
+  "type": "MINOR",
+  "ecosystemVersion": "1.28.0",
+  "components": [
+    {
+      "repository": "CustomCodeCR/DholeCRMService",
+      "previous": "1.15.0",
+      "next": "1.16.0"
+    },
+    {
+      "repository": "CustomCodeCR/DholeWeb",
+      "previous": "1.27.1",
+      "next": "1.28.0"
+    }
+  ],
+  "changes": [
+    "Shared drag-and-drop multi-file queue for CRM accounts, leads, contacts, activities, followups and each account-specific procedure",
+    "No artificial limit on file count; validate each file at 100 MB, deduplicate re-selection and allow removing queued files",
+    "Preview stored PDFs, images and text and download all stored formats from record and procedure detail",
+    "Port procedure-specific account-authorized document access into master without losing existing CRM records or workflow"
+  ],
+  "releaseBranches": [
+    "feature/crm-dragdrop-procedures-20261111-develop",
+    "feature/crm-dragdrop-procedures-20261111-master"
+  ],
+  "validation": {
+    "CI": "pending",
+    "staging": "pending"
+  },
+  "productionDeploymentAuthorized": false
+}
