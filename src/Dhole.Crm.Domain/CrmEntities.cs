@@ -28,6 +28,10 @@ public sealed class Account : CrmRecord
     public Guid ExecutiveUserId { get; set; }
     // Explicit institutional seller; ExecutiveUserId remains the accountable Auth user.
     public bool IsCastroFallasExecutive { get; set; }
+    // Account-wide routing rule for every future commercially sent quotation.
+    // The contact ID is resolved again when dispatching; no email is cached.
+    public string QuoteDeliveryTarget { get; set; } = "seller";
+    public Guid? QuoteDeliveryContactId { get; set; }
     public string VerificationStatus { get; set; } = "Pending";
     public DateTime? HaciendaVerifiedAt { get; set; }
     public string Status { get; set; } = "Active";
