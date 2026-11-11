@@ -34,6 +34,7 @@ internal static class CommercialActivityEndpoints
         g.MapGet("/activities/{id:guid}",Get);
         g.MapPost("/activities",Create);
         g.MapPatch("/activities/{id:guid}",Patch);
+        g.MapPut("/activities/{id:guid}/details",ActivityDetailsEditing.Update);
         g.MapPost("/activities/{id:guid}/complete",Complete);
         g.MapPost("/activities/{id:guid}/reschedule",Reschedule);
         g.MapPost("/activities/{id:guid}/cancel",Cancel);
@@ -408,6 +409,8 @@ internal static class CommercialActivityEndpoints
         var note=await db.ActivityNotes.AsNoTracking()
             .FirstOrDefaultAsync(x=>x.Id==noteId && x.ActivityId==id,ct);
         if(note is null)return Results.NotFound();
+        if(note.NoteText.StartsWith("[Historial de edición]",StringComparison.Ordinal))
+            return CommercialAccess.Invalid("Audit history cannot create new agreement commitments.");
         var entries=request.Commitments;
         if(entries is null || entries.Count is < 1 or > 30 ||
             entries.Any(x=>string.IsNullOrWhiteSpace(x.Subject) ||
