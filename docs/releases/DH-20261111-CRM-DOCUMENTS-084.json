@@ -1,0 +1,33 @@
+{
+  "releaseId": "DH-20261111-CRM-DOCUMENTS-084",
+  "date": "2026-11-11",
+  "kind": "MINOR",
+  "ecosystemVersion": "1.26.0",
+  "sourceBranches": [
+    "feature/crm-documents-20261111-develop",
+    "feature/crm-documents-20261111-master"
+  ],
+  "components": [
+    {
+      "repository": "CustomCodeCR/DholeCRMService",
+      "previous": "1.13.0",
+      "next": "1.14.0"
+    },
+    {
+      "repository": "CustomCodeCR/DholeWeb",
+      "previous": "1.25.0",
+      "next": "1.26.0"
+    }
+  ],
+  "changes": [
+    "Support entity-bound CRM document upload, listing and download for accounts, prospects, contacts, commercial activities and followups",
+    "Allow selecting multiple documents during commercial activity creation, preserving the already-created activity on upload retries",
+    "Validate CRM record access before offering files and retain existing Storage scopes and API contracts",
+    "Preserve existing REST and realtime pipelines without introducing breaking changes"
+  ],
+  "validation": {
+    "CI": "pending",
+    "staging": "pending"
+  },
+  "productionDeploymentAuthorized": false
+}
