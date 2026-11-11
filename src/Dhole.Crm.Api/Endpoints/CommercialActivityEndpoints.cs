@@ -13,7 +13,8 @@ public sealed record ActivityCreateRequest(Guid? AccountId,Guid? LeadId,Guid? Op
     string? Involved = null,string? Agreements = null,
     string? NextCommitment = null,DateTime? CommitmentDueAt = null,
     IReadOnlyList<AgreementCommitmentRequest>? AgreementCommitments = null,
-    int? RepeatEveryDays = null, int? ReminderRepeatMinutes = null);
+    int? RepeatEveryDays = null, int? ReminderRepeatMinutes = null,
+    string? Minutes = null, IReadOnlyList<Guid>? ParticipantContactIds = null);
 public sealed record ActivityPatchRequest(long ExpectedVersion,string Subject,string? LocationText,
     int? RepeatEveryDays = null,int? ReminderLeadMinutes = null,int? ReminderRepeatMinutes = null);
 public sealed record ActivityCompleteRequest(long ExpectedVersion,string Outcome,DateTime OccurredAt,string? Note);
@@ -54,7 +55,7 @@ internal static class CommercialActivityEndpoints
             (!a.AccountId.HasValue || await CrmAccess.CanSeeAccount(db,h,a.AccountId.Value,ct)) ? a : null;
     }
     private static async Task<IResult> List(CrmDbContext db,HttpContext h,
-        Guid? accountId,Guid? leadId,Guid? opportunityId,string? type,string? status,
+        Guid? accountId,Guid? leadId,Guid? opportunityId,Guid? ownerId,string? type,string? status,
         DateTime? from,DateTime? to,int? page,int? pageSize,CancellationToken ct)
     {
         if(!CanRead(h))return CrmAccess.Denied();
@@ -63,6 +64,11 @@ internal static class CommercialActivityEndpoints
             (!x.AccountId.HasValue || visibleAccounts.Contains(x.AccountId.Value)));
         if(!CrmAccess.CanManageAgendaAcrossUsers(h))
             query=query.Where(x=>x.OwnerUserId==CrmAccess.UserId(h));
+        if(ownerId is { } owner) {
+            if(owner!=CrmAccess.UserId(h) && !CrmAccess.CanManageAgendaAcrossUsers(h))
+                return CrmAccess.Denied();
+            query=query.Where(x=>x.OwnerUserId==owner);
+        }
         if(accountId is { } a)query=query.Where(x=>x.AccountId==a);
         if(leadId is { } l)query=query.Where(x=>x.LeadId==l);
         if(opportunityId is { } o)query=query.Where(x=>x.OpportunityId==o);
@@ -106,7 +112,7 @@ internal static class CommercialActivityEndpoints
             return CommercialAccess.Invalid("Unknown activity type in Config");
         if(r.OccurredAt is not null&&r.OccurredAt>DateTime.UtcNow)
             return CommercialAccess.Invalid("Cannot record future actual occurrence");
-        if(r.Involved?.Length>1500 || r.Agreements?.Length>6000 ||
+        if(r.Involved?.Length>1500 || r.Minutes?.Length>20000 || r.Agreements?.Length>6000 ||
             r.NextCommitment?.Length>250 ||
             (string.IsNullOrWhiteSpace(r.NextCommitment) != !r.CommitmentDueAt.HasValue) ||
             (r.CommitmentDueAt is { } commitmentDue &&
@@ -122,6 +128,12 @@ internal static class CommercialActivityEndpoints
                 x.DueAt < DateTime.UtcNow ||
                 (r.ScheduledStartAt.HasValue && x.DueAt < r.ScheduledStartAt.Value)))
             return CommercialAccess.Invalid("Agreement commitments require a title and a valid future date.");
+        var contactIds = r.ParticipantContactIds?.Distinct().ToArray() ?? [];
+        if(contactIds.Length>50 || contactIds.Any(x=>x==Guid.Empty))
+            return CommercialAccess.Invalid("Too many or invalid activity contacts");
+        foreach(var contactId in contactIds)
+            if(!await CommercialAccess.ContactBelongsTo(db,contactId,r.AccountId,r.OpportunityId,ct))
+                return CommercialAccess.Invalid("Participant contact does not belong to this account");
         var createdAtUtc=DateTime.UtcNow;
         var occurredAt=r.OccurredAt ??
             (CommercialRules.IsHistoricalActivity(r.ScheduledEndAt,createdAtUtc)
@@ -138,6 +150,16 @@ internal static class CommercialActivityEndpoints
             ReminderRepeatMinutes=r.ReminderRepeatMinutes is > 0 ? r.ReminderRepeatMinutes : null
         };
         db.Activities.Add(activity);
+        foreach(var contactId in contactIds)
+            db.ActivityParticipants.Add(new ActivityParticipant {
+                ActivityId=activity.Id,ContactId=contactId,Role="ATTENDEE",
+                CreatedByUserId=current
+            });
+        if(!string.IsNullOrWhiteSpace(r.Minutes))
+            db.ActivityNotes.Add(new ActivityNote {
+                ActivityId=activity.Id,AuthorUserId=current,CreatedByUserId=current,
+                NoteText="Minuta:\n"+r.Minutes.Trim()
+            });
         // Reuse the existing notes/participants and followup models rather than
         // storing agreements only in the browser. Save everything atomically.
         var summary=string.Join("\n\n",new[] {
