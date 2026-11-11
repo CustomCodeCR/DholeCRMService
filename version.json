@@ -2,9 +2,9 @@
   "schemaVersion": 1,
   "ecosystem": "Dhole",
   "component": "DholeCRMService",
-  "version": "1.5.1",
-  "ecosystemVersion": "1.20.1",
-  "releaseId": "DH-20261110-CRM-SELLERS-COMMITMENTS-078",
+  "version": "1.6.0",
+  "ecosystemVersion": "1.21.0",
+  "releaseId": "DH-20261110-CRM-CONTACTS-ROLE-MULTISELECT-079",
   "releaseStatus": "candidate-master-ci-staging-pending",
-  "businessReleaseId": "DH-20261110-CRM-SELLERS-COMMITMENTS-078"
+  "businessReleaseId": "DH-20261110-CRM-CONTACTS-ROLE-MULTISELECT-079"
 }
