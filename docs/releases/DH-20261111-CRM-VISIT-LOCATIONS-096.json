@@ -1,0 +1,31 @@
+{
+  "releaseId": "DH-20261111-CRM-VISIT-LOCATIONS-096",
+  "date": "2026-11-11",
+  "type": "MINOR",
+  "ecosystem": "Dhole",
+  "ecosystemVersion": "1.34.0",
+  "components": [
+    {
+      "repository": "CustomCodeCR/DholeCRMService",
+      "previous": "1.20.1",
+      "next": "1.21.0"
+    },
+    {
+      "repository": "CustomCodeCR/DholeWeb",
+      "previous": "1.33.0",
+      "next": "1.34.0"
+    }
+  ],
+  "changes": [
+    "Ubicaciones de prospectos con validación, permisos CRM y outbox existente",
+    "Recuperación de direcciones de cuentas y prospectos para seleccionar visitas",
+    "Geoapify: búsqueda directa, autocompletado, ubicación manual y mensajes de error"
+  ],
+  "releaseBranch": "feature/crm-visit-registered-locations-search-20261111-develop",
+  "validation": {
+    "CI": "pending",
+    "staging": "pending",
+    "rollback": "No eliminar la tabla de ubicaciones"
+  },
+  "productionDeploymentAuthorized": false
+}
