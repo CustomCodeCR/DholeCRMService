@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "ecosystem": "Dhole",
+  "releaseId": "DH-20261111-CRM-ACCOUNT-FUTURE-QUOTE-DELIVERY-093",
+  "releaseType": "MINOR",
+  "ecosystemVersion": "1.33.0",
+  "createdAt": "2026-11-11",
+  "components": [
+    {
+      "repository": "CustomCodeCR/DholeCRMService",
+      "component": "DholeCRMService",
+      "from": "1.18.0",
+      "to": "1.19.0"
+    },
+    {
+      "repository": "CustomCodeCR/DholePricingService",
+      "component": "DholePricingService",
+      "from": "1.11.2",
+      "to": "1.12.0"
+    },
+    {
+      "repository": "CustomCodeCR/DholeWeb",
+      "component": "DholeWeb",
+      "from": "1.31.1",
+      "to": "1.32.0"
+    },
+    {
+      "repository": "CustomCodeCR/DholeSystem",
+      "component": "DholeSystem",
+      "from": "1.32.1",
+      "to": "1.33.0"
+    }
+  ],
+  "changes": [
+    "Configuración de destinatarios persistente por cuenta CRM para futuras cotizaciones",
+    "Sólo la alternativa definitiva FCL y el estado de envío generan correos al destinatario configurado",
+    "Validación de contacto actual y copia al vendedor de cuenta en backend, también para envíos automáticos y reintentos"
+  ],
+  "validation": "CI y staging pendientes",
+  "productionDeploymentAuthorized": false
+}
