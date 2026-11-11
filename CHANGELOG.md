@@ -1,3 +1,9 @@
+## [1.20.0] - 2026-11-11
+
+- MINOR DH-20261111-CRM-ACCOUNT-QUOTE-DELIVERY-093: configura por cuenta destinatarios de todas las próximas cotizaciones: vendedor únicamente o contacto del cliente con copia al vendedor asignado.
+- La preferencia se guarda en CRM, se valida en Pricing en cada envío y se edita sin seleccionar QUO. REST, SignalR, Outbox y el procesamiento idempotente se mantienen.
+- Versión global Dhole 1.33.0. CI y staging pendientes; producción no autorizada hasta validación.
+
 ## [1.19.0] - 2026-11-11
 
 - MINOR DH-20261111-CRM-GEOAPIFY-VISIT-089: coordenadas geográficas para visitas CRM mediante migración PostgreSQL nullable, validaciones y actualización de endpoints REST. Compatible con registros previos, realtime y DholeWeb 1.31.0.
