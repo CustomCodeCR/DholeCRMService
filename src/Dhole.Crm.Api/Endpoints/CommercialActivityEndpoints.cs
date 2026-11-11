@@ -47,7 +47,9 @@ internal static class CommercialActivityEndpoints
         g.MapPost("/activities/{id:guid}/participants",AddParticipant);
         return g;
     }
-    private static bool CanRead(HttpContext h)=>CrmDataEndpoints.HasRead(h,"activity") || CrmAccess.IsCalendarAdministrator(h);
+    private static bool CanRead(HttpContext h)=>CrmDataEndpoints.HasRead(h,"activity") ||
+        CrmAccess.IsCalendarAdministrator(h) || CrmAccess.Scope(h,"crm.account.read-all") ||
+        CrmAccess.Scope(h,"crm.lead.read-all");
     private static async Task<Activity?> FindAllowed(Guid id,CrmDbContext db,HttpContext h,CancellationToken ct)
     {
         var a=await db.Activities.FirstOrDefaultAsync(x=>x.Id==id&&x.ArchivedAt==null,ct);
@@ -60,7 +62,9 @@ internal static class CommercialActivityEndpoints
         var activity=await db.Activities.AsNoTracking()
             .FirstOrDefaultAsync(x=>x.Id==id && x.ArchivedAt==null,ct);
         return activity is not null &&
-            (CommercialAccess.ActivityOwns(h,activity)||CrmAccess.IsCalendarAdministrator(h)) &&
+            (CommercialAccess.ActivityOwns(h,activity)||CrmAccess.IsCalendarAdministrator(h) ||
+             (activity.AccountId.HasValue && CrmAccess.Scope(h,"crm.account.read-all")) ||
+             (activity.LeadId.HasValue && CrmAccess.Scope(h,"crm.lead.read-all"))) &&
             (!activity.AccountId.HasValue || await CrmAccess.CanSeeCalendarAccount(db,h,activity.AccountId.Value,ct))
             ? activity : null;
     }
@@ -73,12 +77,21 @@ internal static class CommercialActivityEndpoints
         var query=db.Activities.AsNoTracking().Where(x=>x.ArchivedAt==null &&
             (!x.AccountId.HasValue || visibleAccounts.Contains(x.AccountId.Value)));
         if(!CrmAccess.Scope(h,"crm.activity.read-all") && !CrmAccess.IsCalendarAdministrator(h))
-            query=query.Where(x=>x.OwnerUserId==CrmAccess.UserId(h));
+        {
+            var accountManager=CrmAccess.Scope(h,"crm.account.read-all");
+            var leadManager=CrmAccess.Scope(h,"crm.lead.read-all");
+            var actor=CrmAccess.UserId(h);
+            query=query.Where(x=>x.OwnerUserId==actor ||
+                (accountManager && x.AccountId.HasValue) ||
+                (leadManager && x.LeadId.HasValue));
+        }
         if(ownerId.HasValue)
         {
             if(ownerId.Value!=CrmAccess.UserId(h) &&
                 !CrmAccess.Scope(h,"crm.activity.read-all") &&
-                !CrmAccess.IsCalendarAdministrator(h))return CrmAccess.Denied();
+                !CrmAccess.IsCalendarAdministrator(h) &&
+                !CrmAccess.Scope(h,"crm.account.read-all") &&
+                !CrmAccess.Scope(h,"crm.lead.read-all"))return CrmAccess.Denied();
             query=query.Where(x=>x.OwnerUserId==ownerId.Value);
         }
         if(accountId is { } a)query=query.Where(x=>x.AccountId==a);
@@ -117,7 +130,10 @@ internal static class CommercialActivityEndpoints
             return CommercialAccess.Invalid("Invalid activity type, schedule or authorized subject");
         var current=CrmAccess.UserId(h);
         var owner=r.OwnerUserId??current;
-        if(owner!=current&&!CrmAccess.Scope(h,"crm.activity.read-all"))
+        if(owner!=current && !CrmAccess.Scope(h,"crm.activity.read-all") &&
+           !CrmAccess.IsCalendarAdministrator(h) &&
+           !(r.AccountId.HasValue && CrmAccess.Scope(h,"crm.account.read-all")) &&
+           !(r.LeadId.HasValue && CrmAccess.Scope(h,"crm.lead.read-all")))
             return CrmAccess.Denied();
         if(await auth.GetActiveAsync(owner,ct) is null)return CommercialAccess.Invalid("Activity owner inactive in Auth");
         if(!await config.IsActiveCodeAsync("crm-activity-types",r.Type,ct))
