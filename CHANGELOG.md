@@ -1,3 +1,8 @@
+## [1.10.0] - 2026-11-10
+
+- MINOR DH-20261110-CRM-CONTACTS-SELLERS-078: CRM valida mediante roles activos de Auth que la asignación a otro vendedor corresponda a Vendedor, Vendedor Supervisor, Vendedor Jefe o SuperUsuario; aplica en actividades y seguimientos.
+- Se conservan los permisos de lectura, las API REST existentes, los compromisos, recordatorios y SignalR. Compatibilidad con actividades previas.
+
 ## [1.9.2] - 2026-11-10
 
 - PATCH DH-20261110-CRM-GLOBAL-AGENDAS-076: autoriza consultar agendas y crear actividades de otros vendedores con crm.activity.read-all o la combinación crm.account.read-all + crm.lead.read-all; mantiene la verificación de clientes/prospectos, usuarios activos y permisos de escritura. Habilita directorio interno protegido para estos scopes.
