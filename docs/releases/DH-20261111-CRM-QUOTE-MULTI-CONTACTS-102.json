@@ -3,7 +3,7 @@
   "ecosystem": "Dhole",
   "releaseId": "DH-20261111-CRM-QUOTE-MULTI-CONTACTS-102",
   "releaseType": "MINOR",
-  "ecosystemVersion": "1.35.0",
+  "ecosystemVersion": "1.36.0",
   "createdAt": "2026-11-11",
   "sourceBranch": "feature/quote-multi-contacts-20261111-master",
   "components": [
@@ -20,12 +20,12 @@
     {
       "repository": "CustomCodeCR/DholeWeb",
       "component": "DholeWeb",
-      "version": "1.35.0"
+      "version": "1.36.0"
     },
     {
       "repository": "CustomCodeCR/DholeSystem",
       "component": "DholeSystem",
-      "version": "1.35.0"
+      "version": "1.36.0"
     }
   ],
   "changes": [
