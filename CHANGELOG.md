@@ -1,3 +1,8 @@
+## [1.21.0] - 2026-11-11
+
+- MINOR DH-20261111-CRM-VISIT-LOCATIONS-096: nuevo registro seguro de ubicaciones para prospectos, con endpoint de consulta/creación/edición, migración PostgreSQL aditiva y eventos existentes de lista de prospectos por outbox.
+- DholeWeb 1.34.0 consulta direcciones de cuentas y prospectos y recupera búsqueda Geoapify con fallback. Ecosistema Dhole 1.34.0; pruebas de staging pendientes.
+
 ## [1.19.0] - 2026-11-11
 
 - MINOR DH-20261111-CRM-GEOAPIFY-VISIT-089: coordenadas geográficas para visitas CRM mediante migración PostgreSQL nullable, validaciones y actualización de endpoints REST. Compatible con registros previos, realtime y DholeWeb 1.31.0.

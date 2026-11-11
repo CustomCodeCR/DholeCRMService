@@ -18,6 +18,7 @@ public sealed partial class CrmDbContext(DbContextOptions<CrmDbContext> options)
     public DbSet<Contact> Contacts => Set<Contact>();
     public DbSet<AccountContact> AccountContacts => Set<AccountContact>();
     public DbSet<Address> Addresses => Set<Address>();
+    public DbSet<LeadAddress> LeadAddresses => Set<LeadAddress>();
     public DbSet<ContactPreference> ContactPreferences => Set<ContactPreference>();
     public DbSet<MarketingConsent> MarketingConsents => Set<MarketingConsent>();
     public DbSet<AccountBusinessActivity> AccountBusinessActivities => Set<AccountBusinessActivity>();
@@ -71,6 +72,7 @@ public sealed partial class CrmDbContext(DbContextOptions<CrmDbContext> options)
         ConfigureRecord<AccountAssignment>(b, "crm_account_assignments");
         ConfigureRecord<Contact>(b, "crm_contacts");
         ConfigureRecord<Address>(b, "crm_addresses");
+        ConfigureRecord<LeadAddress>(b, "crm_lead_addresses");
         ConfigureRecord<ContactPreference>(b, "crm_contact_preferences");
         ConfigureRecord<MarketingConsent>(b, "crm_marketing_consents");
         ConfigureRecord<AccountBusinessActivity>(b, "crm_account_business_activities");
@@ -185,6 +187,22 @@ public sealed partial class CrmDbContext(DbContextOptions<CrmDbContext> options)
             e.HasIndex(x => new { x.CountryCode, x.Admin1Code });
             e.HasOne<Account>().WithMany().HasForeignKey(x => x.AccountId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne<Contact>().WithMany().HasForeignKey(x => x.ContactId).OnDelete(DeleteBehavior.Restrict);
+        });
+        b.Entity<LeadAddress>(e =>
+        {
+            e.Property(x => x.AddressType).HasMaxLength(40);
+            e.Property(x => x.CountryCode).HasMaxLength(2);
+            e.Property(x => x.Admin1Code).HasMaxLength(160);
+            e.Property(x => x.Admin1Name).HasMaxLength(160);
+            e.Property(x => x.Admin2Code).HasMaxLength(160);
+            e.Property(x => x.Admin2Name).HasMaxLength(160);
+            e.Property(x => x.Admin3Code).HasMaxLength(160);
+            e.Property(x => x.Admin3Name).HasMaxLength(160);
+            e.Property(x => x.PostalCode).HasMaxLength(32);
+            e.Property(x => x.LocationLatitude).HasPrecision(9, 6);
+            e.Property(x => x.LocationLongitude).HasPrecision(9, 6);
+            e.HasOne<Lead>().WithMany().HasForeignKey(x => x.LeadId).OnDelete(DeleteBehavior.Restrict);
+            e.HasIndex(x => x.LeadId);
         });
         b.Entity<ContactPreference>(e =>
         {
