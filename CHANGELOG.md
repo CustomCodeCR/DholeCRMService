@@ -1,3 +1,8 @@
+## [1.18.0] - 2026-11-11
+
+- MINOR DH-20261111-CRM-ACTIVITY-COMPLETE-EDIT-088: endpoint transaccional PUT para edición completa de actividades, minutas, acuerdos y compromisos, incluso finalizadas; autorización por scope y visibilidad, versiones optimistas, auditoría de cambios y recordatorios idempotentes.
+- Ampliación sin pérdida de datos de crm_activity_notes a TEXT, compatible con REST y outbox/realtime existentes. Ecosistema Dhole 1.30.0; CI/staging pendientes; producción no autorizada.
+
 ## [1.17.1] - 2026-11-11
 
 - PATCH DH-20261111-CRM-RESPONSIBLES-SCOPES-086: los responsables de actividades y seguimientos son usuarios activos habilitados por crm.activity.read, crm.activity.read-all o crm.followup.manage, según los permisos efectivos de Auth. No se exige rol Vendedor. Mantiene autorización para asignar a terceros, REST y SignalR.

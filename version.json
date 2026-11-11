@@ -2,9 +2,9 @@
   "schemaVersion": 1,
   "ecosystem": "Dhole",
   "component": "DholeCRMService",
-  "version": "1.17.1",
-  "ecosystemVersion": "1.29.1",
-  "releaseId": "DH-20261111-CRM-RESPONSIBLES-SCOPES-086",
-  "releaseStatus": "candidate-master-ci-staging-verified",
-  "businessReleaseId": "DH-20261111-CRM-RESPONSIBLES-SCOPES-086"
+  "version": "1.18.0",
+  "ecosystemVersion": "1.30.0",
+  "releaseId": "DH-20261111-CRM-ACTIVITY-COMPLETE-EDIT-088",
+  "releaseStatus": "candidate-ci-and-staging-pending",
+  "businessReleaseId": "DH-20261111-CRM-ACTIVITY-COMPLETE-EDIT-088"
 }
