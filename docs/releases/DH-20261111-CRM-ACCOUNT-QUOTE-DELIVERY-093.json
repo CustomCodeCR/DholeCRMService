@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "ecosystem": "Dhole",
+  "releaseId": "DH-20261111-CRM-ACCOUNT-QUOTE-DELIVERY-093",
+  "releaseType": "MINOR",
+  "ecosystemVersion": "1.33.0",
+  "createdAt": "2026-11-11",
+  "sourceBranch": "feature/account-quote-delivery-default-093-develop",
+  "components": [
+    {
+      "component": "DholeCRMService",
+      "repository": "CustomCodeCR/DholeCRMService",
+      "version": "1.20.0"
+    },
+    {
+      "component": "DholePricingService",
+      "repository": "CustomCodeCR/DholePricingService",
+      "version": "1.12.0"
+    },
+    {
+      "component": "DholeWeb",
+      "repository": "CustomCodeCR/DholeWeb",
+      "version": "1.33.0"
+    },
+    {
+      "component": "DholeSystem",
+      "repository": "CustomCodeCR/DholeSystem",
+      "version": "1.33.0"
+    }
+  ],
+  "changes": [
+    "CRM preference is persisted per account with version and linked contact validation",
+    "Pricing queries the saved preference for each new Sent status transition and verifies contact and seller before queuing the mail",
+    "Web account UI edits preference without requiring or sending a specific quotation"
+  ],
+  "validation": {
+    "ci": "pending",
+    "staging": "pending"
+  },
+  "productionDeploymentAuthorized": false
+}

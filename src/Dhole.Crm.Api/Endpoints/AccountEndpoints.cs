@@ -20,6 +20,8 @@ public sealed record AssignAccountRequest(long ExpectedVersion, Guid? ExecutiveU
 public sealed record ArchiveAccountRequest(long ExpectedVersion, string? Reason = null);
 public sealed record SetAccountLogoRequest(long ExpectedVersion, Guid? LogoFileId);
 public sealed record AddBusinessActivityRequest(string ActivityCode, string? Description, string Source);
+public sealed record UpdateQuoteDeliveryPreferenceRequest(
+    string DeliveryTarget, Guid? ContactId, long ExpectedVersion);
 
 internal static class AccountEndpoints
 {
@@ -40,6 +42,8 @@ internal static class AccountEndpoints
         group.MapPatch("/accounts/{id:guid}/logo", SetLogo);
         group.MapGet("/accounts/{id:guid}/assignments", Assignments);
         group.MapGet("/accounts/{id:guid}/assigned-executive", AssignedExecutive);
+        group.MapGet("/accounts/{id:guid}/quote-delivery-preference", GetQuoteDeliveryPreference);
+        group.MapPut("/accounts/{id:guid}/quote-delivery-preference", PutQuoteDeliveryPreference);
         group.MapGet("/accounts/assigned-executives", AssignedExecutives);
         group.MapGet("/accounts/{id:guid}/business-activities", Activities);
         group.MapPost("/accounts/{id:guid}/business-activities", AddActivity);
@@ -249,6 +253,85 @@ internal static class AccountEndpoints
                 : x.ExecutiveUserId == Guid.Empty ? "Sin asignar"
                 : names.TryGetValue(x.ExecutiveUserId, out var name) ? name : "Vendedor no disponible");
         return Results.Ok(new { sellers });
+    }
+
+    // Read a single account's durable default. The same authenticated CRM endpoint
+    // is used by Pricing immediately before every future quote enters the Outbox.
+    private static async Task<IResult> GetQuoteDeliveryPreference(
+        Guid id, CrmDbContext db, HttpContext http, CancellationToken ct)
+    {
+        if (!CrmAccess.Scope(http, "crm.account.read") &&
+            !CrmAccess.Scope(http, "crm.account.read-all"))
+            return CrmAccess.Denied();
+        var account = await CrmAccess.VisibleAccounts(db, http).AsNoTracking()
+            .Where(x => x.Id == id).Select(x => new
+            {
+                x.QuoteDeliveryTarget, x.QuoteDeliveryContactId,
+                x.QuoteDeliveryUpdatedAtUtc, x.RowVersion
+            }).FirstOrDefaultAsync(ct);
+        return account is null ? Results.NotFound() : Results.Ok(new
+        {
+            deliveryTarget = account.QuoteDeliveryTarget,
+            contactId = account.QuoteDeliveryContactId,
+            updatedAtUtc = account.QuoteDeliveryUpdatedAtUtc,
+            rowVersion = account.RowVersion
+        });
+    }
+
+    private static async Task<IResult> PutQuoteDeliveryPreference(
+        Guid id, UpdateQuoteDeliveryPreferenceRequest request,
+        CrmDbContext db, HttpContext http, CancellationToken ct)
+    {
+        if (!CrmAccess.Scope(http, "crm.account.update"))
+            return CrmAccess.Denied();
+        if (request.DeliveryTarget is not ("seller" or "client"))
+            return Results.BadRequest(new { error = "Seleccione vendedor o cliente." });
+        if (request.DeliveryTarget == "client" &&
+            (!request.ContactId.HasValue || request.ContactId == Guid.Empty))
+            return Results.BadRequest(new { error = "Seleccione un contacto del cliente." });
+        if (request.DeliveryTarget == "seller" && request.ContactId.HasValue)
+            return Results.BadRequest(new { error = "Solo al vendedor no admite contacto." });
+
+        var account = await db.Accounts.FindAsync([id], ct);
+        if (account is null || account.ArchivedAt != null)
+            return Results.NotFound();
+        if (!await CrmAccess.CanSeeAccount(db, http, id, ct))
+            return CrmAccess.Denied();
+        if (account.RowVersion != request.ExpectedVersion)
+            return Results.Conflict(new { error = "La cuenta se actualizó; recargue y vuelva a guardar." });
+
+        if (request.DeliveryTarget == "client")
+        {
+            var linked = await (from rel in db.AccountContacts.AsNoTracking()
+                join contact in db.Contacts.AsNoTracking() on rel.ContactId equals contact.Id
+                where rel.AccountId == id && rel.ContactId == request.ContactId &&
+                      rel.ActiveTo == null && contact.ArchivedAt == null &&
+                      contact.Email != null && contact.Email != ""
+                select contact.Email).FirstOrDefaultAsync(ct);
+            if (string.IsNullOrWhiteSpace(linked) ||
+                !System.Net.Mail.MailAddress.TryCreate(linked.Trim(), out var mail) ||
+                !string.Equals(mail.Address, linked.Trim(), StringComparison.OrdinalIgnoreCase))
+                return Results.BadRequest(new
+                {
+                    error = "El contacto no pertenece a la cuenta o no tiene correo válido."
+                });
+        }
+
+        account.QuoteDeliveryTarget = request.DeliveryTarget;
+        account.QuoteDeliveryContactId = request.DeliveryTarget == "client" ? request.ContactId : null;
+        account.QuoteDeliveryUpdatedAtUtc = DateTime.UtcNow;
+        account.RowVersion++;
+        account.UpdatedAt = DateTime.UtcNow;
+        account.UpdatedByUserId = CrmAccess.UserId(http);
+        var result = await CrmDataEndpoints.Commit(db, ct);
+        return result is Microsoft.AspNetCore.Http.HttpResults.Ok
+            ? Results.Ok(new
+            {
+                deliveryTarget = account.QuoteDeliveryTarget,
+                contactId = account.QuoteDeliveryContactId,
+                updatedAtUtc = account.QuoteDeliveryUpdatedAtUtc,
+                rowVersion = account.RowVersion
+            }) : result;
     }
 
     private static async Task<IResult> AssignedExecutive(Guid id, CrmDbContext db,
