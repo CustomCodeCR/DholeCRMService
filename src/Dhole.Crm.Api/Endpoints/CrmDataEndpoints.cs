@@ -39,10 +39,25 @@ public static class CrmDataEndpoints
     internal static string? NormalizeTax(string? value) =>
         string.IsNullOrWhiteSpace(value) ? null :
         Regex.Replace(value.Trim().ToUpperInvariant(), @"[\s.\-]", "");
+    internal const string AccountCategoryManageScope = "crm.account.category.manage";
+    // A safe initial classification is assigned by CRM, never by an unprivileged client.
+    // The category remains one of the existing supported codes, preserving legacy integrations.
+    internal static string DefaultAccountCategory(string type) => type switch
+    {
+        "CUSTOMER" => "D",
+        "NVOCC" => "B",
+        "LITTLE" => "A",
+        _ => "D"
+    };
+    internal static string CategoryOnCreate(HttpContext http, string type, string requestedCode) =>
+        CrmAccess.Scope(http, AccountCategoryManageScope)
+            ? requestedCode
+            : DefaultAccountCategory(type);
     internal static bool CategoryValid(string type, string code) =>
-        (type == "CUSTOMER" && "ABCD".Contains(code, StringComparison.Ordinal)) ||
-        (type == "NVOCC" && "AB".Contains(code, StringComparison.Ordinal)) ||
-        (type == "LITTLE" && code == "A");
+        code is { Length: 1 } &&
+        ((type == "CUSTOMER" && "ABCD".Contains(code, StringComparison.Ordinal)) ||
+         (type == "NVOCC" && "AB".Contains(code, StringComparison.Ordinal)) ||
+         (type == "LITTLE" && code == "A"));
     internal static bool IsEmailValid(string? address) =>
         string.IsNullOrWhiteSpace(address) ||
         (System.Net.Mail.MailAddress.TryCreate(address, out var parsed) &&
