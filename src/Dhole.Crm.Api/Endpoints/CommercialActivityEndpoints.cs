@@ -47,7 +47,7 @@ internal static class CommercialActivityEndpoints
         g.MapPost("/activities/{id:guid}/participants",AddParticipant);
         return g;
     }
-    private static bool CanRead(HttpContext h)=>CrmDataEndpoints.HasRead(h,"activity") || CrmAccess.IsCalendarAdministrator(h);
+    private static bool CanRead(HttpContext h)=>CrmDataEndpoints.HasRead(h,"activity") || CrmAccess.IsCalendarAdministrator(h) || CrmAccess.CanManageAgendaAcrossUsers(h);
     private static async Task<Activity?> FindAllowed(Guid id,CrmDbContext db,HttpContext h,CancellationToken ct)
     {
         var a=await db.Activities.FirstOrDefaultAsync(x=>x.Id==id&&x.ArchivedAt==null,ct);
@@ -72,12 +72,12 @@ internal static class CommercialActivityEndpoints
         var visibleAccounts=CrmAccess.CalendarVisibleAccounts(db,h).Select(a=>a.Id);
         var query=db.Activities.AsNoTracking().Where(x=>x.ArchivedAt==null &&
             (!x.AccountId.HasValue || visibleAccounts.Contains(x.AccountId.Value)));
-        if(!CrmAccess.Scope(h,"crm.activity.read-all") && !CrmAccess.IsCalendarAdministrator(h))
+        if(!CrmAccess.CanManageAgendaAcrossUsers(h) && !CrmAccess.IsCalendarAdministrator(h))
             query=query.Where(x=>x.OwnerUserId==CrmAccess.UserId(h));
         if(ownerId.HasValue)
         {
             if(ownerId.Value!=CrmAccess.UserId(h) &&
-                !CrmAccess.Scope(h,"crm.activity.read-all") &&
+                !CrmAccess.CanManageAgendaAcrossUsers(h) &&
                 !CrmAccess.IsCalendarAdministrator(h))return CrmAccess.Denied();
             query=query.Where(x=>x.OwnerUserId==ownerId.Value);
         }
@@ -117,7 +117,7 @@ internal static class CommercialActivityEndpoints
             return CommercialAccess.Invalid("Invalid activity type, schedule or authorized subject");
         var current=CrmAccess.UserId(h);
         var owner=r.OwnerUserId??current;
-        if(owner!=current&&!CrmAccess.Scope(h,"crm.activity.read-all"))
+        if(owner!=current&&!CrmAccess.CanManageAgendaAcrossUsers(h))
             return CrmAccess.Denied();
         if(await auth.GetActiveAsync(owner,ct) is null)return CommercialAccess.Invalid("Activity owner inactive in Auth");
         if(!await config.IsActiveCodeAsync("crm-activity-types",r.Type,ct))
