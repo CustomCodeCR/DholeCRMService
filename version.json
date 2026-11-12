@@ -2,9 +2,9 @@
   "schemaVersion": 1,
   "ecosystem": "Dhole",
   "component": "DholeCRMService",
-  "version": "1.25.0",
-  "ecosystemVersion": "1.41.0",
-  "releaseId": "DH-20261112-CRM-ACCOUNT-GROUPS-112",
-  "releaseStatus": "candidate-ci-and-staging-pending",
-  "businessReleaseId": "DH-20261112-CRM-ACCOUNT-GROUPS-112"
+  "version": "1.25.1",
+  "ecosystemVersion": "1.41.2",
+  "releaseId": "DH-20261112-CRM-PRODUCTION-GATE-113",
+  "releaseStatus": "production-deployment-authorized-checks-pending",
+  "businessReleaseId": "DH-20261112-CRM-PRODUCTION-GATE-113"
 }

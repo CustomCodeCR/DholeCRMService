@@ -1,3 +1,9 @@
+## [1.25.1] - 2026-11-12
+
+- PATCH DH-20261112-CRM-PRODUCTION-GATE-113: elimina la condición de exclusión en el workflow de producción CRM que causó el estado Skipped del release de agrupación de cuentas.
+- Restaura los despliegues automáticos con push a master y conserva workflow_dispatch, migraciones versionadas, health checks, REST y SignalR/Outbox.
+- El modelo de agrupación de cuentas permanece intacto; CRM 1.25.0 → 1.25.1, ecosistema 1.41.2, DholeWeb 1.41.1 sin modificaciones. Despliegue CRM autorizado en esta conversación.
+
 ## [1.25.0] - 2026-11-12
 
 - MINOR DH-20261112-CRM-ACCOUNT-GROUPS-112: agrupación comercial de cuentas bajo una cuenta principal, manteniendo la identidad fiscal, vendedor, contactos y contratos de cada cuenta.
