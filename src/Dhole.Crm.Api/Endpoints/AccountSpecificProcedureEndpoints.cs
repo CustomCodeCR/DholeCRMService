@@ -38,8 +38,9 @@ internal static class AccountSpecificProcedureEndpoints
         if (!CrmDataEndpoints.HasRead(http, "account")) return CrmAccess.Denied();
         if (await VisibleAccount(id, db, http, ct) is null) return Results.NotFound();
 
+        var groupIds = await AccountGroupAccess.VisibleIdsAsync(db, http, id, ct);
         var procedures = await db.AccountSpecificProcedures.AsNoTracking()
-            .Where(p => p.AccountId == id)
+            .Where(p => groupIds.Contains(p.AccountId))
             .OrderByDescending(p => p.UpdatedAt)
             .ThenBy(p => p.Name)
             .ToListAsync(ct);
@@ -89,8 +90,9 @@ internal static class AccountSpecificProcedureEndpoints
         if (account is null) return Results.NotFound();
         if (!Valid(request)) return CrmDataEndpoints.Bad("Procedure name is required (max 160), detail max 8000 and team max 500 characters");
 
+        var groupIds = await AccountGroupAccess.VisibleIdsAsync(db, http, id, ct);
         var procedure = await db.AccountSpecificProcedures
-            .SingleOrDefaultAsync(p => p.Id == procedureId && p.AccountId == id, ct);
+            .SingleOrDefaultAsync(p => p.Id == procedureId && groupIds.Contains(p.AccountId), ct);
         if (procedure is null) return Results.NotFound();
         if (request.ExpectedVersion is null || request.ExpectedVersion != procedure.RowVersion)
             return CrmDataEndpoints.Conflict("Procedure changed; refresh and try again");
@@ -111,8 +113,9 @@ internal static class AccountSpecificProcedureEndpoints
         var account = await VisibleAccount(id, db, http, ct);
         if (account is null) return Results.NotFound();
 
+        var groupIds = await AccountGroupAccess.VisibleIdsAsync(db, http, id, ct);
         var procedure = await db.AccountSpecificProcedures
-            .SingleOrDefaultAsync(p => p.Id == procedureId && p.AccountId == id, ct);
+            .SingleOrDefaultAsync(p => p.Id == procedureId && groupIds.Contains(p.AccountId), ct);
         if (procedure is null) return Results.NotFound();
         if (expectedVersion is null || expectedVersion != procedure.RowVersion)
             return CrmDataEndpoints.Conflict("Procedure changed; refresh and try again");
