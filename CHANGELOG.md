@@ -1,3 +1,9 @@
+## [1.25.2] - 2026-11-12
+
+- PATCH DH-20261112-PRICING-CRM-LEAD-OWNER-120: corregido endpoint GET /pricing-client-options; prospectos usan su IsCastroFallasExecutive real, sin fijarlo en false. Pricing muestra al responsable institucional Castro Fallas aun cuando ExecutiveUserId sea el usuario operativo que creó o custodia el prospecto.
+- Se conserva filtrado por scopes y ACL existentes, paginación, búsqueda, API REST y SignalR/Outbox. Se agrega test de regresión del contrato de proyección institucional.
+- CRM 1.25.1 → 1.25.2 y DholeSystem/ecosistema 1.43.7 → 1.43.8. DholeWeb 1.43.6 y PricingService 1.16.3 sin cambios. Pendiente validación en staging de TARIFARIO y de borradores de Pricing antes del despliegue a producción.
+
 ## [1.25.1] - 2026-11-12
 
 - PATCH DH-20261112-CRM-PRODUCTION-GATE-113: elimina la condición de exclusión en el workflow de producción CRM que causó el estado Skipped del release de agrupación de cuentas.
