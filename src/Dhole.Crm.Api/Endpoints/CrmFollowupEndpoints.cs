@@ -122,7 +122,11 @@ internal static class CrmFollowupEndpoints
                 !accounts && !leads && !opportunities)return CrmAccess.Denied();
             query=query.Where(x=>x.AssignedUserId==ownerId.Value);
         }
-        if(accountId.HasValue)query=query.Where(x=>x.AccountId==accountId);
+        if (accountId.HasValue) {
+            var groupIds = await AccountGroupAccess.VisibleIdsAsync(db, h, accountId.Value, ct);
+            if (groupIds.Length == 0) return CrmAccess.Denied();
+            query = query.Where(x => x.AccountId.HasValue && groupIds.Contains(x.AccountId.Value));
+        }
         // Prospect calendars only request tasks linked to that lead.
         if(leadId.HasValue)query=query.Where(x=>x.LeadId==leadId);
         if(!string.IsNullOrWhiteSpace(status))query=query.Where(x=>x.Status==status);

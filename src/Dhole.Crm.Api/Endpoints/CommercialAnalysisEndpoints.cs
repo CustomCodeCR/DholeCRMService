@@ -258,7 +258,8 @@ internal static class CommercialAnalysisEndpoints
     {
         if(!CrmAccess.Scope(h,"crm.analysis.read")||!await AllowedAccount(id,db,h,ct))
             return CrmAccess.Denied();
-        return Results.Ok(await db.CustomerTradeProfiles.AsNoTracking().Where(x=>x.AccountId==id)
+        var groupIds = await AccountGroupAccess.VisibleIdsAsync(db, h, id, ct);
+        return Results.Ok(await db.CustomerTradeProfiles.AsNoTracking().Where(x=>groupIds.Contains(x.AccountId))
             .OrderByDescending(x=>x.CreatedAt).ToListAsync(ct));
     }
     private static async Task<IResult> AddTradeProfile(Guid id,TradeProfileRequest r,

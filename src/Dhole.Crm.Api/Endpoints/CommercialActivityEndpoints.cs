@@ -87,7 +87,11 @@ internal static class CommercialActivityEndpoints
                 !CrmAccess.IsCalendarAdministrator(h))return CrmAccess.Denied();
             query=query.Where(x=>x.OwnerUserId==ownerId.Value);
         }
-        if(accountId is { } a)query=query.Where(x=>x.AccountId==a);
+        if (accountId is { } requestedAccount) {
+            var groupIds = await AccountGroupAccess.VisibleIdsAsync(db, h, requestedAccount, ct);
+            if (groupIds.Length == 0) return CrmAccess.Denied();
+            query = query.Where(x => x.AccountId.HasValue && groupIds.Contains(x.AccountId.Value));
+        }
         if(leadId is { } l)query=query.Where(x=>x.LeadId==l);
         if(opportunityId is { } o)query=query.Where(x=>x.OpportunityId==o);
         if(!string.IsNullOrWhiteSpace(type))query=query.Where(x=>x.Type==type);
