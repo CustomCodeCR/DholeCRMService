@@ -1,0 +1,30 @@
+{
+  "releaseId": "DH-20261111-CRM-DRAFT-RECOVERY-109",
+  "date": "2026-11-11",
+  "type": "MINOR",
+  "ecosystem": "Dhole",
+  "ecosystemVersion": "1.39.0",
+  "components": [
+    {
+      "repository": "CustomCodeCR/DholeWeb",
+      "previous": "1.38.1",
+      "next": "1.39.0"
+    },
+    {
+      "repository": "CustomCodeCR/DholeCRMService",
+      "previous": "1.23.0",
+      "next": "1.24.0"
+    }
+  ],
+  "changes": [
+    "Recuperación local de borradores para formularios del CRM, aislados por usuario/cliente/registro",
+    "Persistencia inmediata y recuperación con confirmación al regresar al formulario; borrado únicamente tras éxito del servicio",
+    "Se conserva la infraestructura REST/SignalR vigente, sin cambios de esquema ni archivos persistidos; los adjuntos requieren volver a seleccionarse"
+  ],
+  "releaseBranch": "feature/crm-autosave-recovery-20261111",
+  "validation": {
+    "CI": "pending",
+    "staging": "pending"
+  },
+  "productionDeploymentAuthorized": false
+}
