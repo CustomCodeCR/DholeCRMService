@@ -1,0 +1,37 @@
+{
+  "releaseId": "DH-20261112-CRM-DRAFT-DHMODAL-111",
+  "date": "2026-11-12",
+  "type": "PATCH",
+  "ecosystem": "Dhole",
+  "ecosystemVersion": "1.40.1",
+  "components": [
+    {
+      "repository": "CustomCodeCR/DholeWeb",
+      "previous": "1.40.0",
+      "next": "1.40.1"
+    },
+    {
+      "repository": "CustomCodeCR/DholeCRMService",
+      "previous": "1.24.0",
+      "next": "1.24.1"
+    },
+    {
+      "repository": "CustomCodeCR/DholeSystem",
+      "previous": "1.40.0",
+      "next": "1.40.1"
+    }
+  ],
+  "changes": [
+    "Recuperación de borradores CRM exclusivamente mediante DhModal y DhButton; eliminado window.confirm",
+    "No abrir recuperación en formularios cerrados, cancelar prompts pendientes al navegar y conservar borradores con Más tarde",
+    "Sin cambios de APIs REST, SignalR, esquema o archivos adjuntos",
+    "Reemplazo de diálogos nativos en el módulo Mercadeo (inserción de enlaces y acciones destructivas) por DhModal",
+    "Prueba de regresión prohíbe window.confirm, window.prompt y window.alert en todo src/"
+  ],
+  "releaseBranch": "fix/crm-draft-recovery-dhmodal-20261112",
+  "validation": {
+    "CI": "pending",
+    "staging": "pending"
+  },
+  "productionDeploymentAuthorized": false
+}

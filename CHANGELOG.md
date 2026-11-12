@@ -1,3 +1,8 @@
+## [1.24.1] - 2026-11-12
+
+- PATCH DH-20261112-CRM-DRAFT-DHMODAL-111: versión de CRM coordinada con la corrección frontend de recuperación de borradores mediante DhModal, sin confirmaciones nativas.
+- Sin cambios en endpoints, esquema, migraciones, contratos, scopes ni SignalR. Requiere DholeWeb 1.40.1 y manifiesto global 1.40.1.
+
 ## [1.24.0] - 2026-11-11
 
 - MINOR DH-20261111-CRM-DRAFT-RECOVERY-109: versión coordinada de CRM con el nuevo mecanismo de recuperación de formularios de DholeWeb 1.39.0. Sin cambios a endpoints, modelo de datos o comportamiento de API: los borradores se conservan localmente en Web hasta confirmar la operación CRM por REST, manteniendo los canales realtime actuales.
