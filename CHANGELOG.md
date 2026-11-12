@@ -1,3 +1,8 @@
+## [1.24.0] - 2026-11-11
+
+- MINOR DH-20261111-CRM-DRAFT-RECOVERY-109: versión coordinada de CRM con el nuevo mecanismo de recuperación de formularios de DholeWeb 1.39.0. Sin cambios a endpoints, modelo de datos o comportamiento de API: los borradores se conservan localmente en Web hasta confirmar la operación CRM por REST, manteniendo los canales realtime actuales.
+- DholeCRMService 1.23.0 → 1.24.0; ecosistema 1.39.0. CI y staging pendientes, sin autorización para despliegue en producción.
+
 ## [1.23.0] - 2026-11-11
 
 - MINOR DH-20261111-CRM-ACCOUNT-INLINE-RELATIONS-107: permite registrar contactos y direcciones opcionales al crear una cuenta en una sola transacción EF Core. Incluye permisos, validación de país, contactos principales y jerarquías geográficas, sin alterar las APIs REST existentes.
