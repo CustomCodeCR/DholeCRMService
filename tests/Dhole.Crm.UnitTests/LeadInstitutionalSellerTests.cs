@@ -37,4 +37,22 @@ public sealed class LeadInstitutionalSellerTests
         Assert.IsNotNull(property);
         Assert.AreEqual("is_castro_fallas_executive", property.GetColumnName());
     }
+    [TestMethod]
+    public void PricingClientPickerProjectsTheInstitutionalLeadFlag()
+    {
+        // Prevent the regression where the CRM prospect view displayed Castro Fallas
+        // but pricing-client-options hard-coded false and displayed the Auth creator.
+        var root = new DirectoryInfo(AppContext.BaseDirectory);
+        while (root is not null && !File.Exists(Path.Combine(root.FullName,
+                   "src", "Dhole.Crm.Api", "Endpoints", "PricingClientOptionsEndpoints.cs")))
+            root = root.Parent;
+        Assert.IsNotNull(root, "Pricing endpoint source must exist in the checked-out repository");
+        var endpoint = File.ReadAllText(Path.Combine(root.FullName,
+            "src", "Dhole.Crm.Api", "Endpoints", "PricingClientOptionsEndpoints.cs"));
+        StringAssert.Contains(endpoint, "IsCastroFallasExecutive = x.IsCastroFallasExecutive");
+        Assert.DoesNotContain(endpoint, "IsCastroFallasExecutive = false",
+            "Pricing must not discard the institutional-seller flag when projecting leads");
+        StringAssert.Contains(endpoint, "x.IsCastroFallasExecutive ? \"Castro Fallas\"");
+    }
+
 }
