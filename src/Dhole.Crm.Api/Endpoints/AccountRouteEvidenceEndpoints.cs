@@ -38,16 +38,17 @@ internal static class AccountRouteEvidenceEndpoints
     {
         if (!CanRead(h)) return CrmAccess.Denied();
         if (!await CanSeeAccount(db, h, id, ct)) return Results.NotFound();
+        var groupIds = await AccountGroupAccess.VisibleIdsAsync(db, h, id, ct);
         var actor = CrmAccess.UserId(h);
         var canReadMeetings = CrmDataEndpoints.HasRead(h, "activity");
         var canReadQuotes = CrmAccess.Scope(h, "crm.quote.read") &&
             CrmDataEndpoints.HasRead(h, "opportunity");
-        var query = db.AccountRouteEvidence.AsNoTracking().Where(x => x.AccountId == id);
+        var query = db.AccountRouteEvidence.AsNoTracking().Where(x => groupIds.Contains(x.AccountId));
         if (!canReadMeetings) query = query.Where(x => x.SourceKind != "MEETING");
         else if (!CrmAccess.Scope(h, "crm.activity.read-all"))
         {
             var visibleActivityIds = db.Activities.AsNoTracking()
-                .Where(x => x.AccountId == id && x.OwnerUserId == actor && x.ArchivedAt == null)
+                .Where(x => x.AccountId.HasValue && groupIds.Contains(x.AccountId.Value) && x.OwnerUserId == actor && x.ArchivedAt == null)
                 .Select(x => x.Id);
             query = query.Where(x => x.SourceKind != "MEETING" ||
                 visibleActivityIds.Contains(x.SourceId));
@@ -58,7 +59,7 @@ internal static class AccountRouteEvidenceEndpoints
             var visibleQuoteIds =
                 from q in db.OpportunityQuotes.AsNoTracking()
                 join o in db.Opportunities.AsNoTracking() on q.OpportunityId equals o.Id
-                where o.AccountId == id && o.ExecutiveUserId == actor && o.ArchivedAt == null
+                where o.AccountId.HasValue && groupIds.Contains(o.AccountId.Value) && o.ExecutiveUserId == actor && o.ArchivedAt == null
                 select q.PricingQuoteId;
             query = query.Where(x => x.SourceKind != "QUOTE" ||
                 visibleQuoteIds.Contains(x.SourceId));
@@ -92,8 +93,9 @@ internal static class AccountRouteEvidenceEndpoints
         // Pricing independently authorizes every quote with the caller's bearer token.
         if (!CrmDataEndpoints.HasRead(h, "account")) return CrmAccess.Denied();
         if (!await CanSeeAccount(db, h, id, ct)) return Results.NotFound();
+        var groupIds = await AccountGroupAccess.VisibleIdsAsync(db, h, id, ct);
         var visibleOpportunities = db.Opportunities.AsNoTracking()
-            .Where(o => o.AccountId == id && o.ArchivedAt == null);
+            .Where(o => o.AccountId.HasValue && groupIds.Contains(o.AccountId.Value) && o.ArchivedAt == null);
         var linked = from q in db.OpportunityQuotes.AsNoTracking()
                      join op in visibleOpportunities on q.OpportunityId equals op.Id
                      select q;

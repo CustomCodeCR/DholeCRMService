@@ -39,10 +39,14 @@ internal static class AccountCommercialBenefitsEndpoints
     {
         if (!CanRead(http)) return CrmAccess.Denied();
         if (!await Visible(accountId, db, http, ct)) return Results.NotFound();
+        var groupIds = await AccountGroupAccess.VisibleIdsAsync(db, http, accountId, ct);
+        var primaryId = await db.Accounts.AsNoTracking().Where(a => a.Id == accountId)
+            .Select(a => a.ParentAccountId ?? a.Id).SingleAsync(ct);
         var settings = await db.AccountBenefitSettings.AsNoTracking()
-            .SingleOrDefaultAsync(x => x.AccountId == accountId, ct);
+            .OrderByDescending(a => a.AccountId == primaryId)
+            .FirstOrDefaultAsync(x => groupIds.Contains(x.AccountId), ct);
         var rates = await db.AccountPreferentialRates.AsNoTracking()
-            .Where(x => x.AccountId == accountId)
+            .Where(x => groupIds.Contains(x.AccountId))
             .OrderBy(x => x.Modality).ThenBy(x => x.ChargeCode)
             .ThenByDescending(x => x.IsActive).ThenByDescending(x => x.UpdatedAt)
             .ToArrayAsync(ct);
@@ -69,11 +73,15 @@ internal static class AccountCommercialBenefitsEndpoints
     {
         if (!CanManage(http)) return CrmAccess.Denied();
         if (!await Visible(accountId, db, http, ct)) return Results.NotFound();
+        var groupIds = await AccountGroupAccess.VisibleIdsAsync(db, http, accountId, ct);
         // The account's category is authoritative, including for LCL Miami.
         // Legacy requests may still contain MiamiLclPlanCode; never persist a second category.
         var notes = Clean(request.Notes);
         if (notes?.Length > 2000)
             return CrmDataEndpoints.Bad("Invalid commercial terms notes");
+        var primaryId = await db.Accounts.AsNoTracking().Where(a => a.Id == accountId)
+            .Select(a => a.ParentAccountId ?? a.Id).SingleAsync(ct);
+        if (groupIds.Contains(primaryId)) accountId = primaryId;
         var settings = await db.AccountBenefitSettings
             .SingleOrDefaultAsync(x => x.AccountId == accountId, ct);
         var actor = CrmAccess.UserId(http);
@@ -104,8 +112,12 @@ internal static class AccountCommercialBenefitsEndpoints
     {
         if (!CanManage(http)) return CrmAccess.Denied();
         if (!await Visible(accountId, db, http, ct)) return Results.NotFound();
+        var groupIds = await AccountGroupAccess.VisibleIdsAsync(db, http, accountId, ct);
         if (request.ExpectedVersion.HasValue)
             return CrmDataEndpoints.Bad("New benefit cannot have an existing version");
+        var primaryId = await db.Accounts.AsNoTracking().Where(a => a.Id == accountId)
+            .Select(a => a.ParentAccountId ?? a.Id).SingleAsync(ct);
+        if (groupIds.Contains(primaryId)) accountId = primaryId;
         var actor = CrmAccess.UserId(http);
         var rate = new AccountPreferentialRate { AccountId = accountId, CreatedByUserId = actor };
         Apply(rate, request);
@@ -127,12 +139,13 @@ internal static class AccountCommercialBenefitsEndpoints
     {
         if (!CanManage(http)) return CrmAccess.Denied();
         if (!await Visible(accountId, db, http, ct)) return Results.NotFound();
+        var groupIds = await AccountGroupAccess.VisibleIdsAsync(db, http, accountId, ct);
         var rate = await db.AccountPreferentialRates.SingleOrDefaultAsync(x =>
-            x.Id == rateId && x.AccountId == accountId, ct);
+            x.Id == rateId && groupIds.Contains(x.AccountId), ct);
         if (rate is null) return Results.NotFound();
         if (!request.ExpectedVersion.HasValue || rate.RowVersion != request.ExpectedVersion.Value)
             return CrmDataEndpoints.Conflict("Preferential benefit was modified; reload before editing");
-        var candidate = new AccountPreferentialRate { AccountId = accountId };
+        var candidate = new AccountPreferentialRate { AccountId = rate.AccountId };
         Apply(candidate, request);
         if (!CommercialBenefitRules.ValidRate(candidate))
             return CrmDataEndpoints.Bad("Invalid modality, charge, financial value, unit or validity");
@@ -191,8 +204,12 @@ internal static class AccountCommercialBenefitsEndpoints
         Guid excludedId, CancellationToken ct)
     {
         if (!candidate.IsActive) return false;
+        var primaryId = await db.Accounts.AsNoTracking().Where(a => a.Id == candidate.AccountId)
+            .Select(a => a.ParentAccountId ?? a.Id).SingleAsync(ct);
+        var relatedIds = db.Accounts.AsNoTracking()
+            .Where(a => a.Id == primaryId || a.ParentAccountId == primaryId).Select(a => a.Id);
         var existing = await db.AccountPreferentialRates.AsNoTracking()
-            .Where(x => x.AccountId == candidate.AccountId && x.IsActive &&
+            .Where(x => relatedIds.Contains(x.AccountId) && x.IsActive &&
                 x.Id != excludedId && x.Modality == candidate.Modality)
             .ToListAsync(ct);
         return existing.Any(x => CommercialBenefitRules.Overlap(x, candidate));

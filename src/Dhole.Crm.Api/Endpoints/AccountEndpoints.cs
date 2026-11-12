@@ -646,6 +646,8 @@ internal static class AccountEndpoints
         if (account is null) return Results.NotFound();
         if (!await CrmAccess.CanSeeAccount(db, http, account.Id, ct)) return CrmAccess.Denied();
         if (account.RowVersion != request.ExpectedVersion) return CrmDataEndpoints.Conflict("Stale row version");
+        if (await db.Accounts.AnyAsync(a => a.ParentAccountId == id && a.ArchivedAt == null, ct))
+            return CrmDataEndpoints.Conflict("Ungroup linked accounts before archiving the primary account");
         account.ArchivedAt = DateTime.UtcNow;
         account.Status = "Archived";
         account.UpdatedAt = DateTime.UtcNow;
