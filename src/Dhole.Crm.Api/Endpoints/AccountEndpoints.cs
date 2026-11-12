@@ -28,6 +28,7 @@ internal static class AccountEndpoints
 {
     public static RouteGroupBuilder MapAccounts(this RouteGroupBuilder group)
     {
+        group.MapAccountGroups();
         group.MapGet("/accounts", List);
         group.MapGet("/accounts/filter-options", AccountFilterOptions);
         group.MapGet("/accounts/{id:guid}", Get);

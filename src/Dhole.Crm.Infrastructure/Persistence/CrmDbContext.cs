@@ -87,6 +87,9 @@ public sealed partial class CrmDbContext(DbContextOptions<CrmDbContext> options)
 
         b.Entity<Account>(e =>
         {
+            e.HasOne<Account>().WithMany().HasForeignKey(a => a.ParentAccountId)
+                .OnDelete(DeleteBehavior.Restrict);
+            e.HasIndex(a => a.ParentAccountId);
             e.Property(x => x.DisplayName).HasMaxLength(220).IsRequired();
             e.Property(x => x.LegalName).HasMaxLength(220).IsRequired();
             e.Property(x => x.NormalizedTaxId).HasMaxLength(80);
