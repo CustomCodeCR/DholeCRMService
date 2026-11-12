@@ -24,7 +24,9 @@
   "changes": [
     "Recuperación de borradores CRM exclusivamente mediante DhModal y DhButton; eliminado window.confirm",
     "No abrir recuperación en formularios cerrados, cancelar prompts pendientes al navegar y conservar borradores con Más tarde",
-    "Sin cambios de APIs REST, SignalR, esquema o archivos adjuntos"
+    "Sin cambios de APIs REST, SignalR, esquema o archivos adjuntos",
+    "Reemplazo de diálogos nativos en el módulo Mercadeo (inserción de enlaces y acciones destructivas) por DhModal",
+    "Prueba de regresión prohíbe window.confirm, window.prompt y window.alert en todo src/"
   ],
   "releaseBranch": "fix/crm-draft-recovery-dhmodal-20261112",
   "validation": {
