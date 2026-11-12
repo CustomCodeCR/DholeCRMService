@@ -39,12 +39,13 @@ internal static class AccountCommercialOverviewEndpoints
             .Select(x => new { x.IsCastroFallasExecutive })
             .SingleOrDefaultAsync(ct);
         if (account is null) return Results.NotFound();
+        var groupIds = await AccountGroupAccess.VisibleIdsAsync(db, http, id, ct);
 
         var actor = CrmAccess.UserId(http);
         var allOpportunities = CrmAccess.Scope(http, "crm.opportunity.read-all") ||
             account.IsCastroFallasExecutive;
         var visible = db.Opportunities.AsNoTracking()
-            .Where(x => x.AccountId == id && x.ArchivedAt == null &&
+            .Where(x => x.AccountId.HasValue && groupIds.Contains(x.AccountId.Value) && x.ArchivedAt == null &&
                 (allOpportunities || x.ExecutiveUserId == actor));
 
         var linked = await (
@@ -90,6 +91,7 @@ internal static class AccountCommercialOverviewEndpoints
             .Select(x => new { x.Id, x.IsCastroFallasExecutive })
             .SingleOrDefaultAsync(ct);
         if (account is null) return Results.NotFound();
+        var groupIds = await AccountGroupAccess.VisibleIdsAsync(db, http, id, ct);
 
         var actor = CrmAccess.UserId(http);
         var allActivities = CrmAccess.Scope(http, "crm.activity.read-all") || account.IsCastroFallasExecutive;
@@ -103,7 +105,7 @@ internal static class AccountCommercialOverviewEndpoints
         if (CrmDataEndpoints.HasRead(http, "activity"))
         {
             activities = await db.Activities.AsNoTracking()
-                .Where(x => x.AccountId == id && x.ArchivedAt == null &&
+                .Where(x => x.AccountId.HasValue && groupIds.Contains(x.AccountId.Value) && x.ArchivedAt == null &&
                     (allActivities || x.OwnerUserId == actor))
                 .OrderByDescending(x => x.OccurredAt ?? x.ScheduledStartAt ?? x.CreatedAt)
                 .Take(50)
@@ -118,7 +120,7 @@ internal static class AccountCommercialOverviewEndpoints
             CrmAccess.Scope(http, "crm.task.manage"))
         {
             followups = await db.Followups.AsNoTracking()
-                .Where(x => x.AccountId == id &&
+                .Where(x => x.AccountId.HasValue && groupIds.Contains(x.AccountId.Value) &&
                     (x.AssignedUserId == actor || allAccounts || account.IsCastroFallasExecutive))
                 .OrderBy(x => x.DueAt).Take(50)
                 .Select(x => new { x.Id, x.Channel, x.DueAt, x.Status,
@@ -131,20 +133,20 @@ internal static class AccountCommercialOverviewEndpoints
         if (CrmAccess.Scope(http, "crm.analysis.read"))
         {
             routes = await db.CustomerTradeProfiles.AsNoTracking()
-                .Where(x => x.AccountId == id)
+                .Where(x => groupIds.Contains(x.AccountId))
                 .OrderByDescending(x => x.IsActive).ThenBy(x => x.ServiceCode)
                 .Take(100)
                 .Select(x => new { x.Id, x.ServiceCode, x.PreferredOriginCode,
                     x.PreferredDestinationCode, x.Frequency, x.ExpectedVolume,
                     x.VolumeUnit, x.IsActive }).ToArrayAsync(ct);
             analyses = await db.CommercialAnalyses.AsNoTracking()
-                .Where(x => x.AccountId == id &&
+                .Where(x => x.AccountId.HasValue && groupIds.Contains(x.AccountId.Value) &&
                     (allAnalyses || x.OwnerUserId == actor))
                 .OrderByDescending(x => x.CreatedAt).Take(30)
                 .Select(x => new { x.Id, x.MarketCode, x.CustomsNationalizationRequired,
                     x.EstimatedMonthlyVolume, x.VolumeUnit, x.CreatedAt }).ToArrayAsync(ct);
             var visibleAnalysisIds = db.CommercialAnalyses.AsNoTracking()
-                .Where(x => x.AccountId == id &&
+                .Where(x => x.AccountId.HasValue && groupIds.Contains(x.AccountId.Value) &&
                     (allAnalyses || x.OwnerUserId == actor))
                 .Select(x => x.Id);
             analysisRoutes = await db.CommercialAnalysisRoutes.AsNoTracking()
@@ -159,7 +161,7 @@ internal static class AccountCommercialOverviewEndpoints
         if (CrmDataEndpoints.HasRead(http, "opportunity"))
         {
             var visible = db.Opportunities.AsNoTracking()
-                .Where(x => x.AccountId == id && x.ArchivedAt == null &&
+                .Where(x => x.AccountId.HasValue && groupIds.Contains(x.AccountId.Value) && x.ArchivedAt == null &&
                     (allOpportunities || x.ExecutiveUserId == actor));
             opportunities = await visible
                 .OrderByDescending(x => x.CreatedAt).Take(50)

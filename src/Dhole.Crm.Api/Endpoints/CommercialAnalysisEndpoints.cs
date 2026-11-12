@@ -101,7 +101,11 @@ internal static class CommercialAnalysisEndpoints
             .Where(x => !x.AccountId.HasValue || visibleAccountIds.Contains(x.AccountId.Value));
         if(!CrmAccess.Scope(h,"crm.opportunity.read-all") && !CrmAccess.Scope(h,"crm.account.read-all"))
             query=query.Where(x=>x.OwnerUserId==CrmAccess.UserId(h));
-        if(accountId is { } a)query=query.Where(x=>x.AccountId==a);
+        if (accountId is { } requestedAccount) {
+            var groupIds = await AccountGroupAccess.VisibleIdsAsync(db, h, requestedAccount, ct);
+            if (groupIds.Length == 0) return CrmAccess.Denied();
+            query = query.Where(x => x.AccountId.HasValue && groupIds.Contains(x.AccountId.Value));
+        }
         if(leadId is { } l)query=query.Where(x=>x.LeadId==l);
         if(opportunityId is { } o)query=query.Where(x=>x.OpportunityId==o);
         var number=Math.Max(1,page??1);var size=Math.Clamp(pageSize??25,1,100);
