@@ -1,3 +1,8 @@
+## [1.24.1] - 2026-11-12
+
+- PATCH DH-20261112-CRM-DRAFT-DHMODAL-111: versión coordinada de CRM con la sustitución del diálogo nativo del autoguardado de DholeWeb por DhModal.
+- No modifica endpoints, base de datos, migraciones, permisos ni eventos SignalR. Compatible con Web 1.39.1 y System 1.39.1 en master.
+
 ## [1.24.0] - 2026-11-11
 
 - MINOR DH-20261111-CRM-DRAFT-RECOVERY-109: versión coordinada de CRM con el nuevo mecanismo de recuperación de formularios de DholeWeb 1.39.0. Sin cambios a endpoints, modelo de datos o comportamiento de API: los borradores se conservan localmente en Web hasta confirmar la operación CRM por REST, manteniendo los canales realtime actuales.
