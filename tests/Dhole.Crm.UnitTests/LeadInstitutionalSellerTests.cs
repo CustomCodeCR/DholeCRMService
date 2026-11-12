@@ -50,7 +50,7 @@ public sealed class LeadInstitutionalSellerTests
         var endpoint = File.ReadAllText(Path.Combine(root.FullName,
             "src", "Dhole.Crm.Api", "Endpoints", "PricingClientOptionsEndpoints.cs"));
         StringAssert.Contains(endpoint, "IsCastroFallasExecutive = x.IsCastroFallasExecutive");
-        Assert.IsFalse(endpoint.Contains("IsCastroFallasExecutive = false"),
+        Assert.DoesNotContain("IsCastroFallasExecutive = false", endpoint,
             "Pricing must not discard the institutional-seller flag when projecting leads");
         StringAssert.Contains(endpoint, "x.IsCastroFallasExecutive ? \"Castro Fallas\"");
     }
