@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "ecosystem": "Dhole",
+  "releaseId": "DH-20261112-CRM-PRODUCTION-GATE-113",
+  "releaseType": "PATCH",
+  "ecosystemVersion": "1.41.2",
+  "createdAt": "2026-11-12",
+  "sourceBranch": "fix/crm-production-skipped-20261112-develop",
+  "baseBranch": "develop",
+  "components": [
+    {
+      "repository": "CustomCodeCR/DholeCRMService",
+      "component": "DholeCRMService",
+      "previousVersion": "1.25.0",
+      "version": "1.25.1"
+    },
+    {
+      "repository": "CustomCodeCR/DholeWeb",
+      "component": "DholeWeb",
+      "previousVersion": "1.41.1",
+      "version": "1.41.1",
+      "status": "unchanged-already-deployed"
+    }
+  ],
+  "changes": [
+    "Remove legacy production skip guard",
+    "Preserve master push and manual dispatch",
+    "Deploy CRM account grouping through existing migrator and health gates"
+  ],
+  "validation": {
+    "ci": "pending",
+    "staging": "pending",
+    "production": "explicitly-authorized-pending-workflow"
+  },
+  "productionDeploymentAuthorized": true
+}
