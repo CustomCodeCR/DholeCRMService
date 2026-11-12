@@ -55,8 +55,7 @@ internal static class PricingClientOptionsEndpoints
             .Select(x => new OptionRow {
                 Kind = "lead", Id = x.Id, DisplayName = x.CompanyName ?? x.Name,
                 LegalName = x.CompanyName ?? x.Name, TaxId = x.TaxId,
-                                ExecutiveUserId = x.ExecutiveUserId, IsCastroFallasExecutive = false
-                // A lead's operational Auth owner is not its institutional commercial owner.
+                                // A lead's operational Auth owner is not its institutional commercial owner.
                 // Preserve the flag so Pricing labels Castro Fallas rather than the creator.
                 ExecutiveUserId = x.ExecutiveUserId,
                 IsCastroFallasExecutive = x.IsCastroFallasExecutive
