@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "ecosystem": "Dhole",
+  "releaseId": "DH-20261111-CRM-ACCOUNT-INLINE-RELATIONS-107",
+  "releaseType": "MINOR",
+  "ecosystemVersion": "1.38.0",
+  "createdAt": "2026-11-11",
+  "sourceBranch": "feature/crm-account-inline-contact-address-20261111",
+  "components": [
+    {
+      "repository": "CustomCodeCR/DholeCRMService",
+      "component": "DholeCRMService",
+      "version": "1.23.0"
+    },
+    {
+      "repository": "CustomCodeCR/DholeWeb",
+      "component": "DholeWeb",
+      "version": "1.38.0"
+    }
+  ],
+  "changes": [
+    "Account creation accepts optional multiple structured contacts and geographic addresses in a single atomic transaction",
+    "Customer creation drawer and account edit screen expose inline creation, without requiring optional records",
+    "Preserves current REST operations and the existing CRM realtime architecture"
+  ],
+  "validation": {
+    "ci": "pending",
+    "staging": "pending",
+    "production": "not-authorized"
+  },
+  "productionDeploymentAuthorized": false
+}

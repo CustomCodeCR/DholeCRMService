@@ -10,7 +10,8 @@ namespace Dhole.Crm.Api.Endpoints;
 public sealed record CreateAccountRequest(string DisplayName, string LegalName, Guid? CountryId,
     string? TaxIdTypeCode, string? TaxId, string CustomerTypeCode, string? SourceCode,
     string? RelationshipTypeCode, string CategoryType, string CategoryCode, Guid? ExecutiveUserId,
-    bool AssignToCastroFallas = false);
+    bool AssignToCastroFallas = false,
+    List<CreateContactRequest>? Contacts = null, List<AddressRequest>? Addresses = null);
 public sealed record PatchAccountRequest(long ExpectedVersion, string DisplayName, string LegalName,
     string CustomerTypeCode, string? SourceCode, string? RelationshipTypeCode,
     string CategoryType, string CategoryCode, bool UpdateFiscalIdentity = false,
@@ -419,6 +420,44 @@ internal static class AccountEndpoints
             return CrmDataEndpoints.Bad("Tax identifier requires a country and document type");
         if (!await CrmDataEndpoints.ValidCountry(config, request.CountryId, ct))
             return CrmDataEndpoints.Bad("Country not found in Config");
+        // Nested records are optional; validate them before mutating the DbContext.
+        // The existing REST endpoints remain available to older clients.
+        var newContacts = request.Contacts ?? [];
+        var newAddresses = request.Addresses ?? [];
+        if (newContacts.Count > 20 || newAddresses.Count > 20)
+            return CrmDataEndpoints.Bad("At most 20 contacts and 20 addresses are allowed");
+        if (newContacts.Count > 0 && !CrmAccess.Scope(http, "crm.contact.create"))
+            return CrmAccess.Denied();
+        if (newAddresses.Count > 0 && !CrmAccess.Scope(http, "crm.account.update"))
+            return CrmAccess.Denied();
+        if (newContacts.Count(x => x.IsPrimary) > 1)
+            return CrmDataEndpoints.Bad("Only one primary contact is allowed");
+        foreach (var item in newContacts)
+        {
+            if (string.IsNullOrWhiteSpace(item.FirstName) || string.IsNullOrWhiteSpace(item.LastName) ||
+                item.FirstName.Length > 160 || item.LastName.Length > 160 ||
+                !CrmDataEndpoints.IsEmailValid(item.Email) || item.Email?.Length > 254 ||
+                item.Phone?.Length > 60 || item.JobTitle?.Length > 220 ||
+                string.IsNullOrWhiteSpace(item.RelationRole) || item.RelationRole.Length > 60 ||
+                !await CrmDataEndpoints.ValidCountry(config, item.CountryId ?? request.CountryId, ct))
+                return CrmDataEndpoints.Bad("Invalid optional account contact");
+        }
+        foreach (var item in newAddresses)
+        {
+            if (item.ContactId is not null ||
+                string.IsNullOrWhiteSpace(item.AddressText) || item.AddressText.Length > 4000 ||
+                string.IsNullOrWhiteSpace(item.AddressType) || item.AddressType.Length > 40 ||
+                !await CrmDataEndpoints.ValidCountry(config, item.CountryId ?? request.CountryId, ct) ||
+                (!string.IsNullOrWhiteSpace(item.CountryCode) &&
+                 !System.Text.RegularExpressions.Regex.IsMatch(item.CountryCode, "^[A-Za-z]{2}$")) ||
+                new[] { item.Admin1Code, item.Admin1Name, item.Admin2Code,
+                    item.Admin2Name, item.Admin3Code, item.Admin3Name }
+                    .Any(x => x is { Length: > 160 }) || item.PostalCode is { Length: > 32 } ||
+                (!string.IsNullOrWhiteSpace(item.Admin2Code) && string.IsNullOrWhiteSpace(item.Admin1Code)) ||
+                (!string.IsNullOrWhiteSpace(item.Admin3Code) && string.IsNullOrWhiteSpace(item.Admin2Code)) ||
+                (!string.IsNullOrWhiteSpace(item.Admin1Code) && string.IsNullOrWhiteSpace(item.CountryCode)))
+                return CrmDataEndpoints.Bad("Invalid optional account address");
+        }
         if (await auth.GetActiveAsync(executiveId, ct) is null) return CrmDataEndpoints.Bad("Inactive or invalid executive");
         if (tax is not null && await db.Accounts.AnyAsync(x => x.CountryId == request.CountryId &&
              x.TaxIdTypeCode == request.TaxIdTypeCode && x.NormalizedTaxId == tax && x.ArchivedAt == null, ct))
@@ -450,6 +489,39 @@ internal static class AccountEndpoints
             HaciendaVerifiedAt = verifiedTaxpayer?.VerifiedAt.UtcDateTime
         };
         db.Accounts.Add(account);
+        // Save account, assignments and optional related records in one EF Core
+        // transaction. A validation/database failure must not leave an orphan account.
+        foreach (var item in newContacts)
+        {
+            var first = item.FirstName!.Trim();
+            var last = item.LastName!.Trim();
+            var contact = new Contact {
+                FirstName = first, LastName = last, Name = first + " " + last,
+                JobTitle = item.JobTitle?.Trim(), CountryId = item.CountryId ?? request.CountryId,
+                Email = item.Email?.Trim().ToLowerInvariant(), Phone = item.Phone?.Trim(),
+                CreatedByUserId = id
+            };
+            db.Contacts.Add(contact);
+            db.AccountContacts.Add(new AccountContact {
+                AccountId = account.Id, ContactId = contact.Id,
+                RelationRole = item.RelationRole.Trim(), IsPrimary = item.IsPrimary
+            });
+        }
+        foreach (var item in newAddresses)
+        {
+            var iso = item.CountryCode?.Trim().ToUpperInvariant();
+            db.Addresses.Add(new Address {
+                AccountId = account.Id, CountryId = item.CountryId ?? request.CountryId,
+                AddressType = item.AddressType.Trim(), AddressText = item.AddressText.Trim(),
+                Location = item.Location?.Trim(), CountryCode = iso,
+                Admin1Code = item.Admin1Code?.Trim(), Admin1Name = item.Admin1Name?.Trim(),
+                Admin2Code = item.Admin2Code?.Trim(), Admin2Name = item.Admin2Name?.Trim(),
+                Admin3Code = item.Admin3Code?.Trim(), Admin3Name = item.Admin3Name?.Trim(),
+                PostalCode = CrmGeoEndpoints.PostalCodeForCostaRica(iso,
+                    item.Admin1Code, item.Admin2Code, item.Admin3Code) ?? item.PostalCode?.Trim(),
+                CreatedByUserId = id
+            });
+        }
         if (verifiedTaxpayer is not null)
         {
             foreach (var activity in verifiedTaxpayer.Activities

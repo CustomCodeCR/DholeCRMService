@@ -1,3 +1,8 @@
+## [1.23.0] - 2026-11-11
+
+- MINOR DH-20261111-CRM-ACCOUNT-INLINE-RELATIONS-107: permite registrar contactos y direcciones opcionales al crear una cuenta en una sola transacción EF Core. Incluye permisos, validación de país, contactos principales y jerarquías geográficas, sin alterar las APIs REST existentes.
+- La creación de cuentas sin contactos ni direcciones conserva su funcionamiento previo. CRM 1.22.0 → 1.23.0; versión global del ecosistema Dhole 1.38.0. CI y staging pendientes; no se autoriza despliegue a producción.
+
 ## [1.22.0] - 2026-11-11
 
 - MINOR DH-20261111-CRM-QUOTE-MULTI-CONTACTS-102: configuración por cuenta de todos los destinatarios de cotizaciones futuras. Elimina el selector de QUO y permite elegir varios contactos con DhMultiSelect; se preservan las opciones solo vendedor o cliente con CC vendedor asignado.

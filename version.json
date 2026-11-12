@@ -2,9 +2,9 @@
   "schemaVersion": 1,
   "ecosystem": "Dhole",
   "component": "DholeCRMService",
-  "version": "1.22.0",
-  "ecosystemVersion": "1.36.0",
-  "releaseId": "DH-20261111-CRM-QUOTE-MULTI-CONTACTS-102",
+  "version": "1.23.0",
+  "ecosystemVersion": "1.38.0",
+  "releaseId": "DH-20261111-CRM-ACCOUNT-INLINE-RELATIONS-107",
   "releaseStatus": "candidate-ci-and-staging-pending",
-  "businessReleaseId": "DH-20261111-CRM-QUOTE-MULTI-CONTACTS-102"
+  "businessReleaseId": "DH-20261111-CRM-ACCOUNT-INLINE-RELATIONS-107"
 }
