@@ -15,6 +15,8 @@ public sealed class Account : CrmRecord
 {
     public string DisplayName { get; set; } = "";
     public string LegalName { get; set; } = "";
+    // Direct child of an existing primary account; identity, tax and credit stay separate.
+    public Guid? ParentAccountId { get; set; }
     public Guid? CountryId { get; set; }
     public string? TaxIdTypeCode { get; set; }
     public string? TaxId { get; set; }

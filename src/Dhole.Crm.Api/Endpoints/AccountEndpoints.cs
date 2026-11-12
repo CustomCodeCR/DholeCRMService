@@ -28,6 +28,7 @@ internal static class AccountEndpoints
 {
     public static RouteGroupBuilder MapAccounts(this RouteGroupBuilder group)
     {
+        group.MapAccountGroups();
         group.MapGet("/accounts", List);
         // Same effective scope as the real account list. No customer fields are returned.
         group.MapGet("/accounts/realtime-access", (HttpContext http) =>
