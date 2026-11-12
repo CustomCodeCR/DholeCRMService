@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "ecosystem": "Dhole",
+  "releaseId": "DH-20261112-CRM-ACCOUNT-GROUPS-112",
+  "releaseType": "MINOR",
+  "ecosystemVersion": "1.41.0",
+  "createdAt": "2026-11-12",
+  "sourceBranch": "feature/crm-account-groups-20261112-master",
+  "baseBranch": "master",
+  "components": [
+    {
+      "repository": "CustomCodeCR/DholeCRMService",
+      "component": "DholeCRMService",
+      "version": "1.25.0"
+    },
+    {
+      "repository": "CustomCodeCR/DholeWeb",
+      "component": "DholeWeb",
+      "version": "1.41.0"
+    }
+  ],
+  "changes": [
+    "Group existing accounts while retaining distinct fiscal identities and account ownership",
+    "Access-controlled group management REST API and Entity Framework migration",
+    "Group-aware CRM activity, followup, analysis, procedures, preferential benefits and quote read models",
+    "Continue to use existing CRM REST and realtime/outbox infrastructure"
+  ],
+  "validation": {
+    "ci": "pending",
+    "staging": "pending",
+    "production": "not-authorized"
+  },
+  "productionDeploymentAuthorized": false
+}

@@ -1,3 +1,10 @@
+## [1.25.0] - 2026-11-12
+
+- MINOR DH-20261112-CRM-ACCOUNT-GROUPS-112: agrupación comercial de cuentas bajo una cuenta principal, manteniendo la identidad fiscal, vendedor, contactos y contratos de cada cuenta.
+- Endpoints REST GET /accounts/{id}/group, POST /accounts/{id}/group/members y DELETE /accounts/{id}/group/members/{memberId}, con control de versión, ACL y prevención de jerarquías circulares.
+- Consultas compartidas para actividades, seguimientos, análisis comercial, procedimientos específicos, tarifas preferenciales, rutas y oportunidades/cotizaciones CRM. Conserva el productor realtime/outbox existente.
+- DholeCRMService 1.24.1 → 1.25.0; DholeWeb → 1.41.0; ecosistema 1.41.0. Validaciones CI y staging pendientes; sin despliegue autorizado a producción.
+
 ## [1.24.1] - 2026-11-12
 
 - PATCH DH-20261112-CRM-DRAFT-DHMODAL-111: versión coordinada de CRM con la sustitución del diálogo nativo del autoguardado de DholeWeb por DhModal.
