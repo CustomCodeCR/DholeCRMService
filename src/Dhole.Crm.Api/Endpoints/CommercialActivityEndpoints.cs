@@ -61,7 +61,7 @@ internal static class CommercialActivityEndpoints
     }
     private static async Task<IResult> List(CrmDbContext db,HttpContext h,
         Guid? accountId,Guid? leadId,Guid? opportunityId,Guid? ownerId,string? type,string? status,
-        DateTime? from,DateTime? to,int? page,int? pageSize,CancellationToken ct)
+        bool? agendaOnly,DateTime? from,DateTime? to,int? page,int? pageSize,CancellationToken ct)
     {
         if(!CanRead(h))return CrmAccess.Denied();
         var visibleAccounts=CrmAccess.VisibleAccounts(db,h).Select(a=>a.Id);
@@ -83,6 +83,7 @@ internal static class CommercialActivityEndpoints
         if(opportunityId is { } o)query=query.Where(x=>x.OpportunityId==o);
         if(!string.IsNullOrWhiteSpace(type))query=query.Where(x=>x.Type==type);
         if(!string.IsNullOrWhiteSpace(status))query=query.Where(x=>x.Status==status);
+        if(agendaOnly==true)query=query.Where(x=>x.Status!="Completed" && x.Status!="Cancelled");
         if(from.HasValue)query=query.Where(x=>(x.ScheduledStartAt??x.OccurredAt??x.CreatedAt)>=from.Value);
         if(to.HasValue)query=query.Where(x=>(x.ScheduledStartAt??x.OccurredAt??x.CreatedAt)<to.Value);
         var n=Math.Max(1,page??1);var size=Math.Clamp(pageSize??25,1,100);
