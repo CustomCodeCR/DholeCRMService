@@ -1,3 +1,8 @@
+## [1.28.3] - 2026-11-13
+
+- PATCH DH-20261113-PRODUCTION-DEPLOY-SKIP-135: elimina exclusiones de commits [no-prod] que dejan el despliegue de CRM en Skipped. Push a master ejecuta compilación, migraciones, despliegue y health checks. Sin cambios funcionales REST/SignalR ni modelo de datos.
+- Auth 1.9.2 → 1.9.3, CRM 1.28.2 → 1.28.3, Web 1.48.3 → 1.48.4 y ecosistema 1.48.3 → 1.48.4. CI y staging antes de producción; publicación solicitada el 2026-11-13.
+
 ## [1.28.2] - 2026-11-13
 
 - PATCH DH-20261113-CRM-COMMERCIAL-LOG-ACL-134: release coordinado que consolida verificación de visibilidad de prospectos en el listado y detalle de Bitácora; el endpoint de master ya incorpora el aislamiento de prospectos por vendedor o permiso global de prospectos.
