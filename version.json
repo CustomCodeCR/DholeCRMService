@@ -2,9 +2,9 @@
   "schemaVersion": 1,
   "ecosystem": "Dhole",
   "component": "DholeCRMService",
-  "version": "1.27.1",
-  "ecosystemVersion": "1.47.1",
-  "releaseId": "DH-20261112-CRM-BITACORA-PRODUCTION-127",
-  "releaseStatus": "production-authorized-staging-pending",
-  "businessReleaseId": "DH-20261112-CRM-BITACORA-PRODUCTION-127"
+  "version": "1.27.2",
+  "ecosystemVersion": "1.47.2",
+  "releaseId": "DH-20261112-CRM-ACTIVITY-DB-CONSTRAINT-128",
+  "releaseStatus": "candidate-ci-and-staging-pending",
+  "businessReleaseId": "DH-20261112-CRM-ACTIVITY-DB-CONSTRAINT-128"
 }

@@ -1,3 +1,9 @@
+## [1.27.2] - 2026-11-12
+
+- PATCH DH-20261112-CRM-ACTIVITY-DB-CONSTRAINT-128: corrige HTTP 409 al guardar «Seguimiento comercial», WhatsApp, Recomendación y Oferta, extendiendo la restricción real `ck_crm_activity_type` de PostgreSQL mediante migración EF Core sin pérdida de actividades.
+- La creación distingue una restricción SQL de un registro modificado; mantiene bitácora sin agenda, notas, participantes, documentos, REST y SignalR/Outbox. Pruebas de integración con los nueve tipos permitidos y rechazo de códigos inválidos.
+- CRM 1.27.1 → 1.27.2; Web 1.47.1 → 1.47.2; ecosistema 1.47.1 → 1.47.2. CI y staging pendientes, producción no autorizada.
+
 ## [1.27.1] - 2026-11-12
 
 - PATCH DH-20261112-CRM-BITACORA-PRODUCTION-127: publicación autorizada a producción de actividades CRM sin agenda y recordatorios explícitos, sin modificaciones de API ni esquema frente al release 126 validado en staging. CRM 1.27.0 → 1.27.1, Web 1.47.0 → 1.47.1, ecosistema 1.47.0 → 1.47.1.

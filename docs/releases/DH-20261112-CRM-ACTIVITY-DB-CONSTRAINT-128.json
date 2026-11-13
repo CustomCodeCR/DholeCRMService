@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "ecosystem": "Dhole",
+  "releaseId": "DH-20261112-CRM-ACTIVITY-DB-CONSTRAINT-128",
+  "releaseType": "PATCH",
+  "ecosystemVersion": "1.47.2",
+  "createdAt": "2026-11-12",
+  "components": [
+    {
+      "repository": "CustomCodeCR/DholeWeb",
+      "component": "DholeWeb",
+      "version": "1.47.2"
+    },
+    {
+      "repository": "CustomCodeCR/DholeCRMService",
+      "component": "DholeCRMService",
+      "version": "1.27.2"
+    }
+  ],
+  "changes": [
+    "Apply PostgreSQL CHECK migration allowing all CRM Config-backed commercial activity codes",
+    "Preserve unscheduled completed log activities, contact participants, notes and attachments",
+    "Show actionable activity type constraint errors rather than labeling any SQL 409 as stale records",
+    "Preserve REST, SignalR and existing Outbox reminder semantics"
+  ],
+  "validation": {
+    "ci": "pending",
+    "staging": "pending",
+    "production": "not-authorized"
+  },
+  "productionDeploymentAuthorized": false
+}
