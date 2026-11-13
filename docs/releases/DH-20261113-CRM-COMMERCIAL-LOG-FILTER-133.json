@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "ecosystem": "Dhole",
+  "releaseId": "DH-20261113-CRM-COMMERCIAL-LOG-FILTER-133",
+  "previousReleaseId": "DH-20261113-CRM-COMMERCIAL-LOG-131",
+  "releaseType": "PATCH",
+  "ecosystemVersion": "1.48.2",
+  "createdAt": "2026-11-13",
+  "components": [
+    {
+      "repository": "CustomCodeCR/DholeAuthService",
+      "version": "1.9.1"
+    },
+    {
+      "repository": "CustomCodeCR/DholeCRMService",
+      "version": "1.28.1"
+    },
+    {
+      "repository": "CustomCodeCR/DholeWeb",
+      "version": "1.48.2"
+    }
+  ],
+  "changes": [
+    "Show Bitácora type filters on first render without opening modal",
+    "Protect prospect ACL in global and assigned commercial-log reads",
+    "Separate log drafts from scheduled reminders; preserve REST SignalR outbox"
+  ],
+  "validation": {
+    "ci": "pending",
+    "staging": "pending",
+    "production": "not-authorized"
+  },
+  "productionDeploymentAuthorized": false
+}
