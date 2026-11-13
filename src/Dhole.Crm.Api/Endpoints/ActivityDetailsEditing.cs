@@ -193,7 +193,7 @@ internal static class ActivityDetailsEditing
                     AccountId = activity.AccountId, LeadId = activity.LeadId,
                     OpportunityId = activity.OpportunityId, AssignedUserId = activity.OwnerUserId,
                     Channel = "SYSTEM", Subject = change.Subject.Trim(), DueAt = change.DueAt,
-                    ReminderLeadMinutes = activity.ReminderLeadMinutes,
+                    ReminderLeadMinutes = activity.ReminderLeadMinutes ?? 60,
                     ReminderChannelStrategy = "BOTH", CreatedByUserId = actor,
                     Status = change.Completed ? "Completed" : "Pending",
                     CompletedAt = change.Completed ? now : null
@@ -201,7 +201,8 @@ internal static class ActivityDetailsEditing
                 db.Followups.Add(followup);
                 db.FollowupHistories.Add(new FollowupHistory {
                     FollowupId = followup.Id, ActorUserId = actor, CreatedByUserId = actor,
-                    Action = "Created", Reason = "Acuerdo registrado en actividad comercial " + id,
+                    Action = "Created", Reason = "Acuerdo registrado en actividad comercial " + id +
+                        (activity.ScheduledStartAt.HasValue ? "" : " (tarea de bitácora)"),
                     NewDueAt = followup.DueAt
                 });
                 if (!change.Completed)

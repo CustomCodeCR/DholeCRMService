@@ -2,9 +2,9 @@
   "schemaVersion": 1,
   "ecosystem": "Dhole",
   "component": "DholeCRMService",
-  "version": "1.29.0",
-  "ecosystemVersion": "1.50.0",
-  "releaseId": "DH-20261113-CRM-SELLER-ACTIVITY-REPORTS-137",
+  "version": "1.30.0",
+  "ecosystemVersion": "1.51.0",
+  "releaseId": "DH-20261113-CRM-BITACORA-AGREEMENT-TASKS-138",
   "releaseStatus": "candidate-ci-and-staging-pending",
-  "businessReleaseId": "DH-20261113-CRM-SELLER-ACTIVITY-REPORTS-137"
+  "businessReleaseId": "DH-20261113-CRM-BITACORA-AGREEMENT-TASKS-138"
 }
