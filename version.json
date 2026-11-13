@@ -2,9 +2,9 @@
   "schemaVersion": 1,
   "ecosystem": "Dhole",
   "component": "DholeCRMService",
-  "version": "1.25.3",
-  "ecosystemVersion": "1.44.3",
-  "releaseId": "DH-20261112-CRM-REMINDER-CONTEXT-124",
+  "version": "1.26.0",
+  "ecosystemVersion": "1.46.0",
+  "releaseId": "DH-20261112-CRM-ACTIVITY-TYPES-125",
   "releaseStatus": "candidate-ci-and-staging-pending",
-  "businessReleaseId": "DH-20261112-CRM-REMINDER-CONTEXT-124"
+  "businessReleaseId": "DH-20261112-CRM-ACTIVITY-TYPES-125"
 }
