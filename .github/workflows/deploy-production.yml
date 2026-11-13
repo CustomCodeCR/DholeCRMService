@@ -21,9 +21,7 @@ env:
 
 jobs:
   deploy:
-    # No production deployment on a source-only release commit.
-    if: ${{ github.event_name == 'workflow_dispatch' || (!contains(github.event.head_commit.message, 'DH-20261112-CRM-ACTIVITY-DB-CONSTRAINT-128 [no-prod]') && !contains(github.event.head_commit.message, 'DH-20261113-CRM-COMMERCIAL-LOG-131 [no-prod]') && !contains(github.event.head_commit.message, 'DH-20261113-CRM-COMMERCIAL-LOG-FILTER-133 [no-prod]') && !contains(github.event.head_commit.message, 'DH-20261113-CRM-COMMERCIAL-LOG-ACL-134 [no-prod]')) }}
-    # Production release explicitly approved after staging validation.
+    # Always deploy master pushes; require CI and staging before merging the release.
     runs-on: [self-hosted, linux, x64, dhole]
     steps:
       - uses: actions/checkout@v4
