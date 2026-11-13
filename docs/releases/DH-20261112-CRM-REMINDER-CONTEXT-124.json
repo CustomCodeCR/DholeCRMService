@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "ecosystem": "Dhole",
+  "releaseId": "DH-20261112-CRM-REMINDER-CONTEXT-124",
+  "releaseType": "PATCH",
+  "ecosystemVersion": "1.44.3",
+  "createdAt": "2026-11-12",
+  "sourceBranch": "feature/crm-reminder-context-link-20261112-124",
+  "baseBranches": [
+    "develop",
+    "master"
+  ],
+  "components": [
+    {
+      "repository": "CustomCodeCR/DholeCRMService",
+      "component": "DholeCRMService",
+      "previousVersion": "1.25.2",
+      "version": "1.25.3"
+    },
+    {
+      "repository": "CustomCodeCR/DholeSystem",
+      "component": "DholeSystem",
+      "previousVersion": "1.44.2",
+      "version": "1.44.3"
+    }
+  ],
+  "changes": [
+    "Email reminders show linked customer or prospect (including opportunity context)",
+    "Click-through to existing CRM activity/followup detail route",
+    "Configure public Web origin from CORS_WEB_ORIGIN for CRM worker"
+  ],
+  "validation": {
+    "ci": "pending",
+    "unit": "pending",
+    "staging": "pending",
+    "production": "not-authorized"
+  },
+  "productionDeploymentAuthorized": false
+}

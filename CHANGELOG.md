@@ -1,3 +1,10 @@
+## [1.25.3] - 2026-11-12
+
+- PATCH DH-20261112-CRM-REMINDER-CONTEXT-124: correos de actividades y seguimientos CRM muestran Cliente o Prospecto con nombre actual, incluso cuando la relación viene de la oportunidad comercial; notificaciones de supervisión conservan vendedor, compromiso y vencimiento.
+- Añade enlace HTML seguro y directo al detalle `/crm/activities/{id}` o `/crm/followups/{id}`, con URL pública configurable por entorno; las notificaciones internas mantienen texto plano y reciben ruta segura en el payload para navegación existente.
+- Pruebas unitarias de nombres y escape HTML, rutas cliente/prospecto, URL de staging y bloqueo de esquemas externos. Sin cambios de esquema, REST, SignalR ni claves de deduplicación/outbox.
+- DholeCRMService 1.25.2 → 1.25.3; DholeSystem/ecosistema 1.44.2 → 1.44.3. CI, compilación, pruebas y staging pendientes; no se autoriza despliegue a producción.
+
 ## [1.25.2] - 2026-11-12
 
 - PATCH DH-20261112-PRICING-CRM-LEAD-OWNER-120: corregido endpoint GET /pricing-client-options; prospectos usan su IsCastroFallasExecutive real, sin fijarlo en false. Pricing muestra al responsable institucional Castro Fallas aun cuando ExecutiveUserId sea el usuario operativo que creó o custodia el prospecto.
