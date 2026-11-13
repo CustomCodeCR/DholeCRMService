@@ -279,8 +279,7 @@ internal static class CommercialActivityEndpoints
             db.Followups.Add(followup);
             db.FollowupHistories.Add(new FollowupHistory {
                 FollowupId=followup.Id, ActorUserId=current,
-                Action="Created", Reason="Acuerdo registrado en actividad comercial "+activity.Id+
-                    (activity.ScheduledStartAt.HasValue ? "" : " (tarea de bitácora)"),
+                Action="Created", Reason="Acuerdo registrado en actividad comercial "+activity.Id,
                 NewDueAt=followup.DueAt,CreatedByUserId=current
             });
         }
@@ -459,7 +458,7 @@ internal static class CommercialActivityEndpoints
                 OpportunityId=activity.OpportunityId,OriginActivityId=activity.Id,
                 AssignedUserId=activity.OwnerUserId,Channel="SYSTEM",
                 Subject=item.Subject.Trim(),DueAt=item.DueAt,
-                ReminderLeadMinutes=activity.ReminderLeadMinutes,
+                ReminderLeadMinutes=activity.ReminderLeadMinutes ?? 60,
                 ReminderChannelStrategy="BOTH",CreatedByUserId=actor
             };
             generated.Add(followup);
@@ -515,7 +514,7 @@ internal static class CommercialActivityEndpoints
                 OpportunityId=activity.OpportunityId,OriginActivityId=activity.Id,
                 AssignedUserId=activity.OwnerUserId,
                 Channel="SYSTEM",Subject=item.Subject.Trim(),
-                DueAt=item.DueAt,ReminderLeadMinutes=activity.ReminderLeadMinutes,
+                DueAt=item.DueAt,ReminderLeadMinutes=activity.ReminderLeadMinutes ?? 60,
                 ReminderChannelStrategy="BOTH",CreatedByUserId=actor
             };
             generated.Add(followup);
@@ -546,7 +545,8 @@ internal static class CommercialActivityEndpoints
         var noteIds=await db.ActivityNotes.AsNoTracking()
             .Where(x=>x.ActivityId==id).Select(x=>x.Id).ToListAsync(ct);
         var reasons=noteIds.Select(x=>"Acuerdo de observación "+x)
-            .Append("Acuerdo registrado en actividad comercial "+id).ToArray();
+            .Append("Acuerdo registrado en actividad comercial "+id)
+            .Append("Acuerdo registrado en actividad comercial "+id+" (tarea de bitácora)").ToArray();
         var legacyIds=db.FollowupHistories.AsNoTracking()
             .Where(x=>x.Action=="Created" && x.Reason!=null && reasons.Contains(x.Reason))
             .Select(x=>x.FollowupId);
