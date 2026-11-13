@@ -1,3 +1,8 @@
+## [1.28.2] - 2026-11-13
+
+- PATCH DH-20261113-CRM-COMMERCIAL-LOG-ACL-134: release coordinado que consolida verificación de visibilidad de prospectos en el listado y detalle de Bitácora; el endpoint de master ya incorpora el aislamiento de prospectos por vendedor o permiso global de prospectos.
+- Mantiene API REST, SignalR, documentos y recordatorios. Auth 1.9.1 → 1.9.2; CRM 1.28.1 → 1.28.2; Web 1.48.2 → 1.48.3; ecosistema 1.48.2 → 1.48.3. Producción no autorizada.
+
 ## [1.28.1] - 2026-11-13
 
 - PATCH DH-20261113-CRM-COMMERCIAL-LOG-FILTER-133: sincronización de versión de Auth/CRM con el ajuste del filtro de tipos de Bitácora de Web; sin cambios adicionales de permisos o contratos. Mantiene REST, realtime y ACL.
