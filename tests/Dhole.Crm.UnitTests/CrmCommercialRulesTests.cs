@@ -40,6 +40,20 @@ public sealed class CrmCommercialRulesTests
         Assert.IsFalse(CommercialRules.ValidActivitySchedule(end,start));
     }
     [TestMethod]
+    public void Unscheduled_actions_are_completed_without_reminder_scheduling()
+    {
+        var now=new DateTime(2026,11,12,21,0,0,DateTimeKind.Utc);
+        Assert.IsTrue(CommercialRules.ValidActivitySchedule(null,null));
+        Assert.AreEqual(now,CommercialRules.ResolveOccurredAt(null,null,null,now));
+        Assert.IsNull(CommercialRules.ResolveOccurredAt(now.AddHours(1),
+            now.AddHours(2),null,now));
+        var start=now.AddDays(-1);
+        var end=start.AddHours(1);
+        Assert.AreEqual(end,CommercialRules.ResolveOccurredAt(start,end,null,now));
+        Assert.AreEqual(start,CommercialRules.ResolveOccurredAt(null,null,start,now));
+    }
+
+    [TestMethod]
     public void Activity_schedule_must_be_UTC_and_ordered()
     {
         var start=new DateTime(2026,10,14,20,0,0,DateTimeKind.Utc);
