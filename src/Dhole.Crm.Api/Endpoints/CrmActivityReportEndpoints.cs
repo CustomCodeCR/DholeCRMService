@@ -113,8 +113,8 @@ internal static class CrmActivityReportEndpoints
             from = start, to = end, allSellers = global,
             summary = Totals(ordered, now),
             sellers = ordered.GroupBy(r => r.OwnerUserId)
-                .Select(g => new { ownerUserId = g.Key, summary = Totals(g, now) })
-                .OrderByDescending(g => g.Count()).ToArray(),
+                .Select(g => new { ownerUserId = g.Key, count = g.Count(), summary = Totals(g, now) })
+                .OrderByDescending(g => g.count).ToArray(),
             types = ordered.GroupBy(r => r.Type)
                 .Select(g => new { type = g.Key, count = g.Count() })
                 .OrderByDescending(g => g.count).ToArray(),
