@@ -248,6 +248,12 @@ internal static class CommercialActivityEndpoints
             await db.SaveChangesAsync(ct);
             return Results.Created("/api/crm/activities/"+activity.Id,activity);
         }
+        catch(DbUpdateException ex) when (ex.InnerException is Npgsql.PostgresException
+            { ConstraintName: "ck_crm_activity_type" })
+        {
+            // The database schema, not the user's record version, rejected the code.
+            return CommercialAccess.Invalid("El tipo de actividad no está habilitado en la base de datos CRM. Se requiere actualizar la migración de tipos de actividad.");
+        }
         catch(DbUpdateException){return CommercialAccess.Conflict("Activity relation constraint");}
     }
     private static async Task<IResult> Patch(Guid id,ActivityPatchRequest r,CrmDbContext db,HttpContext h,CancellationToken ct)
