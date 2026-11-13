@@ -107,9 +107,16 @@ internal static class CommercialActivityEndpoints
         var globalLog=CrmAccess.Scope(h,"crm.bitacora.read-all") ||
             CrmAccess.CanManageAgendaAcrossUsers(h);
         var visibleAccounts=CrmAccess.VisibleAccounts(db,h).Select(a=>a.Id);
+        // A global bitácora scope never overrides account/prospect visibility.
+        var actor=CrmAccess.UserId(h);
+        var allLeads=CrmAccess.Scope(h,"crm.lead.read-all");
+        var visibleLeads=db.Leads.AsNoTracking()
+            .Where(l=>l.ArchivedAt==null && (allLeads || l.ExecutiveUserId==actor))
+            .Select(l=>l.Id);
         var query=db.Activities.AsNoTracking()
             .Where(x=>x.ArchivedAt==null && x.Status=="Completed" &&
-                (!x.AccountId.HasValue || visibleAccounts.Contains(x.AccountId.Value)));
+                (!x.AccountId.HasValue || visibleAccounts.Contains(x.AccountId.Value)) &&
+                (!x.LeadId.HasValue || visibleLeads.Contains(x.LeadId.Value)));
         if(!globalLog)query=query.Where(x=>x.OwnerUserId==CrmAccess.UserId(h));
         if(ownerId.HasValue)
         {
@@ -142,6 +149,10 @@ internal static class CommercialActivityEndpoints
             !CrmAccess.CanManageAgendaAcrossUsers(h)))return null;
         if(activity.AccountId.HasValue && !await CrmAccess.CanSeeAccount(db,h,activity.AccountId.Value,ct))
             return null;
+        if(activity.LeadId.HasValue &&
+           !await db.Leads.AsNoTracking().AnyAsync(l=>l.Id==activity.LeadId.Value &&
+               l.ArchivedAt==null && (l.ExecutiveUserId==CrmAccess.UserId(h) ||
+               CrmAccess.Scope(h,"crm.lead.read-all")),ct))return null;
         return activity;
     }
     private static async Task<IResult> Get(Guid id,CrmDbContext db,HttpContext h,CancellationToken ct)
