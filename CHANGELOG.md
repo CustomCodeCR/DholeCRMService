@@ -1,3 +1,8 @@
+## [1.27.1] - 2026-11-12
+
+- PATCH DH-20261112-CRM-BITACORA-PRODUCTION-127: publicación autorizada a producción de actividades CRM sin agenda y recordatorios explícitos, sin modificaciones de API ni esquema frente al release 126 validado en staging. CRM 1.27.0 → 1.27.1, Web 1.47.0 → 1.47.1, ecosistema 1.47.0 → 1.47.1.
+- Staging y CI deberán validarse antes de promover el mismo release a master; producción autorizada expresamente.
+
 ## [1.27.0] - 2026-11-12
 
 - MINOR DH-20261112-CRM-BITACORA-REMINDERS-126: registros comerciales sin fechas programadas se guardan como Completed en el instante de creación, nunca como Scheduled sin inicio ni se encolan avisos.
