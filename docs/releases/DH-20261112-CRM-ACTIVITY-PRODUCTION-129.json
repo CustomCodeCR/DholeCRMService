@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "ecosystem": "Dhole",
+  "releaseId": "DH-20261112-CRM-ACTIVITY-PRODUCTION-129",
+  "releaseType": "PATCH",
+  "ecosystemVersion": "1.47.3",
+  "createdAt": "2026-11-12",
+  "components": [
+    {
+      "repository": "CustomCodeCR/DholeWeb",
+      "component": "DholeWeb",
+      "previousVersion": "1.47.2",
+      "version": "1.47.3"
+    },
+    {
+      "repository": "CustomCodeCR/DholeCRMService",
+      "component": "DholeCRMService",
+      "previousVersion": "1.27.2",
+      "version": "1.27.3"
+    }
+  ],
+  "changes": [
+    "Authorized production promotion of release 128, fixing the PostgreSQL CRM activity type CHECK constraint and HTTP 409 messaging",
+    "No application behavior or REST contract changes beyond the already CI-tested and staging-validated fix",
+    "Retain real-time SignalR, Outbox/Inbox, existing documents and CRM history"
+  ],
+  "validationPlan": "CI on release branches; coordinated develop staging deployment; then master production deployment",
+  "productionDeploymentAuthorized": true
+}
