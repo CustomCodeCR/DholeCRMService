@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "ecosystem": "Dhole",
+  "releaseId": "DH-20261112-CRM-BITACORA-REMINDERS-126",
+  "releaseType": "MINOR",
+  "ecosystemVersion": "1.47.0",
+  "createdAt": "2026-11-12",
+  "components": [
+    {
+      "repository": "CustomCodeCR/DholeWeb",
+      "component": "DholeWeb",
+      "version": "1.47.0"
+    },
+    {
+      "repository": "CustomCodeCR/DholeCRMService",
+      "component": "DholeCRMService",
+      "version": "1.27.0"
+    }
+  ],
+  "changes": [
+    "Unscheduled completed log activities without date inputs or reminders",
+    "Explicit Crear recordatorio entrypoint for scheduled activity and followup",
+    "Retain contacts, documents, notes, ACL, REST and realtime Outbox compatibility"
+  ],
+  "validation": {
+    "ci": "pending",
+    "staging": "pending",
+    "production": "not-authorized"
+  },
+  "productionDeploymentAuthorized": false
+}
