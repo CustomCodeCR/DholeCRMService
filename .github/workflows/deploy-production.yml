@@ -21,8 +21,7 @@ env:
 
 jobs:
   deploy:
-    # This source-only release must not deploy on master until explicitly authorized.
-    if: ${{ github.event_name == 'workflow_dispatch' || !contains(github.event.head_commit.message, 'DH-20261112-CRM-BITACORA-REMINDERS-126 [no-prod]') }}
+    # Production release explicitly approved after staging validation.
     runs-on: [self-hosted, linux, x64, dhole]
     steps:
       - uses: actions/checkout@v4
