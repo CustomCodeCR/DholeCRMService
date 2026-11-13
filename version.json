@@ -2,9 +2,9 @@
   "schemaVersion": 1,
   "ecosystem": "Dhole",
   "component": "DholeCRMService",
-  "version": "1.27.4",
-  "ecosystemVersion": "1.47.4",
-  "releaseId": "DH-20261113-CRM-DRAFT-RECOVERY-130",
+  "version": "1.28.1",
+  "ecosystemVersion": "1.48.2",
+  "releaseId": "DH-20261113-CRM-COMMERCIAL-LOG-FILTER-133",
   "releaseStatus": "candidate-ci-and-staging-pending",
-  "businessReleaseId": "DH-20261113-CRM-DRAFT-RECOVERY-130"
+  "businessReleaseId": "DH-20261113-CRM-COMMERCIAL-LOG-FILTER-133"
 }

@@ -17,6 +17,9 @@ public static class CommercialRules
         occurredUtc ?? (!startUtc.HasValue && !endUtc.HasValue ? nowUtc :
             IsHistoricalActivity(endUtc,nowUtc) ? endUtc : null);
 
+    public static bool IsCommercialLog(string status) =>
+        string.Equals(status,"Completed",StringComparison.Ordinal);
+
     // A historical meeting/visit has already ended. Use its original end time
     // as the actual occurrence instead of scheduling retroactive reminders.
     public static bool IsHistoricalActivity(DateTime? endUtc, DateTime nowUtc) =>

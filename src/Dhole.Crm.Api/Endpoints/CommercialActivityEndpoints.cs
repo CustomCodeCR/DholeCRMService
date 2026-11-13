@@ -34,6 +34,7 @@ internal static class CommercialActivityEndpoints
     public static RouteGroupBuilder MapCommercialActivities(this RouteGroupBuilder g)
     {
         g.MapGet("/activities",List);
+        g.MapGet("/activities/bitacora",ListBitacora);
         g.MapGet("/activities/{id:guid}",Get);
         g.MapPost("/activities",Create);
         g.MapPatch("/activities/{id:guid}",Patch);
@@ -60,7 +61,7 @@ internal static class CommercialActivityEndpoints
     }
     private static async Task<IResult> List(CrmDbContext db,HttpContext h,
         Guid? accountId,Guid? leadId,Guid? opportunityId,Guid? ownerId,string? type,string? status,
-        DateTime? from,DateTime? to,int? page,int? pageSize,CancellationToken ct)
+        bool? agendaOnly,DateTime? from,DateTime? to,int? page,int? pageSize,CancellationToken ct)
     {
         if(!CanRead(h))return CrmAccess.Denied();
         var visibleAccounts=CrmAccess.VisibleAccounts(db,h).Select(a=>a.Id);
@@ -82,6 +83,7 @@ internal static class CommercialActivityEndpoints
         if(opportunityId is { } o)query=query.Where(x=>x.OpportunityId==o);
         if(!string.IsNullOrWhiteSpace(type))query=query.Where(x=>x.Type==type);
         if(!string.IsNullOrWhiteSpace(status))query=query.Where(x=>x.Status==status);
+        if(agendaOnly==true)query=query.Where(x=>x.Status!="Completed" && x.Status!="Cancelled");
         if(from.HasValue)query=query.Where(x=>(x.ScheduledStartAt??x.OccurredAt??x.CreatedAt)>=from.Value);
         if(to.HasValue)query=query.Where(x=>(x.ScheduledStartAt??x.OccurredAt??x.CreatedAt)<to.Value);
         var n=Math.Max(1,page??1);var size=Math.Clamp(pageSize??25,1,100);
@@ -90,11 +92,74 @@ internal static class CommercialActivityEndpoints
             .OrderByDescending(x=>x.OccurredAt??x.ScheduledStartAt??x.CreatedAt).ThenBy(x=>x.Id)
             .Skip((n-1)*size).Take(size).ToListAsync(ct)});
     }
+    // Completed commercial actions are a separate ledger from the scheduled agenda.
+    // Reuse the existing Activity/Notes/Participants and Storage relationships.
+    private static bool CanReadLog(HttpContext h) =>
+        CrmAccess.Scope(h,"crm.bitacora.read") ||
+        CrmAccess.Scope(h,"crm.bitacora.read-all") || CanRead(h);
+    private static bool CanReadRecord(HttpContext h,Activity activity) =>
+        CanRead(h) || (activity.Status=="Completed" && CanReadLog(h));
+    private static async Task<IResult> ListBitacora(CrmDbContext db,HttpContext h,
+        Guid? accountId,Guid? leadId,Guid? ownerId,string? type,
+        DateTime? from,DateTime? to,int? page,int? pageSize,CancellationToken ct)
+    {
+        if(!CanReadLog(h))return CrmAccess.Denied();
+        var globalLog=CrmAccess.Scope(h,"crm.bitacora.read-all") ||
+            CrmAccess.CanManageAgendaAcrossUsers(h);
+        var visibleAccounts=CrmAccess.VisibleAccounts(db,h).Select(a=>a.Id);
+        // A global bitácora scope never overrides account/prospect visibility.
+        var actor=CrmAccess.UserId(h);
+        var allLeads=CrmAccess.Scope(h,"crm.lead.read-all");
+        var visibleLeads=db.Leads.AsNoTracking()
+            .Where(l=>l.ArchivedAt==null && (allLeads || l.ExecutiveUserId==actor))
+            .Select(l=>l.Id);
+        var query=db.Activities.AsNoTracking()
+            .Where(x=>x.ArchivedAt==null && x.Status=="Completed" &&
+                (!x.AccountId.HasValue || visibleAccounts.Contains(x.AccountId.Value)) &&
+                (!x.LeadId.HasValue || visibleLeads.Contains(x.LeadId.Value)));
+        if(!globalLog)query=query.Where(x=>x.OwnerUserId==CrmAccess.UserId(h));
+        if(ownerId.HasValue)
+        {
+            if(ownerId.Value!=CrmAccess.UserId(h) && !globalLog)return CrmAccess.Denied();
+            query=query.Where(x=>x.OwnerUserId==ownerId.Value);
+        }
+        if(accountId is { } requestedAccount)
+        {
+            var groupIds=await AccountGroupAccess.VisibleIdsAsync(db,h,requestedAccount,ct);
+            if(groupIds.Length==0)return CrmAccess.Denied();
+            query=query.Where(x=>x.AccountId.HasValue && groupIds.Contains(x.AccountId.Value));
+        }
+        if(leadId.HasValue)query=query.Where(x=>x.LeadId==leadId.Value);
+        if(!string.IsNullOrWhiteSpace(type))query=query.Where(x=>x.Type==type);
+        if(from.HasValue)query=query.Where(x=>(x.OccurredAt??x.ScheduledEndAt??x.CreatedAt)>=from.Value);
+        if(to.HasValue)query=query.Where(x=>(x.OccurredAt??x.ScheduledEndAt??x.CreatedAt)<to.Value);
+        var n=Math.Max(1,page??1);var size=Math.Clamp(pageSize??25,1,100);
+        var total=await query.CountAsync(ct);
+        return Results.Ok(new {total,page=n,pageSize=size,items=await query
+            .OrderByDescending(x=>x.OccurredAt??x.ScheduledEndAt??x.CreatedAt)
+            .ThenBy(x=>x.Id).Skip((n-1)*size).Take(size).ToListAsync(ct)});
+    }
+    // Read-only projection for completed activities; mutation keeps FindAllowed unchanged.
+    private static async Task<Activity?> FindLogReadable(Guid id,CrmDbContext db,HttpContext h,CancellationToken ct)
+    {
+        var activity=await db.Activities.AsNoTracking()
+            .FirstOrDefaultAsync(x=>x.Id==id&&x.ArchivedAt==null,ct);
+        if(activity is null || (!CommercialAccess.ActivityOwns(h,activity) &&
+            !(activity.Status=="Completed" && CrmAccess.Scope(h,"crm.bitacora.read-all")) &&
+            !CrmAccess.CanManageAgendaAcrossUsers(h)))return null;
+        if(activity.AccountId.HasValue && !await CrmAccess.CanSeeAccount(db,h,activity.AccountId.Value,ct))
+            return null;
+        if(activity.LeadId.HasValue &&
+           !await db.Leads.AsNoTracking().AnyAsync(l=>l.Id==activity.LeadId.Value &&
+               l.ArchivedAt==null && (l.ExecutiveUserId==CrmAccess.UserId(h) ||
+               CrmAccess.Scope(h,"crm.lead.read-all")),ct))return null;
+        return activity;
+    }
     private static async Task<IResult> Get(Guid id,CrmDbContext db,HttpContext h,CancellationToken ct)
     {
-        if(!CanRead(h))return CrmAccess.Denied();
-        var a=await FindAllowed(id,db,h,ct);
-        return a is null?Results.NotFound():Results.Ok(a);
+        if(!CanReadLog(h))return CrmAccess.Denied();
+        var a=await FindLogReadable(id,db,h,ct);
+        return a is null || !CanReadRecord(h,a)?Results.NotFound():Results.Ok(a);
     }
     private static async Task<IResult> Create(ActivityCreateRequest r,CrmDbContext db,HttpContext h,
         IAuthReferenceService auth,IConfigReferenceService config,CancellationToken ct)
@@ -384,7 +449,8 @@ internal static class CommercialActivityEndpoints
 
     private static async Task<IResult> Notes(Guid id,CrmDbContext db,HttpContext h,CancellationToken ct)
     {
-        if(!CanRead(h)||await FindAllowed(id,db,h,ct) is null)return CrmAccess.Denied();
+        var activity=CanReadLog(h) ? await FindLogReadable(id,db,h,ct) : null;
+        if(activity is null || !CanReadRecord(h,activity))return CrmAccess.Denied();
         return Results.Ok(await db.ActivityNotes.AsNoTracking().Where(x=>x.ActivityId==id)
             .OrderBy(x=>x.CreatedAt).ToListAsync(ct));
     }
@@ -491,7 +557,8 @@ internal static class CommercialActivityEndpoints
 
     private static async Task<IResult> Participants(Guid id,CrmDbContext db,HttpContext h,CancellationToken ct)
     {
-        if(!CanRead(h)||await FindAllowed(id,db,h,ct) is null)return CrmAccess.Denied();
+        var activity=CanReadLog(h) ? await FindLogReadable(id,db,h,ct) : null;
+        if(activity is null || !CanReadRecord(h,activity))return CrmAccess.Denied();
         return Results.Ok(await db.ActivityParticipants.AsNoTracking().Where(x=>x.ActivityId==id)
             .OrderBy(x=>x.CreatedAt).ToListAsync(ct));
     }
