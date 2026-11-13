@@ -1,3 +1,9 @@
+## [1.26.0] - 2026-11-12
+
+- MINOR DH-20261112-CRM-ACTIVITY-TYPES-125: actividades CRM admiten Seguimiento comercial, WhatsApp, Recomendación y Oferta; CALL conserva su código y recordatorio de llamada telefónica. Se mantienen las cinco clasificaciones históricas y el recurso FOLLOWUP separado.
+- La validación de creación/edición acepta los códigos del catálogo Config; recordatorios genéricos usan el canal realtime/Outbox existente. Pruebas unitarias para códigos válidos y rechazo de desconocidos.
+- DholeCRMService 1.25.3 → 1.26.0; DholeConfigService 1.5.0; DholeWeb 1.46.0; ecosistema 1.46.0. CI y staging pendientes; producción no autorizada.
+
 ## [1.25.3] - 2026-11-12
 
 - PATCH DH-20261112-CRM-REMINDER-CONTEXT-124: correos de actividades y seguimientos CRM muestran Cliente o Prospecto con nombre actual, incluso cuando la relación viene de la oportunidad comercial; notificaciones de supervisión conservan vendedor, compromiso y vencimiento.

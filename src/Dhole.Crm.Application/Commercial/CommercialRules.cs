@@ -16,7 +16,8 @@ public static class CommercialRules
         endUtc.HasValue && endUtc.Value.Kind == DateTimeKind.Utc &&
         nowUtc.Kind == DateTimeKind.Utc && endUtc.Value <= nowUtc;
     public static bool ValidActivityType(string? type) =>
-        type is "VISIT" or "CALL" or "EMAIL" or "MEETING" or "OTHER";
+        type is "VISIT" or "CALL" or "EMAIL" or "MEETING" or "OTHER"
+            or "COMMERCIAL_FOLLOWUP" or "WHATSAPP" or "RECOMMENDATION" or "OFFER";
     public static bool ValidStage(decimal probability, bool won, bool lost) =>
         probability is >= 0m and <= 100m && !(won && lost) &&
         (!won || probability == 100m) && (!lost || probability == 0m);
