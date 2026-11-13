@@ -1,3 +1,8 @@
+## [1.27.4] - 2026-11-13
+
+- PATCH DH-20261113-CRM-DRAFT-RECOVERY-130: incrementa la versión del componente CRM como parte del release coordinado Web/CRM/System. La protección y recuperación de borradores es local en DholeWeb; no se alteran endpoints, esquema, ACL, SignalR ni Outbox de CRM.
+- DholeCRMService 1.27.3 → 1.27.4; DholeWeb 1.47.3 → 1.47.4; ecosistema 1.47.3 → 1.47.4. CI, compilación, pruebas y staging pendientes. Producción no autorizada.
+
 ## [1.27.3] - 2026-11-12
 
 - PATCH DH-20261112-CRM-ACTIVITY-PRODUCTION-129: publicación expresamente autorizada de la corrección `DH-20261112-CRM-ACTIVITY-DB-CONSTRAINT-128` validada en CI y staging. Sin cambios funcionales adicionales; se mantienen REST, SignalR, Outbox y registro histórico.
