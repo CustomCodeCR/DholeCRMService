@@ -51,4 +51,20 @@ public sealed class CrmCommercialRulesTests
         Assert.IsFalse(CommercialRules.ValidVolume(-0.01m,"CBM"));
         Assert.IsTrue(CommercialRules.ValidVolume(10.2500m,"CFT"));
     }
+    [TestMethod]
+    public void Commercial_activity_types_allow_extended_sales_actions_without_changing_followup_semantics()
+    {
+        foreach (var activityType in new[]
+        {
+            "VISIT", "CALL", "EMAIL", "MEETING", "OTHER",
+            "COMMERCIAL_FOLLOWUP", "WHATSAPP", "RECOMMENDATION", "OFFER"
+        })
+            Assert.IsTrue(CommercialRules.ValidActivityType(activityType), activityType);
+
+        // FOLLOWUP is a separate reminder/commitment resource, not an activity type.
+        Assert.IsFalse(CommercialRules.ValidActivityType("FOLLOWUP"));
+        Assert.IsFalse(CommercialRules.ValidActivityType("UNKNOWN"));
+        Assert.IsFalse(CommercialRules.ValidActivityType(null));
+    }
+
 }
