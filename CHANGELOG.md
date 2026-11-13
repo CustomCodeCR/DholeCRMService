@@ -1,3 +1,8 @@
+## [1.29.0] - 2026-11-13
+
+- MINOR DH-20261113-CRM-SELLER-ACTIVITY-REPORTS-137: GET /api/crm/activities/report para informes generales y por vendedor, filtrados por período, responsable, tipo, estado y origen. Incluye registros sin agenda en Bitácora y recordatorios sin doble contabilización, manteniendo ACL por cuenta/prospecto y propietario.
+- Endpoint REST de solo lectura, sin migraciones ni nuevos eventos; compatible con SignalR/Outbox existentes. CRM 1.28.4 → 1.29.0, Web 1.49.0 → 1.50.0 y ecosistema 1.49.0 → 1.50.0. CI/staging pendientes; producción no autorizada.
+
 ## [1.28.4] - 2026-11-13
 
 - PATCH DH-20261113-CRM-AGENDA-NOTES-FILTERS-136: sincroniza versión del servicio CRM para la separación visual de notas y agenda en DholeWeb. Sin cambios de contrato o modelo de datos: se reutilizan GET /activities/bitacora, filtros por cliente/prospecto, responsable, tipo y fechas y la resolución de identidades autorizadas. Se mantienen permisos, REST, SignalR, Outbox/Inbox y documentos.
