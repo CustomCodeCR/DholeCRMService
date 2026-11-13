@@ -70,6 +70,11 @@ internal static class CommercialActivityEndpoints
             !(activity.Status=="Completed" && CrmAccess.Scope(h,"crm.bitacora.read-all"))) return null;
         if (activity.AccountId.HasValue &&
             !await CrmAccess.CanSeeCalendarAccount(db,h,activity.AccountId.Value,ct)) return null;
+        if(activity.LeadId.HasValue &&
+           !await db.Leads.AsNoTracking().AnyAsync(l=>l.Id==activity.LeadId.Value &&
+               l.ArchivedAt==null && (l.ExecutiveUserId==CrmAccess.UserId(h) ||
+               CrmAccess.Scope(h,"crm.lead.read-all") ||
+               CrmAccess.IsCalendarAdministrator(h)),ct))return null;
         return activity;
     }
     private static async Task<IResult> List(CrmDbContext db,HttpContext h,
@@ -122,9 +127,16 @@ internal static class CommercialActivityEndpoints
         var globalLog=CrmAccess.Scope(h,"crm.bitacora.read-all") ||
             CrmAccess.CanManageAgendaAcrossUsers(h) || CrmAccess.IsCalendarAdministrator(h);
         var visibleAccounts=CrmAccess.CalendarVisibleAccounts(db,h).Select(a=>a.Id);
+        // A global bitácora scope never overrides account/prospect visibility.
+        var actor=CrmAccess.UserId(h);
+        var allLeads=CrmAccess.Scope(h,"crm.lead.read-all") || CrmAccess.IsCalendarAdministrator(h);
+        var visibleLeads=db.Leads.AsNoTracking()
+            .Where(l=>l.ArchivedAt==null && (allLeads || l.ExecutiveUserId==actor))
+            .Select(l=>l.Id);
         var query=db.Activities.AsNoTracking()
             .Where(x=>x.ArchivedAt==null && x.Status=="Completed" &&
-                (!x.AccountId.HasValue || visibleAccounts.Contains(x.AccountId.Value)));
+                (!x.AccountId.HasValue || visibleAccounts.Contains(x.AccountId.Value)) &&
+                (!x.LeadId.HasValue || visibleLeads.Contains(x.LeadId.Value)));
         if(!globalLog)query=query.Where(x=>x.OwnerUserId==CrmAccess.UserId(h));
         if(ownerId.HasValue)
         {
