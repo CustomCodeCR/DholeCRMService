@@ -54,6 +54,15 @@ public sealed class CrmCommercialRulesTests
     }
 
     [TestMethod]
+    public void CommercialLog_IncludesCompletedActions_NotScheduledOrCancelled()
+    {
+        Assert.IsTrue(CommercialRules.IsCommercialLog("Completed"));
+        Assert.IsFalse(CommercialRules.IsCommercialLog("Scheduled"));
+        Assert.IsFalse(CommercialRules.IsCommercialLog("Pending"));
+        Assert.IsFalse(CommercialRules.IsCommercialLog("Cancelled"));
+    }
+
+    [TestMethod]
     public void Activity_schedule_must_be_UTC_and_ordered()
     {
         var start=new DateTime(2026,10,14,20,0,0,DateTimeKind.Utc);

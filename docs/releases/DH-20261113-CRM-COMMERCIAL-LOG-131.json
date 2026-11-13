@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "ecosystem": "Dhole",
+  "releaseId": "DH-20261113-CRM-COMMERCIAL-LOG-131",
+  "releaseType": "MINOR",
+  "ecosystemVersion": "1.48.0",
+  "createdAt": "2026-11-13",
+  "components": [
+    {
+      "repository": "CustomCodeCR/DholeAuthService",
+      "component": "DholeAuthService",
+      "version": "1.9.0"
+    },
+    {
+      "repository": "CustomCodeCR/DholeCRMService",
+      "component": "DholeCRMService",
+      "version": "1.28.0"
+    },
+    {
+      "repository": "CustomCodeCR/DholeWeb",
+      "component": "DholeWeb",
+      "version": "1.48.0"
+    }
+  ],
+  "changes": [
+    "Add dedicated account/prospect commercial log with dates/type/owner filters and document detail links",
+    "Separate completed activities from agenda scheduling and notifications while preserving REST/realtime and ACL",
+    "Add read/read-all commercial log scopes, preserving legacy activity permission compatibility"
+  ],
+  "validation": {
+    "ci": "pending",
+    "staging": "pending",
+    "production": "not-authorized"
+  },
+  "productionDeploymentAuthorized": false
+}
