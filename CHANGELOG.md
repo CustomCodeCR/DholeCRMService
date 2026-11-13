@@ -1,3 +1,9 @@
+## [1.28.0] - 2026-11-13
+
+- MINOR DH-20261113-CRM-COMMERCIAL-LOG-131: `GET /api/crm/activities/bitacora` consulta exclusivamente actividades completadas con filtros de fecha, tipo, responsable, cliente y prospecto; preserva visibilidad de grupos de cuentas y acceso restringido al responsable.
+- Nuevos scopes Auth `crm.bitacora.read`/`read-all` y compatibilidad con permisos previos. Acceso a notas, participantes y adjuntos existentes sin duplicar actividades ni emitir notificaciones; agenda REST existente sigue disponible.
+- CRM 1.27.4 → 1.28.0, Web 1.47.4 → 1.48.0, Auth 1.8.1 → 1.9.0, ecosistema 1.48.0. Producción no autorizada.
+
 ## [1.27.4] - 2026-11-13
 
 - PATCH DH-20261113-CRM-DRAFT-RECOVERY-130: incrementa la versión del componente CRM como parte del release coordinado Web/CRM/System. La protección y recuperación de borradores es local en DholeWeb; no se alteran endpoints, esquema, ACL, SignalR ni Outbox de CRM.
