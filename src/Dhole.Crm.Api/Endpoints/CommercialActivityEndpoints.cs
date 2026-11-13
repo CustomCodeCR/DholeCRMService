@@ -70,6 +70,11 @@ internal static class CommercialActivityEndpoints
             !(activity.Status=="Completed" && CrmAccess.Scope(h,"crm.bitacora.read-all"))) return null;
         if (activity.AccountId.HasValue &&
             !await CrmAccess.CanSeeCalendarAccount(db,h,activity.AccountId.Value,ct)) return null;
+        // Global log permission does not automatically grant access to prospects.
+        if (activity.LeadId.HasValue &&
+            !await db.Leads.AsNoTracking().AnyAsync(l=>l.Id==activity.LeadId.Value &&
+                l.ArchivedAt==null && (CrmAccess.Scope(h,"crm.lead.read-all") ||
+                l.ExecutiveUserId==CrmAccess.UserId(h)),ct)) return null;
         return activity;
     }
     private static async Task<IResult> List(CrmDbContext db,HttpContext h,
@@ -122,9 +127,15 @@ internal static class CommercialActivityEndpoints
         var globalLog=CrmAccess.Scope(h,"crm.bitacora.read-all") ||
             CrmAccess.CanManageAgendaAcrossUsers(h) || CrmAccess.IsCalendarAdministrator(h);
         var visibleAccounts=CrmAccess.CalendarVisibleAccounts(db,h).Select(a=>a.Id);
+        var actor=CrmAccess.UserId(h);
+        var globalLeads=CrmAccess.Scope(h,"crm.lead.read-all");
+        var visibleLeads=db.Leads.AsNoTracking()
+            .Where(l=>l.ArchivedAt==null && (globalLeads || l.ExecutiveUserId==actor))
+            .Select(l=>l.Id);
         var query=db.Activities.AsNoTracking()
             .Where(x=>x.ArchivedAt==null && x.Status=="Completed" &&
-                (!x.AccountId.HasValue || visibleAccounts.Contains(x.AccountId.Value)));
+                (!x.AccountId.HasValue || visibleAccounts.Contains(x.AccountId.Value)) &&
+                (!x.LeadId.HasValue || visibleLeads.Contains(x.LeadId.Value)));
         if(!globalLog)query=query.Where(x=>x.OwnerUserId==CrmAccess.UserId(h));
         if(ownerId.HasValue)
         {

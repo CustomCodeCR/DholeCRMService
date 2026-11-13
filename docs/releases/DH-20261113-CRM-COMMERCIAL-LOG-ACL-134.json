@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "ecosystem": "Dhole",
+  "releaseId": "DH-20261113-CRM-COMMERCIAL-LOG-ACL-134",
+  "previousReleaseId": "DH-20261113-CRM-COMMERCIAL-LOG-FILTER-133",
+  "releaseType": "PATCH",
+  "ecosystemVersion": "1.48.3",
+  "createdAt": "2026-11-13",
+  "components": [
+    {
+      "repository": "CustomCodeCR/DholeAuthService",
+      "version": "1.9.2"
+    },
+    {
+      "repository": "CustomCodeCR/DholeCRMService",
+      "version": "1.28.2"
+    },
+    {
+      "repository": "CustomCodeCR/DholeWeb",
+      "version": "1.48.3"
+    }
+  ],
+  "changes": [
+    "Enforce readable prospect ACL on commercial-log list and detail, even with global log permissions",
+    "Keep completed actions, calendar, attachments and realtime REST compatibility"
+  ],
+  "validation": {
+    "ci": "pending",
+    "staging": "pending",
+    "production": "not-authorized"
+  },
+  "productionDeploymentAuthorized": false
+}
