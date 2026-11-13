@@ -10,6 +10,13 @@ public static class CommercialRules
         (!startUtc.HasValue || startUtc.Value.Kind == DateTimeKind.Utc) &&
         (!endUtc.HasValue || endUtc.Value.Kind == DateTimeKind.Utc) &&
         (!startUtc.HasValue || !endUtc.HasValue || endUtc >= startUtc);
+    // An unscheduled commercial action belongs to the log and is immediately completed.
+    // Preserve explicitly dated and historical activities as before.
+    public static DateTime? ResolveOccurredAt(DateTime? startUtc,DateTime? endUtc,
+        DateTime? occurredUtc,DateTime nowUtc) =>
+        occurredUtc ?? (!startUtc.HasValue && !endUtc.HasValue ? nowUtc :
+            IsHistoricalActivity(endUtc,nowUtc) ? endUtc : null);
+
     // A historical meeting/visit has already ended. Use its original end time
     // as the actual occurrence instead of scheduling retroactive reminders.
     public static bool IsHistoricalActivity(DateTime? endUtc, DateTime nowUtc) =>
