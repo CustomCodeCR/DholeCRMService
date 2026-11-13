@@ -268,14 +268,15 @@ internal static class CommercialActivityEndpoints
                 AccountId=activity.AccountId,LeadId=activity.LeadId,
                 OpportunityId=activity.OpportunityId,AssignedUserId=owner,
                 Channel="SYSTEM", Subject=item.Subject,DueAt=item.DueAt,
-                ReminderLeadMinutes=r.ReminderLeadMinutes,
+                ReminderLeadMinutes=r.ReminderLeadMinutes ?? 60,
                 ReminderChannelStrategy="BOTH",CreatedByUserId=current
             };
             nextCommitments.Add(followup);
             db.Followups.Add(followup);
             db.FollowupHistories.Add(new FollowupHistory {
                 FollowupId=followup.Id, ActorUserId=current,
-                Action="Created", Reason="Acuerdo registrado en actividad comercial "+activity.Id,
+                Action="Created", Reason="Acuerdo registrado en actividad comercial "+activity.Id+
+                    (activity.ScheduledStartAt.HasValue ? "" : " (tarea de bitácora)"),
                 NewDueAt=followup.DueAt,CreatedByUserId=current
             });
         }
