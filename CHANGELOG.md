@@ -1,3 +1,8 @@
+## [1.28.2] - 2026-11-13
+
+- PATCH DH-20261113-CRM-COMMERCIAL-LOG-ACL-134: el listado y detalle de Bitácora verifican visibilidad de prospectos, incluso al contar con permisos globales de bitácora. No expone datos de prospectos no autorizados.
+- Conserva actividades completadas, cuentas, adjuntos, REST, SignalR y Outbox. Auth 1.9.1 → 1.9.2; CRM 1.28.1 → 1.28.2; Web 1.48.2 → 1.48.3; ecosistema 1.48.2 → 1.48.3. CI y staging requeridos; producción no autorizada.
+
 ## [1.28.1] - 2026-11-13
 
 - PATCH DH-20261113-CRM-COMMERCIAL-LOG-FILTER-133: sincronización universal de versionamiento para completar el release de Bitácora CRM (filtros de tipo visibles desde el primer acceso) tras la integración inicial 131, sin nuevas mutaciones en permisos o contratos del servicio.
