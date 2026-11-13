@@ -85,7 +85,11 @@ internal static class CrmActivityReportEndpoints
             if (ownerId.HasValue) activities = activities.Where(a => a.OwnerUserId == ownerId.Value);
             if (!string.IsNullOrWhiteSpace(type)) activities = type == "FOLLOWUP"
                 ? activities.Where(a => false) : activities.Where(a => a.Type == type);
-            if (!string.IsNullOrWhiteSpace(status)) activities = activities.Where(a => a.Status == status);
+            if (status == "Overdue") activities = activities.Where(a =>
+                a.Status == "Overdue" ||
+                ((a.Status == "Scheduled" || a.Status == "Pending") &&
+                 (a.OccurredAt ?? a.ScheduledStartAt ?? a.CreatedAt) < now));
+            else if (!string.IsNullOrWhiteSpace(status)) activities = activities.Where(a => a.Status == status);
             rows.AddRange(await activities.Select(a => new Entry(a.Id, "activities",
                 a.OwnerUserId, a.AccountId, a.LeadId, a.Type, a.Subject, a.Status,
                 a.OccurredAt ?? a.ScheduledStartAt ?? a.CreatedAt)).ToListAsync(ct));
@@ -101,7 +105,10 @@ internal static class CrmActivityReportEndpoints
                 f.DueAt >= start && f.DueAt < end);
             if (!global) followups = followups.Where(f => f.AssignedUserId == actor);
             if (ownerId.HasValue) followups = followups.Where(f => f.AssignedUserId == ownerId.Value);
-            if (!string.IsNullOrWhiteSpace(status)) followups = followups.Where(f => f.Status == status);
+            if (status == "Overdue") followups = followups.Where(f =>
+                f.Status == "Overdue" ||
+                ((f.Status == "Scheduled" || f.Status == "Pending") && f.DueAt < now));
+            else if (!string.IsNullOrWhiteSpace(status)) followups = followups.Where(f => f.Status == status);
             rows.AddRange(await followups.Select(f => new Entry(f.Id, "followups",
                 f.AssignedUserId, f.AccountId, f.LeadId, "FOLLOWUP",
                 f.Subject ?? "Seguimiento comercial", f.Status, f.DueAt)).ToListAsync(ct));
