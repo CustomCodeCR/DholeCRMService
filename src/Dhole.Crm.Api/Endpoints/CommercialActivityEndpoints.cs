@@ -266,7 +266,7 @@ internal static class CommercialActivityEndpoints
         {
             var followup = new Followup {
                 AccountId=activity.AccountId,LeadId=activity.LeadId,
-                OpportunityId=activity.OpportunityId,AssignedUserId=owner,
+                OpportunityId=activity.OpportunityId,OriginActivityId=activity.Id,AssignedUserId=owner,
                 Channel="SYSTEM", Subject=item.Subject,DueAt=item.DueAt,
                 ReminderLeadMinutes=r.ReminderLeadMinutes ?? 60,
                 ReminderChannelStrategy="BOTH",CreatedByUserId=current
@@ -442,7 +442,7 @@ internal static class CommercialActivityEndpoints
             .Where(x=>x.Action=="Created" && x.Reason!=null && origins.Contains(x.Reason))
             .Select(x=>x.FollowupId);
         var commitments=await db.Followups.AsNoTracking()
-            .Where(x=>followupIds.Contains(x.Id) && x.ArchivedAt==null &&
+            .Where(x=>(x.OriginActivityId==id || followupIds.Contains(x.Id)) && x.ArchivedAt==null &&
                 x.AccountId==activity.AccountId && x.LeadId==activity.LeadId &&
                 x.OpportunityId==activity.OpportunityId &&
                 x.AssignedUserId==activity.OwnerUserId)
@@ -480,7 +480,7 @@ internal static class CommercialActivityEndpoints
         {
             var followup=new Followup {
                 AccountId=activity.AccountId,LeadId=activity.LeadId,
-                OpportunityId=activity.OpportunityId,
+                OpportunityId=activity.OpportunityId,OriginActivityId=activity.Id,
                 AssignedUserId=activity.OwnerUserId,Channel="SYSTEM",
                 Subject=item.Subject.Trim(),DueAt=item.DueAt,
                 ReminderLeadMinutes=activity.ReminderLeadMinutes ?? 60,
@@ -536,7 +536,7 @@ internal static class CommercialActivityEndpoints
         {
             var followup=new Followup {
                 AccountId=activity.AccountId,LeadId=activity.LeadId,
-                OpportunityId=activity.OpportunityId,
+                OpportunityId=activity.OpportunityId,OriginActivityId=activity.Id,
                 AssignedUserId=activity.OwnerUserId,
                 Channel="SYSTEM",Subject=item.Subject.Trim(),
                 DueAt=item.DueAt,ReminderLeadMinutes=activity.ReminderLeadMinutes ?? 60,
