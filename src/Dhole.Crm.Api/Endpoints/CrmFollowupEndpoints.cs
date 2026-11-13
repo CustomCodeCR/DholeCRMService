@@ -41,6 +41,17 @@ internal static class CrmFollowupEndpoints
         CrmAccess.CanManageAgendaAcrossUsers(h)||
         CrmAccess.Scope(h,"crm.account.read-all");
     private static bool Utc(DateTime dt)=>dt.Kind==DateTimeKind.Utc;
+    // El historial legado añade una etiqueta después del identificador del padre.
+    private static bool TryActivityOrigin(string? reason,out Guid activityId)
+    {
+        activityId=Guid.Empty;
+        const string prefix="Acuerdo registrado en actividad comercial ";
+        const string suffix=" (tarea de bitácora)";
+        if(reason is null || !reason.StartsWith(prefix,StringComparison.Ordinal))return false;
+        var encoded=reason[prefix.Length..];
+        if(encoded.EndsWith(suffix,StringComparison.Ordinal)) encoded=encoded[..^suffix.Length];
+        return Guid.TryParse(encoded,out activityId);
+    }
     private static async Task<bool> AccountVisible(Guid id,CrmDbContext db,HttpContext h,CancellationToken ct)=>
         await CrmAccess.CanSeeAccount(db,h,id,ct);
     private static async Task<bool> HasAccess(Followup x,CrmDbContext db,HttpContext h,CancellationToken ct) =>
@@ -139,18 +150,20 @@ internal static class CrmFollowupEndpoints
             .FirstOrDefaultAsync(x=>x.Id==id && x.ArchivedAt==null,ct);
         if(followup is null)return Results.NotFound();
         if(!await HasAccess(followup,db,h,ct))return CrmAccess.Denied();
-        if(!CrmDataEndpoints.HasRead(h,"activity"))return Results.Ok(new{activityId=(Guid?)null});
+        if(!CrmDataEndpoints.HasRead(h,"activity") &&
+           !CrmAccess.Scope(h,"crm.bitacora.read") &&
+           !CrmAccess.Scope(h,"crm.bitacora.read-all"))
+            return Results.Ok(new{activityId=(Guid?)null});
         var origins=await db.FollowupHistories.AsNoTracking()
             .Where(x=>x.FollowupId==id && x.Action=="Created")
             .Select(x=>x.Reason).ToListAsync(ct);
-        Guid? parentId=null;
+        Guid? parentId=followup.OriginActivityId;
         foreach(var origin in origins)
         {
+            if(parentId.HasValue)break;
             if(string.IsNullOrWhiteSpace(origin))continue;
-            const string fromActivity="Acuerdo registrado en actividad comercial ";
             const string fromNote="Acuerdo de observación ";
-            if(origin.StartsWith(fromActivity,StringComparison.Ordinal) &&
-                Guid.TryParse(origin[fromActivity.Length..],out var directId))
+            if(TryActivityOrigin(origin,out var directId))
             {
                 parentId=directId;break;
             }
@@ -170,7 +183,8 @@ internal static class CrmFollowupEndpoints
             (activity.AccountId.HasValue &&
              !await CrmAccess.CanSeeAccount(db,h,activity.AccountId.Value,ct)))
             return Results.Ok(new{activityId=(Guid?)null});
-        return Results.Ok(new{activityId=(Guid?)activity.Id,activitySubject=activity.Subject});
+        return Results.Ok(new{activityId=(Guid?)activity.Id,activitySubject=activity.Subject,
+            isBitacora=activity.Status=="Completed" && !activity.ScheduledStartAt.HasValue});
     }
 
     private static async Task<IResult> Create(FollowupCreateRequest r,CrmDbContext db,HttpContext h,
@@ -237,19 +251,17 @@ internal static class CrmFollowupEndpoints
         HttpContext h,CancellationToken ct)
     {
         if(!CrmAccess.Scope(h,"crm.activity.update"))return false;
-        Guid? origin=null; // master legacy commitments retain origin only in Created history
+        Guid? origin=followup.OriginActivityId;
         if(!origin.HasValue)
         {
             var reasons=await db.FollowupHistories.AsNoTracking()
                 .Where(history=>history.FollowupId==followup.Id && history.Action=="Created")
                 .Select(history=>history.Reason).ToListAsync(ct);
-            const string activityPrefix="Acuerdo registrado en actividad comercial ";
             const string notePrefix="Acuerdo de observación ";
             foreach(var reason in reasons)
             {
                 if(reason is null)continue;
-                if(reason.StartsWith(activityPrefix,StringComparison.Ordinal) &&
-                   Guid.TryParse(reason[activityPrefix.Length..],out var parentId))
+                if(TryActivityOrigin(reason,out var parentId))
                 {origin=parentId;break;}
                 if(reason.StartsWith(notePrefix,StringComparison.Ordinal) &&
                    Guid.TryParse(reason[notePrefix.Length..],out var noteId))

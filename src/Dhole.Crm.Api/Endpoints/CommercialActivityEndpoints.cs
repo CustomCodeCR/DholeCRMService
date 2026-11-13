@@ -266,7 +266,7 @@ internal static class CommercialActivityEndpoints
         {
             var followup = new Followup {
                 AccountId=activity.AccountId,LeadId=activity.LeadId,
-                OpportunityId=activity.OpportunityId,AssignedUserId=owner,
+                OpportunityId=activity.OpportunityId,OriginActivityId=activity.Id,AssignedUserId=owner,
                 Channel="SYSTEM", Subject=item.Subject,DueAt=item.DueAt,
                 ReminderLeadMinutes=r.ReminderLeadMinutes ?? 60,
                 ReminderChannelStrategy="BOTH",CreatedByUserId=current
@@ -275,8 +275,7 @@ internal static class CommercialActivityEndpoints
             db.Followups.Add(followup);
             db.FollowupHistories.Add(new FollowupHistory {
                 FollowupId=followup.Id, ActorUserId=current,
-                Action="Created", Reason="Acuerdo registrado en actividad comercial "+activity.Id+
-                    (activity.ScheduledStartAt.HasValue ? "" : " (tarea de bitácora)"),
+                Action="Created", Reason="Acuerdo registrado en actividad comercial "+activity.Id,
                 NewDueAt=followup.DueAt,CreatedByUserId=current
             });
         }
@@ -428,18 +427,22 @@ internal static class CommercialActivityEndpoints
     // original creation history so historical records need no data migration.
     private static async Task<IResult> Commitments(Guid id,CrmDbContext db,HttpContext h,CancellationToken ct)
     {
-        if(!CanRead(h))return CrmAccess.Denied();
-        var activity=await FindAllowed(id,db,h,ct);
-        if(activity is null)return Results.NotFound();
+        if(!CanReadLog(h))return CrmAccess.Denied();
+        var activity=await FindLogReadable(id,db,h,ct);
+        if(activity is null || !CanReadRecord(h,activity))return Results.NotFound();
         var noteIds=await db.ActivityNotes.AsNoTracking()
             .Where(x=>x.ActivityId==id).Select(x=>x.Id).ToListAsync(ct);
-        var origins=new List<string>{"Acuerdo registrado en actividad comercial "+id};
+        var origins=new List<string>{
+            "Acuerdo registrado en actividad comercial "+id,
+            // Compatibilidad: versiones previas agregaban este sufijo al historial.
+            "Acuerdo registrado en actividad comercial "+id+" (tarea de bitácora)"
+        };
         origins.AddRange(noteIds.Select(noteId=>"Acuerdo de observación "+noteId));
         var followupIds=db.FollowupHistories.AsNoTracking()
             .Where(x=>x.Action=="Created" && x.Reason!=null && origins.Contains(x.Reason))
             .Select(x=>x.FollowupId);
         var commitments=await db.Followups.AsNoTracking()
-            .Where(x=>followupIds.Contains(x.Id) && x.ArchivedAt==null &&
+            .Where(x=>(x.OriginActivityId==id || followupIds.Contains(x.Id)) && x.ArchivedAt==null &&
                 x.AccountId==activity.AccountId && x.LeadId==activity.LeadId &&
                 x.OpportunityId==activity.OpportunityId &&
                 x.AssignedUserId==activity.OwnerUserId)
@@ -477,10 +480,10 @@ internal static class CommercialActivityEndpoints
         {
             var followup=new Followup {
                 AccountId=activity.AccountId,LeadId=activity.LeadId,
-                OpportunityId=activity.OpportunityId,
+                OpportunityId=activity.OpportunityId,OriginActivityId=activity.Id,
                 AssignedUserId=activity.OwnerUserId,Channel="SYSTEM",
                 Subject=item.Subject.Trim(),DueAt=item.DueAt,
-                ReminderLeadMinutes=activity.ReminderLeadMinutes,
+                ReminderLeadMinutes=activity.ReminderLeadMinutes ?? 60,
                 ReminderChannelStrategy="BOTH",CreatedByUserId=actor
             };
             generated.Add(followup);
@@ -533,10 +536,10 @@ internal static class CommercialActivityEndpoints
         {
             var followup=new Followup {
                 AccountId=activity.AccountId,LeadId=activity.LeadId,
-                OpportunityId=activity.OpportunityId,
+                OpportunityId=activity.OpportunityId,OriginActivityId=activity.Id,
                 AssignedUserId=activity.OwnerUserId,
                 Channel="SYSTEM",Subject=item.Subject.Trim(),
-                DueAt=item.DueAt,ReminderLeadMinutes=activity.ReminderLeadMinutes,
+                DueAt=item.DueAt,ReminderLeadMinutes=activity.ReminderLeadMinutes ?? 60,
                 ReminderChannelStrategy="BOTH",CreatedByUserId=actor
             };
             generated.Add(followup);

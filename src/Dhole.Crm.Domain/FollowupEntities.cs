@@ -19,6 +19,8 @@ public sealed class Followup : CrmRecord
     public Guid? LeadId { get; set; }
     public Guid? OpportunityId { get; set; }
     public Guid? PolicyId { get; set; }
+    // La actividad padre es la bitácora o reunión que originó este recordatorio.
+    public Guid? OriginActivityId { get; set; }
     public DateTime? PolicyOccurrenceAt { get; set; }
     public Guid AssignedUserId { get; set; }
     public string Channel { get; set; } = "SYSTEM";

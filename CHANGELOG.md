@@ -1,3 +1,8 @@
+## [1.31.0] - 2026-11-13
+
+- MINOR DH-20261113-CRM-BITACORA-DIRECT-TASKS-PARENT-141: vínculo explícito `OriginActivityId` desde recordatorios hacia bitácoras; backport de migración de FK a master y compatibilidad de lectura del historial anterior con sufijo «(tarea de bitácora)». Las tareas nuevas registran el identificador padre, y las anteriores siguen apareciendo en compromisos y detalle.
+- El endpoint parent-activity distingue bitácoras completadas, mantiene ACL del cliente y permite lectura autorizada de bitácoras. Los avisos de tareas usan 60 minutos por defecto, Outbox/realtime y REST existente. CRM 1.30.0 → 1.31.0, Web 1.51.2 → 1.52.0, ecosistema 1.51.2 → 1.52.0. Validación CI y staging requerida.
+
 ## [1.30.0] - 2026-11-13
 
 - MINOR DH-20261113-CRM-BITACORA-AGREEMENT-TASKS-138: tareas de acuerdos en bitácoras completadas utilizan los Followups existentes con recordatorio anticipado de 60 minutos por defecto y trazabilidad de origen en el historial, sin programar recordatorios para la gestión ya realizada. También aplica a tareas incorporadas posteriormente desde la edición de bitácoras.
