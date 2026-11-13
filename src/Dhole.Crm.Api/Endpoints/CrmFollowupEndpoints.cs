@@ -45,6 +45,17 @@ internal static class CrmFollowupEndpoints
         CrmAccess.Scope(h,"crm.account.read-all") ||
         CrmAccess.IsCalendarAdministrator(h);
     private static bool Utc(DateTime dt)=>dt.Kind==DateTimeKind.Utc;
+    // El historial legado añade una etiqueta después del identificador del padre.
+    private static bool TryActivityOrigin(string? reason,out Guid activityId)
+    {
+        activityId=Guid.Empty;
+        const string prefix="Acuerdo registrado en actividad comercial ";
+        const string suffix=" (tarea de bitácora)";
+        if(reason is null || !reason.StartsWith(prefix,StringComparison.Ordinal))return false;
+        var encoded=reason[prefix.Length..];
+        if(encoded.EndsWith(suffix,StringComparison.Ordinal)) encoded=encoded[..^suffix.Length];
+        return Guid.TryParse(encoded,out activityId);
+    }
     private static async Task<bool> AccountVisible(Guid id,CrmDbContext db,HttpContext h,CancellationToken ct)=>
         await CrmAccess.CanSeeAccount(db,h,id,ct);
     private static async Task<bool> HasAccess(Followup x,CrmDbContext db,HttpContext h,CancellationToken ct) =>
@@ -168,19 +179,21 @@ internal static class CrmFollowupEndpoints
                 policyOccurrenceAt=followup.PolicyOccurrenceAt,policy
             });
         }
-        if(!CrmDataEndpoints.HasRead(h,"activity") && !CrmAccess.IsCalendarAdministrator(h))
+        if(!CrmDataEndpoints.HasRead(h,"activity") &&
+           !CrmAccess.Scope(h,"crm.bitacora.read") &&
+           !CrmAccess.Scope(h,"crm.bitacora.read-all") &&
+           !CrmAccess.IsCalendarAdministrator(h))
             return Results.Ok(new{activityId=(Guid?)null,sourceType="UNAVAILABLE"});
         var origins=await db.FollowupHistories.AsNoTracking()
             .Where(x=>x.FollowupId==id && x.Action=="Created")
             .Select(x=>x.Reason).ToListAsync(ct);
-        Guid? parentId=null;
+        Guid? parentId=followup.OriginActivityId;
         foreach(var origin in origins)
         {
+            if(parentId.HasValue)break;
             if(string.IsNullOrWhiteSpace(origin))continue;
-            const string fromActivity="Acuerdo registrado en actividad comercial ";
             const string fromNote="Acuerdo de observación ";
-            if(origin.StartsWith(fromActivity,StringComparison.Ordinal) &&
-                Guid.TryParse(origin[fromActivity.Length..],out var directId))
+            if(TryActivityOrigin(origin,out var directId))
             {
                 parentId=directId;break;
             }
@@ -201,7 +214,9 @@ internal static class CrmFollowupEndpoints
            (activity.AccountId.HasValue &&
             !await CrmAccess.CanSeeCalendarAccount(db,h,activity.AccountId.Value,ct)))
             return Results.Ok(new{activityId=(Guid?)null});
-        return Results.Ok(new{activityId=(Guid?)activity.Id,activitySubject=activity.Subject,sourceType="ACTIVITY"});
+        return Results.Ok(new{activityId=(Guid?)activity.Id,activitySubject=activity.Subject,
+            isBitacora=activity.Status=="Completed" && !activity.ScheduledStartAt.HasValue,
+            sourceType="ACTIVITY"});
     }
 
     private static async Task<IResult> GetOrigin(Guid id,CrmDbContext db,HttpContext h,CancellationToken ct)
@@ -217,10 +232,8 @@ internal static class CrmFollowupEndpoints
             var reason=await db.FollowupHistories.AsNoTracking()
                 .Where(x=>x.FollowupId==id&&x.Action=="Created")
                 .Select(x=>x.Reason).FirstOrDefaultAsync(ct);
-            const string byActivity="Acuerdo registrado en actividad comercial ";
             const string byNote="Acuerdo de observación ";
-            if(reason?.StartsWith(byActivity,StringComparison.Ordinal)==true &&
-                Guid.TryParse(reason[byActivity.Length..],out var activityId))
+            if(TryActivityOrigin(reason,out var activityId))
                 origin=activityId;
             else if(reason?.StartsWith(byNote,StringComparison.Ordinal)==true &&
                 Guid.TryParse(reason[byNote.Length..],out var noteId))
@@ -330,13 +343,11 @@ internal static class CrmFollowupEndpoints
             var reasons=await db.FollowupHistories.AsNoTracking()
                 .Where(history=>history.FollowupId==followup.Id && history.Action=="Created")
                 .Select(history=>history.Reason).ToListAsync(ct);
-            const string activityPrefix="Acuerdo registrado en actividad comercial ";
             const string notePrefix="Acuerdo de observación ";
             foreach(var reason in reasons)
             {
                 if(reason is null)continue;
-                if(reason.StartsWith(activityPrefix,StringComparison.Ordinal) &&
-                   Guid.TryParse(reason[activityPrefix.Length..],out var parentId))
+                if(TryActivityOrigin(reason,out var parentId))
                 {origin=parentId;break;}
                 if(reason.StartsWith(notePrefix,StringComparison.Ordinal) &&
                    Guid.TryParse(reason[notePrefix.Length..],out var noteId))
