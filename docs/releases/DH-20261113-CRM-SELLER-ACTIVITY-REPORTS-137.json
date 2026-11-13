@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "ecosystem": "Dhole",
+  "releaseId": "DH-20261113-CRM-SELLER-ACTIVITY-REPORTS-137",
+  "releaseType": "MINOR",
+  "ecosystemVersion": "1.50.0",
+  "component": "DholeCRMService",
+  "version": "1.29.0",
+  "previousVersion": "1.28.4",
+  "sourceBranch": "feature/crm-seller-activity-reports-137-master",
+  "components": [
+    {
+      "repository": "CustomCodeCR/DholeCRMService",
+      "version": "1.29.0"
+    },
+    {
+      "repository": "CustomCodeCR/DholeWeb",
+      "version": "1.50.0"
+    },
+    {
+      "repository": "CustomCodeCR/DholeSystem",
+      "version": "1.50.0"
+    }
+  ],
+  "changes": [
+    "Reportes CRM general y por vendedor, con filtros por fechas, tipo, estado y origen",
+    "Incluye actividades, bitácoras y seguimientos; métricas de completadas, pendientes y vencidas",
+    "Exporta planilla Excel, reporte PDF mediante impresión y preserva ACL por usuario/cuenta/prospecto"
+  ],
+  "validation": {
+    "ci": "pending",
+    "staging": "pending",
+    "production": "not-authorized"
+  },
+  "productionDeploymentAuthorized": false
+}

@@ -35,6 +35,7 @@ internal static class CommercialActivityEndpoints
     {
         g.MapGet("/activities",List);
         g.MapGet("/activities/bitacora",ListBitacora);
+        g.MapActivityReports();
         g.MapGet("/activities/{id:guid}",Get);
         g.MapPost("/activities",Create);
         g.MapPatch("/activities/{id:guid}",Patch);
