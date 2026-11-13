@@ -1,3 +1,8 @@
+## [1.28.1] - 2026-11-13
+
+- PATCH DH-20261113-CRM-COMMERCIAL-LOG-FILTER-133: sincronización universal de versionamiento para completar el release de Bitácora CRM (filtros de tipo visibles desde el primer acceso) tras la integración inicial 131, sin nuevas mutaciones en permisos o contratos del servicio.
+- Auth 1.9.0 → 1.9.1; CRM 1.28.0 → 1.28.1; Web 1.48.0 → 1.48.2; ecosistema 1.48.0 → 1.48.2. Producción no autorizada.
+
 ## [1.28.0] - 2026-11-13
 
 - MINOR DH-20261113-CRM-COMMERCIAL-LOG-131: `GET /api/crm/activities/bitacora` consulta exclusivamente actividades completadas con filtros de fecha, tipo, responsable, cliente y prospecto; preserva visibilidad de grupos de cuentas y acceso restringido al responsable.
