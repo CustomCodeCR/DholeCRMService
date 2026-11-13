@@ -1,3 +1,8 @@
+## [1.28.4] - 2026-11-13
+
+- PATCH DH-20261113-CRM-AGENDA-NOTES-FILTERS-136: servicio CRM coordinado con vistas Agenda y Bitácora/Notas de DholeWeb 1.49.0. Mantiene sin cambios los endpoints de actividades/bitacora, ACL por vendedor, filtros por cliente/prospecto y documentos; sin modificaciones a contratos REST, SignalR ni Outbox.
+- CRM 1.28.3 → 1.28.4, Web 1.48.4 → 1.49.0, DholeSystem/ecosistema 1.48.4 → 1.49.0; no autorizado despliegue productivo de este release.
+
 ## [1.28.3] - 2026-11-13
 
 - PATCH DH-20261113-PRODUCTION-DEPLOY-SKIP-135: elimina exclusiones de commits [no-prod] que dejan el despliegue de CRM en Skipped. Push a master ejecuta compilación, migraciones, despliegue y health checks. Sin cambios funcionales REST/SignalR ni modelo de datos.
