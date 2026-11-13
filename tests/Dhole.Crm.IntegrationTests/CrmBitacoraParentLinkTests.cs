@@ -26,7 +26,7 @@ public sealed class CrmBitacoraParentLinkTests
     [TestMethod]
     public void Historic_bitacora_reason_still_resolves_its_parent_guid()
     {
-        var endpoint = Assembly.Load("Dhole.Crm.Api")
+        var endpoint = typeof(Dhole.Crm.Api.Endpoints.ActivityCreateRequest).Assembly
             .GetType("Dhole.Crm.Api.Endpoints.CrmFollowupEndpoints");
         Assert.IsNotNull(endpoint);
         var parser = endpoint.GetMethod("TryActivityOrigin",
