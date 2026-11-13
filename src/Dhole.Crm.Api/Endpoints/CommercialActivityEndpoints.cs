@@ -147,9 +147,8 @@ internal static class CommercialActivityEndpoints
             if(!await CommercialAccess.ContactBelongsTo(db,contactId,r.AccountId,r.OpportunityId,ct))
                 return CommercialAccess.Invalid("Participant contact does not belong to this account");
         var createdAtUtc=DateTime.UtcNow;
-        var occurredAt=r.OccurredAt ??
-            (CommercialRules.IsHistoricalActivity(r.ScheduledEndAt,createdAtUtc)
-                ? r.ScheduledEndAt : null);
+        var occurredAt=CommercialRules.ResolveOccurredAt(
+            r.ScheduledStartAt,r.ScheduledEndAt,r.OccurredAt,createdAtUtc);
         var activity=new Activity {
             AccountId=r.AccountId,LeadId=r.LeadId,OpportunityId=r.OpportunityId,ContactId=r.ContactId,
             OwnerUserId=owner,Type=r.Type,Subject=r.Subject.Trim(),

@@ -1,3 +1,9 @@
+## [1.27.0] - 2026-11-12
+
+- MINOR DH-20261112-CRM-BITACORA-REMINDERS-126: registros comerciales sin fechas programadas se guardan como Completed en el instante de creación, nunca como Scheduled sin inicio ni se encolan avisos.
+- Conserva registros históricos, actividades futuras y sus recordatorios, permisos, notas, adjuntos, REST y SignalR/Outbox sin migración.
+- Prueba para actividades sin agenda; CRM 1.26.0 → 1.27.0, Web 1.46.0 → 1.47.0, ecosistema 1.46.0 → 1.47.0. CI y staging pendientes, producción no autorizada.
+
 ## [1.26.0] - 2026-11-12
 
 - MINOR DH-20261112-CRM-ACTIVITY-TYPES-125: actividades CRM admiten Seguimiento comercial, WhatsApp, Recomendación y Oferta; CALL conserva su código y recordatorio de llamada telefónica. Se mantienen las cinco clasificaciones históricas y el recurso FOLLOWUP separado.
