@@ -122,6 +122,52 @@ internal sealed class CrmReminderDispatcherWorker(IServiceScopeFactory scopes,IC
                     ? relatedActivity?.ScheduledEndAt??relatedActivity?.ScheduledStartAt??relatedFollowup?.DueAt
                     : relatedActivity?.ScheduledStartAt??relatedFollowup?.DueAt;
                 var title=relatedActivity?.Subject??relatedFollowup?.Subject??subject;
+                // Resolve the linked customer/prospect at dispatch time, including
+                // follow-ups connected indirectly through a commercial opportunity.
+                var relationshipType="Cliente/prospecto";
+                var relationshipName="Sin vincular";
+                if (relatedActivity is not null || relatedFollowup is not null)
+                {
+                    var accountId=relatedActivity?.AccountId??relatedFollowup?.AccountId;
+                    var leadId=relatedActivity?.LeadId??relatedFollowup?.LeadId;
+                    var opportunityId=relatedActivity?.OpportunityId??relatedFollowup?.OpportunityId;
+                    if (accountId is null && leadId is null && opportunityId is { } oid)
+                    {
+                        var opportunity=await db.Opportunities.AsNoTracking()
+                            .Where(x=>x.Id==oid && x.ArchivedAt==null)
+                            .Select(x=>new {x.AccountId,x.LeadId}).FirstOrDefaultAsync(ct);
+                        accountId=opportunity?.AccountId;
+                        leadId=opportunity?.LeadId;
+                    }
+                    if (accountId is { } aid)
+                    {
+                        var account=await db.Accounts.AsNoTracking()
+                            .Where(x=>x.Id==aid && x.ArchivedAt==null)
+                            .Select(x=>new {x.DisplayName,x.LegalName}).FirstOrDefaultAsync(ct);
+                        if (account is not null)
+                        {
+                            relationshipType="Cliente";
+                            relationshipName=!string.IsNullOrWhiteSpace(account.DisplayName)
+                                ? account.DisplayName.Trim()
+                                : !string.IsNullOrWhiteSpace(account.LegalName)
+                                    ? account.LegalName.Trim() : "Nombre no disponible";
+                        }
+                    }
+                    if (relationshipName=="Sin vincular" && leadId is { } lid)
+                    {
+                        var lead=await db.Leads.AsNoTracking()
+                            .Where(x=>x.Id==lid && x.ArchivedAt==null)
+                            .Select(x=>new {x.Name,x.CompanyName}).FirstOrDefaultAsync(ct);
+                        if (lead is not null)
+                        {
+                            relationshipType="Prospecto";
+                            relationshipName=!string.IsNullOrWhiteSpace(lead.Name)
+                                ? lead.Name.Trim()
+                                : !string.IsNullOrWhiteSpace(lead.CompanyName)
+                                    ? lead.CompanyName.Trim() : "Nombre no disponible";
+                        }
+                    }
+                }
                 var localDate=dueAt.HasValue?TimeZoneInfo.ConvertTimeFromUtc(dueAt.Value,
                     TimeZoneInfo.FindSystemTimeZoneById("America/Costa_Rica")).ToString("dd/MM/yyyy HH:mm"):null;
                 var ownerId=relatedActivity?.OwnerUserId??relatedFollowup?.AssignedUserId;
@@ -151,6 +197,18 @@ internal sealed class CrmReminderDispatcherWorker(IServiceScopeFactory scopes,IC
                         $"Recordatorio: {title}. {(localDate is null?"":$"Fecha: {localDate} (Costa Rica). ")}" +
                         "Revise su agenda CRM en Dhole."
                 };
+                var route=CrmReminderMessageContent.RouteFor(reminder.EntityType,reminder.EntityId);
+                if (route is not null)
+                {
+                    body=CrmReminderMessageContent.Render(body,reminder.Channel,
+                        relationshipType,relationshipName,route,cfg["Crm:PublicWebBaseUrl"]);
+                    if (reminder.Channel=="Email" && relationshipName!="Sin vincular")
+                    {
+                        var safeName=new string(relationshipName.Where(c=>!char.IsControl(c))
+                            .Take(90).ToArray()).Trim();
+                        if (safeName.Length>0) subject+=$" · {relationshipType}: {safeName}";
+                    }
+                }
                 var payload=new {
                     eventId=reminder.Id.ToString(),
                     idempotencyKey=reminder.Id.ToString("N"),
@@ -160,7 +218,8 @@ internal sealed class CrmReminderDispatcherWorker(IServiceScopeFactory scopes,IC
                     entityId=reminder.EntityId.ToString(),
                     subject,body,maxAttempts=5,
                     payload=new { crmReminderId=reminder.Id, source="DholeCRMService",
-                        prospectName=relatedProspect?.Name, sellerName=prospectSellerName },
+                        prospectName=relatedProspect?.Name, sellerName=prospectSellerName,
+                        route, relationshipType, relationshipName },
                     recipients=new [] {new {userId=reminder.RecipientUserId.ToString(),
                         address=reminder.Channel=="Email"?user.Email??"":"",
                         displayName=user.DisplayName??""}}

@@ -2,9 +2,9 @@
   "schemaVersion": 1,
   "ecosystem": "Dhole",
   "component": "DholeCRMService",
-  "version": "1.25.2",
-  "ecosystemVersion": "1.43.8",
-  "releaseId": "DH-20261112-PRICING-CRM-LEAD-OWNER-120",
+  "version": "1.25.3",
+  "ecosystemVersion": "1.44.3",
+  "releaseId": "DH-20261112-CRM-REMINDER-CONTEXT-124",
   "releaseStatus": "candidate-ci-and-staging-pending",
-  "businessReleaseId": "DH-20261112-PRICING-CRM-LEAD-OWNER-120"
+  "businessReleaseId": "DH-20261112-CRM-REMINDER-CONTEXT-124"
 }
