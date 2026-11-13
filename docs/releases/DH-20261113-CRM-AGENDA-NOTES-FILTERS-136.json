@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "ecosystem": "Dhole",
+  "releaseId": "DH-20261113-CRM-AGENDA-NOTES-FILTERS-136",
+  "releaseType": "PATCH",
+  "ecosystemVersion": "1.49.0",
+  "component": "DholeCRMService",
+  "version": "1.28.4",
+  "sourceBranch": "feature/crm-agenda-client-seller-notes-136-develop",
+  "change": "Synchronize version while reusing existing commercial log REST endpoint and authorized account/lead filtering",
+  "validation": {
+    "ci": "pending",
+    "staging": "pending",
+    "production": "not-authorized"
+  },
+  "productionDeploymentAuthorized": false
+}
