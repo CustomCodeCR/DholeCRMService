@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "ecosystem": "Dhole",
+  "releaseId": "DH-20261112-CRM-BITACORA-PRODUCTION-127",
+  "releaseType": "PATCH",
+  "ecosystemVersion": "1.47.1",
+  "createdAt": "2026-11-12",
+  "sourceBranch": "release/crm-bitacora-prod-20261112-127",
+  "components": [
+    {
+      "repository": "CustomCodeCR/DholeWeb",
+      "component": "DholeWeb",
+      "version": "1.47.1"
+    },
+    {
+      "repository": "CustomCodeCR/DholeCRMService",
+      "component": "DholeCRMService",
+      "version": "1.27.1"
+    }
+  ],
+  "changes": [
+    "Promote the previously staging-validated CRM commercial log and explicit reminder release to production",
+    "Preserve existing REST, SignalR, Redis Streams Outbox/Inbox, permissions and activity semantics",
+    "Authorize production deployment only after coordinated staging validation"
+  ],
+  "validation": {
+    "ci": "pending",
+    "staging": "pending",
+    "production": "authorized"
+  },
+  "productionDeploymentAuthorized": true
+}
