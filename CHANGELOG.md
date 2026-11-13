@@ -1,3 +1,8 @@
+## [1.28.4] - 2026-11-13
+
+- PATCH DH-20261113-CRM-AGENDA-NOTES-FILTERS-136: sincroniza versión del servicio CRM para la separación visual de notas y agenda en DholeWeb. Sin cambios de contrato o modelo de datos: se reutilizan GET /activities/bitacora, filtros por cliente/prospecto, responsable, tipo y fechas y la resolución de identidades autorizadas. Se mantienen permisos, REST, SignalR, Outbox/Inbox y documentos.
+- Coordinado con DholeWeb 1.49.0 y DholeSystem/ecosistema 1.49.0. CI y staging pendientes; producción no autorizada.
+
 ## [1.28.3] - 2026-11-13
 
 - PATCH DH-20261113-PRODUCTION-DEPLOY-SKIP-135: elimina exclusiones de commits [no-prod] que dejan el despliegue de CRM en Skipped. Push a master ejecuta compilación, migraciones, despliegue y health checks. Sin cambios funcionales REST/SignalR ni modelo de datos.
