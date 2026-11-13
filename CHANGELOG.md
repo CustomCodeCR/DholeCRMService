@@ -1,3 +1,8 @@
+## [1.30.0] - 2026-11-13
+
+- MINOR DH-20261113-CRM-BITACORA-AGREEMENT-TASKS-138: tareas de acuerdos en bitácoras completadas utilizan los Followups existentes con recordatorio anticipado de 60 minutos por defecto y trazabilidad de origen en el historial, sin programar recordatorios para la gestión ya realizada. También aplica a tareas incorporadas posteriormente desde la edición de bitácoras.
+- CRM 1.29.0 → 1.30.0; Web 1.50.0 → 1.51.0; sistema/ecosistema 1.50.0 → 1.51.0. Sin migración, contratos compatibles, Outbox/SignalR sin cambio; CI y staging pendientes.
+
 ## [1.29.0] - 2026-11-13
 
 - MINOR DH-20261113-CRM-SELLER-ACTIVITY-REPORTS-137: GET /api/crm/activities/report para informes generales y por vendedor, filtrados por período, responsable, tipo, estado y origen. Incluye registros sin agenda en Bitácora y recordatorios sin doble contabilización, manteniendo ACL por cuenta/prospecto y propietario.
