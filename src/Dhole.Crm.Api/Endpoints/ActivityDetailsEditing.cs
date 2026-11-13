@@ -64,13 +64,16 @@ internal static class ActivityDetailsEditing
             System.Data.IsolationLevel.Serializable, ct);
         var storedNotes = await db.ActivityNotes.Where(x => x.ActivityId == id).ToListAsync(ct);
         var noteById = storedNotes.ToDictionary(x => x.Id);
-        var origins = new List<string> { "Acuerdo registrado en actividad comercial " + id };
+        var origins = new List<string> {
+            "Acuerdo registrado en actividad comercial " + id,
+            "Acuerdo registrado en actividad comercial " + id + " (tarea de bitácora)"
+        };
         origins.AddRange(storedNotes.Select(x => "Acuerdo de observación " + x.Id));
         var linkedIds = await db.FollowupHistories.AsNoTracking()
             .Where(x => x.Action == "Created" && x.Reason != null && origins.Contains(x.Reason))
             .Select(x => x.FollowupId).Distinct().ToListAsync(ct);
         var storedCommitments = await db.Followups
-            .Where(x => linkedIds.Contains(x.Id) && x.ArchivedAt == null &&
+            .Where(x => (x.OriginActivityId == id || linkedIds.Contains(x.Id)) && x.ArchivedAt == null &&
                 x.AccountId == activity.AccountId && x.LeadId == activity.LeadId &&
                 x.OpportunityId == activity.OpportunityId &&
                 x.AssignedUserId == activity.OwnerUserId)
@@ -191,7 +194,8 @@ internal static class ActivityDetailsEditing
             {
                 var followup = new Followup {
                     AccountId = activity.AccountId, LeadId = activity.LeadId,
-                    OpportunityId = activity.OpportunityId, AssignedUserId = activity.OwnerUserId,
+                    OpportunityId = activity.OpportunityId, OriginActivityId = activity.Id,
+                    AssignedUserId = activity.OwnerUserId,
                     Channel = "SYSTEM", Subject = change.Subject.Trim(), DueAt = change.DueAt,
                     ReminderLeadMinutes = activity.ReminderLeadMinutes ?? 60,
                     ReminderChannelStrategy = "BOTH", CreatedByUserId = actor,
@@ -201,8 +205,7 @@ internal static class ActivityDetailsEditing
                 db.Followups.Add(followup);
                 db.FollowupHistories.Add(new FollowupHistory {
                     FollowupId = followup.Id, ActorUserId = actor, CreatedByUserId = actor,
-                    Action = "Created", Reason = "Acuerdo registrado en actividad comercial " + id +
-                        (activity.ScheduledStartAt.HasValue ? "" : " (tarea de bitácora)"),
+                    Action = "Created", Reason = "Acuerdo registrado en actividad comercial " + id,
                     NewDueAt = followup.DueAt
                 });
                 if (!change.Completed)
