@@ -1,7 +1,7 @@
 ## [1.28.1] - 2026-11-13
 
-- PATCH DH-20261113-CRM-COMMERCIAL-LOG-FILTER-132: sincronización de versión de Auth/CRM con el ajuste del filtro de tipos de Bitácora de Web; sin cambios adicionales de permisos o contratos. Mantiene REST, realtime y ACL.
-- Auth 1.9.0 → 1.9.1; CRM 1.28.0 → 1.28.1; Web 1.48.0 → 1.48.1; global 1.48.1. Producción no autorizada.
+- PATCH DH-20261113-CRM-COMMERCIAL-LOG-FILTER-133: sincronización de versión de Auth/CRM con el ajuste del filtro de tipos de Bitácora de Web; sin cambios adicionales de permisos o contratos. Mantiene REST, realtime y ACL.
+- Auth 1.9.0 → 1.9.1; CRM 1.28.0 → 1.28.1; Web 1.48.0 → 1.48.2; global 1.48.2. Producción no autorizada.
 
 ## [1.28.0] - 2026-11-13
 
