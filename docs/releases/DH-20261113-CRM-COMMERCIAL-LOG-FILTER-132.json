@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "ecosystem": "Dhole",
+  "releaseId": "DH-20261113-CRM-COMMERCIAL-LOG-FILTER-132",
+  "previousReleaseId": "DH-20261113-CRM-COMMERCIAL-LOG-131",
+  "releaseType": "PATCH",
+  "ecosystemVersion": "1.48.1",
+  "createdAt": "2026-11-13",
+  "components": [
+    {
+      "repository": "CustomCodeCR/DholeAuthService",
+      "version": "1.9.1"
+    },
+    {
+      "repository": "CustomCodeCR/DholeCRMService",
+      "version": "1.28.1"
+    },
+    {
+      "repository": "CustomCodeCR/DholeWeb",
+      "version": "1.48.1"
+    }
+  ],
+  "changes": [
+    "Make commercial log type filters visible without opening the creation modal",
+    "Keep existing scheduled activity and commercial log drafts separated",
+    "Preserve all commercial activity authorization and REST/SignalR semantics"
+  ],
+  "validation": {
+    "ci": "pending",
+    "staging": "pending",
+    "production": "not-authorized"
+  },
+  "productionDeploymentAuthorized": false
+}
