@@ -12,7 +12,7 @@ public sealed class CrmReminderMessageContentTests
         var route=CrmReminderMessageContent.RouteFor("Activity",id)!;
         var html=CrmReminderMessageContent.Render("Recordatorio: visita comercial",
             "Email","Cliente","Compañía Castro & Hijos",route,"https://dhole.example.test/");
-        Assert.IsTrue(html.Contains("<strong>Cliente:</strong> Compañía Castro &amp; Hijos",StringComparison.Ordinal));
+        Assert.IsTrue(html.Contains("<strong>Cliente:</strong> " + System.Net.WebUtility.HtmlEncode("Compañía Castro & Hijos"),StringComparison.Ordinal));
         Assert.IsTrue(html.Contains($"href=\"https://dhole.example.test/crm/activities/{id:D}\"",StringComparison.Ordinal));
         Assert.IsTrue(html.Contains("Ver seguimiento en Dhole",StringComparison.Ordinal));
     }
