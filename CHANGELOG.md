@@ -1,3 +1,7 @@
+## [1.33.0] - 2026-11-14 (API Manager Route Discovery 143)
+
+- Adds JWT-protected runtime endpoint inventory for API Manager without publishing any service routes.
+
 ## [1.32.0] - 2026-11-14
 
 - MINOR DH-20261114-CRM-CALENDAR-SPANS-142: el calendario CRM muestra barras continuas entre días y bloques de duración real entre horas, y los seguimientos comerciales admiten fecha/hora de inicio y finalización. Los recordatorios mantienen su disparador de vencimiento, permisos y compatibilidad con los registros anteriores.
