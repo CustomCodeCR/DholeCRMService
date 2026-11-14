@@ -12,15 +12,19 @@
     {
       "component": "DholeWeb",
       "from": "1.52.1",
-      "to": "1.53.0"
+      "to": "1.54.0",
+      "version": "1.54.0",
+      "previousVersion": "1.53.0"
     },
     {
       "component": "DholeSystem",
       "from": "1.52.1",
-      "to": "1.53.0"
+      "to": "1.54.0",
+      "version": "1.54.0",
+      "previousVersion": "1.53.0"
     }
   ],
-  "ecosystemVersion": "1.53.0",
+  "ecosystemVersion": "1.54.0",
   "changes": [
     "Followup StartAt optional UTC with DueAt deadline; additive schema migration",
     "Overlap-based CRM agenda API queries preserve historical point reminders",
