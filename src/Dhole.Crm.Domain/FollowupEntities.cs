@@ -27,6 +27,9 @@ public sealed class Followup : CrmRecord
     public string? Subject { get; set; }
     public int? ReminderLeadMinutes { get; set; }
     public string? ReminderChannelStrategy { get; set; }
+    // Null for legacy one-time reminders; otherwise the start of the interval.
+    public DateTime? StartAt { get; set; }
+    // DueAt is the deadline and continues to drive reminder Outbox delivery.
     public DateTime DueAt { get; set; }
     public string Status { get; set; } = "Pending";
     public DateTime? CompletedAt { get; set; }

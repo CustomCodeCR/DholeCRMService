@@ -105,8 +105,17 @@ internal static class CommercialActivityEndpoints
         if(!string.IsNullOrWhiteSpace(type))query=query.Where(x=>x.Type==type);
         if(!string.IsNullOrWhiteSpace(status))query=query.Where(x=>x.Status==status);
         if(agendaOnly==true)query=query.Where(x=>x.Status!="Completed" && x.Status!="Cancelled");
-        if(from.HasValue)query=query.Where(x=>(x.ScheduledStartAt??x.OccurredAt??x.CreatedAt)>=from.Value);
-        if(to.HasValue)query=query.Where(x=>(x.ScheduledStartAt??x.OccurredAt??x.CreatedAt)<to.Value);
+        if(agendaOnly==true)
+        {
+            // Include activities started in the previous month whose schedule still overlaps.
+            if(from.HasValue)query=query.Where(x=>(x.ScheduledEndAt??x.ScheduledStartAt??x.OccurredAt??x.CreatedAt)>=from.Value);
+            if(to.HasValue)query=query.Where(x=>(x.ScheduledStartAt??x.OccurredAt??x.CreatedAt)<to.Value);
+        }
+        else
+        {
+            if(from.HasValue)query=query.Where(x=>(x.ScheduledStartAt??x.OccurredAt??x.CreatedAt)>=from.Value);
+            if(to.HasValue)query=query.Where(x=>(x.ScheduledStartAt??x.OccurredAt??x.CreatedAt)<to.Value);
+        }
         var n=Math.Max(1,page??1);var size=Math.Clamp(pageSize??25,1,100);
         var total=await query.CountAsync(ct);
         return Results.Ok(new {total,page=n,pageSize=size,items=await query

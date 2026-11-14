@@ -8,8 +8,9 @@ public sealed record FollowupPolicyRequest(long? ExpectedVersion,bool Enabled,Gu
     int FrequencyDays,DateTime NextDueAt,string TimezoneId,int ReminderLeadMinutes,DateTime? PausedUntil);
 public sealed record FollowupCreateRequest(Guid? AccountId,Guid? LeadId,Guid? OpportunityId,
     Guid AssignedUserId,string Channel,DateTime DueAt,
-    string? Subject = null,int? ReminderLeadMinutes = null,string? ReminderChannelStrategy = null);
-public sealed record FollowupRescheduleRequest(long ExpectedVersion,DateTime DueAt,string Reason);
+    string? Subject = null,int? ReminderLeadMinutes = null,string? ReminderChannelStrategy = null,
+    DateTime? StartAt = null);
+public sealed record FollowupRescheduleRequest(long ExpectedVersion,DateTime DueAt,string Reason,DateTime? StartAt = null);
 public sealed record FollowupCompleteRequest(long ExpectedVersion,string Outcome,DateTime? NextFollowupAt);
 public sealed record FollowupCancelRequest(long ExpectedVersion,string Reason);
 public sealed record FollowupReopenRequest(long ExpectedVersion,string Reason);
@@ -142,7 +143,7 @@ internal static class CrmFollowupEndpoints
         if(leadId.HasValue)query=query.Where(x=>x.LeadId==leadId);
         if(!string.IsNullOrWhiteSpace(status))query=query.Where(x=>x.Status==status);
         if(from.HasValue)query=query.Where(x=>x.DueAt>=from.Value);
-        if(to.HasValue)query=query.Where(x=>x.DueAt<to.Value);
+        if(to.HasValue)query=query.Where(x=>(x.StartAt??x.DueAt)<to.Value);
         var n=Math.Max(1,page??1);var s=Math.Clamp(pageSize??25,1,100);var total=await query.CountAsync(ct);
         return Results.Ok(new{total,page=n,pageSize=s,items=await query.OrderBy(x=>x.DueAt)
             .ThenBy(x=>x.Id).Skip((n-1)*s).Take(s).ToListAsync(ct)});
@@ -255,6 +256,7 @@ internal static class CrmFollowupEndpoints
             !(CrmAccess.Scope(h,"crm.activity.create") && CrmAccess.CanManageAgendaAcrossUsers(h)))
             return CrmAccess.Denied();
         if(!Utc(r.DueAt)||r.DueAt<DateTime.UtcNow.AddDays(-1)||
+             (r.StartAt.HasValue && (!Utc(r.StartAt.Value) || r.StartAt.Value>=r.DueAt))||
             r.Subject?.Length>250||r.ReminderLeadMinutes is < 0 or > 10080||
             (r.ReminderChannelStrategy is not null && r.ReminderChannelStrategy is not ("BOTH" or "EMAIL" or "SYSTEM"))||
             r.Channel is not ("EMAIL" or "SYSTEM" or "PHONE" or "VISIT")||
@@ -270,7 +272,7 @@ internal static class CrmFollowupEndpoints
         if(!CrmAccess.CanOwnAgenda(activeAssignee))
             return CrmDataEndpoints.Bad("Assignee requires crm.activity.read, crm.activity.read-all or crm.followup.manage");
         var x=new Followup {AccountId=r.AccountId,LeadId=r.LeadId,OpportunityId=r.OpportunityId,
-            AssignedUserId=r.AssignedUserId,Channel=r.Channel,DueAt=r.DueAt,
+            AssignedUserId=r.AssignedUserId,Channel=r.Channel,StartAt=r.StartAt,DueAt=r.DueAt,
             Subject=r.Subject?.Trim(),ReminderLeadMinutes=r.ReminderLeadMinutes,
             ReminderChannelStrategy=r.ReminderChannelStrategy,
             CreatedByUserId=CrmAccess.UserId(h)};
@@ -317,11 +319,14 @@ internal static class CrmFollowupEndpoints
         if(!await HasAccess(x,db,h,ct))return CrmAccess.Denied();
         if(x.RowVersion!=r.ExpectedVersion)return CrmDataEndpoints.Conflict("Concurrent followup update");
         if(x.Status is not ("Pending" or "Overdue")||!Utc(r.DueAt)||
-            r.DueAt<DateTime.UtcNow||string.IsNullOrWhiteSpace(r.Reason)||r.Reason.Length>2000)
+            r.DueAt<DateTime.UtcNow||
+             (r.StartAt.HasValue && (!Utc(r.StartAt.Value) || r.StartAt.Value>=r.DueAt))||
+             string.IsNullOrWhiteSpace(r.Reason)||r.Reason.Length>2000)
             return CrmDataEndpoints.Bad("Invalid reschedule");
         db.FollowupHistories.Add(new FollowupHistory {FollowupId=id,ActorUserId=CrmAccess.UserId(h),
             Action="Rescheduled",Reason=r.Reason,PreviousDueAt=x.DueAt,NewDueAt=r.DueAt,
             CreatedByUserId=CrmAccess.UserId(h)});
+        x.StartAt=r.StartAt ?? (x.StartAt<r.DueAt ? x.StartAt : null);
         x.DueAt=r.DueAt;x.Status="Pending";x.RowVersion++;
         x.UpdatedByUserId=CrmAccess.UserId(h);x.UpdatedAt=DateTime.UtcNow;
         await CrmReminderEnqueue.QueueAsync(db,"Followup",x.Id,x.AccountId,
