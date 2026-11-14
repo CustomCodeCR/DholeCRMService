@@ -1,8 +1,7 @@
 ## [1.32.0] - 2026-11-14
 
-- MINOR DH-20261114-CRM-CALENDAR-SPANS-142: permite definir `StartAt` (inicio) y `DueAt` (fecha límite/finalización) en seguimientos comerciales. Mantiene el envío de recordatorios basado en `DueAt`, Outbox e idempotencia; los registros anteriores siguen interpretándose como eventos puntuales.
-- Los filtros de agenda devuelven registros cuyo intervalo se superpone al período solicitado, aunque el inicio ocurra antes de la ventana visible. Migración aditiva `20261114140000_AddFollowupStartAt`, sin interrumpir contratos REST anteriores.
-- CRM 1.31.0 → 1.32.0; ecosistema 1.52.1 → 1.53.0. Validación CI, compilación y staging pendientes antes de promoción a master.
+- MINOR DH-20261114-CRM-CALENDAR-SPANS-142: el calendario CRM muestra barras continuas entre días y bloques de duración real entre horas, y los seguimientos comerciales admiten fecha/hora de inicio y finalización. Los recordatorios mantienen su disparador de vencimiento, permisos y compatibilidad con los registros anteriores.
+- Incremento coordinado desde Web 1.53.0 → 1.54.0, CRM 1.31.0 → 1.32.0 y DholeSystem/ecosistema 1.53.0 → 1.54.0. Migración aditiva StartAt; validación CI y staging antes de master.
 
 ## [1.31.0] - 2026-11-13
 
