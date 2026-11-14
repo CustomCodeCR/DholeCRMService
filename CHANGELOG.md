@@ -1,3 +1,9 @@
+## [1.32.0] - 2026-11-14
+
+- MINOR DH-20261114-CRM-CALENDAR-SPANS-142: permite definir `StartAt` (inicio) y `DueAt` (fecha límite/finalización) en seguimientos comerciales. Mantiene el envío de recordatorios basado en `DueAt`, Outbox e idempotencia; los registros anteriores siguen interpretándose como eventos puntuales.
+- Los filtros de agenda devuelven registros cuyo intervalo se superpone al período solicitado, aunque el inicio ocurra antes de la ventana visible. Migración aditiva `20261114140000_AddFollowupStartAt`, sin interrumpir contratos REST anteriores.
+- CRM 1.31.0 → 1.32.0; ecosistema 1.52.1 → 1.53.0. Validación CI, compilación y staging pendientes antes de promoción a master.
+
 ## [1.31.0] - 2026-11-13
 
 - MINOR DH-20261113-CRM-BITACORA-DIRECT-TASKS-PARENT-141: vínculo explícito `OriginActivityId` desde recordatorios hacia bitácoras; backport de migración de FK a master y compatibilidad de lectura del historial anterior con sufijo «(tarea de bitácora)». Las tareas nuevas registran el identificador padre, y las anteriores siguen apareciendo en compromisos y detalle.
