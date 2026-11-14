@@ -1,3 +1,8 @@
+## [1.33.0] - 2026-11-14 (API Manager route discovery)
+
+- MINOR: inventario interno de rutas REST reales protegido por integrations.thirdparty.manage; no expone endpoints ni privilegios a terceros.
+- Release global Dhole 1.56.0; conserva endpoints CRM y SignalR actuales.
+
 ## [1.32.0] - 2026-11-14
 
 - MINOR DH-20261114-CRM-CALENDAR-SPANS-142: el calendario CRM muestra barras continuas entre días y bloques de duración real entre horas, y los seguimientos comerciales admiten fecha/hora de inicio y finalización. Los recordatorios mantienen su disparador de vencimiento, permisos y compatibilidad con los registros anteriores.
