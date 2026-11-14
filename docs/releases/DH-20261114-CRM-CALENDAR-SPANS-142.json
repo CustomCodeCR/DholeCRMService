@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "id": "DH-20261114-CRM-CALENDAR-SPANS-142",
+  "date": "2026-11-14",
+  "status": "candidate",
+  "components": [
+    {
+      "component": "DholeCRMService",
+      "from": "1.31.0",
+      "to": "1.32.0"
+    },
+    {
+      "component": "DholeWeb",
+      "from": "1.52.1",
+      "to": "1.53.0"
+    },
+    {
+      "component": "DholeSystem",
+      "from": "1.52.1",
+      "to": "1.53.0"
+    }
+  ],
+  "ecosystemVersion": "1.53.0",
+  "changes": [
+    "Followup StartAt optional UTC with DueAt deadline; additive schema migration",
+    "Overlap-based CRM agenda API queries preserve historical point reminders",
+    "Compatible REST, reminder Outbox and realtime events"
+  ],
+  "validation": {
+    "ci": "pending",
+    "staging": "pending",
+    "production": "not-authorized"
+  }
+}
