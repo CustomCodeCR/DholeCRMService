@@ -27,6 +27,9 @@ public sealed class Followup : CrmRecord
     public string? Subject { get; set; }
     public int? ReminderLeadMinutes { get; set; }
     public string? ReminderChannelStrategy { get; set; }
+    // Inclusive start of the scheduled interval. Legacy followups remain point-in-time at DueAt.
+    public DateTime? StartAt { get; set; }
+    // DueAt remains the deadline and reminder trigger, not the visual start.
     public DateTime DueAt { get; set; }
     public string Status { get; set; } = "Pending";
     public DateTime? CompletedAt { get; set; }
