@@ -1,3 +1,8 @@
+## [1.33.0] - 2026-11-14 (API Manager runtime route inventory)
+
+- MINOR: inventario administrativo autenticado de endpoints HTTP de CRM. Preserva protección REST y SignalR.
+- Release global 1.56.0.
+
 ## [1.32.0] - 2026-11-14
 
 - MINOR DH-20261114-CRM-CALENDAR-SPANS-142: el calendario CRM muestra barras continuas entre días y bloques de duración real entre horas, y los seguimientos comerciales admiten fecha/hora de inicio y finalización. Los recordatorios mantienen su disparador de vencimiento, permisos y compatibilidad con los registros anteriores.
