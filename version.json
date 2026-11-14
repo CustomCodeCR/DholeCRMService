@@ -2,9 +2,9 @@
   "schemaVersion": 1,
   "ecosystem": "Dhole",
   "component": "DholeCRMService",
-  "version": "1.31.0",
-  "ecosystemVersion": "1.52.0",
-  "releaseId": "DH-20261113-CRM-BITACORA-DIRECT-TASKS-PARENT-141",
+  "version": "1.32.0",
+  "ecosystemVersion": "1.53.0",
+  "releaseId": "DH-20261114-CRM-CALENDAR-SPANS-142",
   "releaseStatus": "candidate-ci-and-staging-pending",
-  "businessReleaseId": "DH-20261113-CRM-BITACORA-DIRECT-TASKS-PARENT-141"
+  "businessReleaseId": "DH-20261114-CRM-CALENDAR-SPANS-142"
 }
