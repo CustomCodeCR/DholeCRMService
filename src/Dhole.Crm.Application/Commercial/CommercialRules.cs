@@ -17,6 +17,21 @@ public static class CommercialRules
         occurredUtc ?? (!startUtc.HasValue && !endUtc.HasValue ? nowUtc :
             IsHistoricalActivity(endUtc,nowUtc) ? endUtc : null);
 
+    // A blank completion time means the server records the actual UTC instant.
+    // Explicit dates still must be UTC and must never be future-dated.
+    public static bool ValidActivityCompletionTime(DateTime? occurredUtc, DateTime nowUtc) =>
+        nowUtc.Kind == DateTimeKind.Utc &&
+        (!occurredUtc.HasValue ||
+         (occurredUtc.Value.Kind == DateTimeKind.Utc && occurredUtc.Value <= nowUtc));
+
+    // Legacy web clients send the status label "Completed" rather than the
+    // canonical Config code. Normalize only this documented alias.
+    public static string NormalizeActivityOutcome(string? outcome) {
+        var code = outcome?.Trim() ?? string.Empty;
+        return string.Equals(code, "Completed", StringComparison.OrdinalIgnoreCase)
+            ? "COMPLETED" : code;
+    }
+
     public static bool IsCommercialLog(string status) =>
         string.Equals(status,"Completed",StringComparison.Ordinal);
 
