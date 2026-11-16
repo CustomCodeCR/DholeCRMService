@@ -20,7 +20,7 @@ public sealed record ActivityPatchRequest(long ExpectedVersion,string Subject,st
     int? RepeatEveryDays = null,int? ReminderLeadMinutes = null,int? ReminderRepeatMinutes = null,
     decimal? LocationLatitude = null, decimal? LocationLongitude = null,
     bool UpdateVisitCoordinates = false);
-public sealed record ActivityCompleteRequest(long ExpectedVersion,string Outcome,DateTime OccurredAt,string? Note);
+public sealed record ActivityCompleteRequest(long ExpectedVersion,string Outcome,DateTime? OccurredAt,string? Note);
 public sealed record ActivityRescheduleRequest(long ExpectedVersion,DateTime ScheduledStartAt,
     DateTime? ScheduledEndAt,string Reason);
 public sealed record ActivityCancelRequest(long ExpectedVersion,string Reason);
@@ -366,10 +366,14 @@ internal static class CommercialActivityEndpoints
         var a=await FindAllowed(id,db,h,ct);if(a is null)return Results.NotFound();
         if(a.RowVersion!=r.ExpectedVersion)return CommercialAccess.Conflict("Stale activity version");
         if(a.Status!="Scheduled")return CommercialAccess.Conflict("Activity already finished or cancelled");
-        if(r.OccurredAt.Kind!=DateTimeKind.Utc||r.OccurredAt>DateTime.UtcNow||
-            string.IsNullOrWhiteSpace(r.Outcome)||!await config.IsActiveCodeAsync("crm-activity-outcomes",r.Outcome,ct))
-            return CommercialAccess.Invalid("Invalid occurrence timestamp or outcome");
-        a.OccurredAt=r.OccurredAt;a.Outcome=r.Outcome;a.Status="Completed";
+        var serverNowUtc = DateTime.UtcNow;
+        if(!CommercialRules.ValidActivityCompletionTime(r.OccurredAt,serverNowUtc))
+            return CommercialAccess.Invalid("Actual completion time must be UTC and cannot be in the future");
+        var outcome = CommercialRules.NormalizeActivityOutcome(r.Outcome);
+        if(string.IsNullOrWhiteSpace(outcome) ||
+            !await config.IsActiveCodeAsync("crm-activity-outcomes",outcome,ct))
+            return CommercialAccess.Invalid("Activity completion outcome is not active in Config");
+        a.OccurredAt=r.OccurredAt??serverNowUtc;a.Outcome=outcome;a.Status="Completed";
         a.RowVersion++;a.UpdatedAt=DateTime.UtcNow;a.UpdatedByUserId=CrmAccess.UserId(h);
         if(!string.IsNullOrWhiteSpace(r.Note))db.ActivityNotes.Add(new ActivityNote {
             ActivityId=id,AuthorUserId=CrmAccess.UserId(h),CreatedByUserId=CrmAccess.UserId(h),

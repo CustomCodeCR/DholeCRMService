@@ -2,9 +2,9 @@
   "schemaVersion": 1,
   "ecosystem": "Dhole",
   "component": "DholeCRMService",
-  "version": "1.34.0",
-  "ecosystemVersion": "1.63.0",
-  "releaseId": "DH-20261116-API-ROUTES-DEFAULTS-165",
+  "version": "1.34.1",
+  "ecosystemVersion": "1.63.10",
+  "releaseId": "DH-20261116-CRM-ACTIVITY-COMPLETE-175",
   "releaseStatus": "candidate-ci-and-staging-pending",
-  "businessReleaseId": "DH-20261116-API-ROUTES-DEFAULTS-165"
+  "businessReleaseId": "DH-20261116-CRM-ACTIVITY-COMPLETE-175"
 }
