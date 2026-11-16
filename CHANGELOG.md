@@ -1,3 +1,8 @@
+## [1.34.1] - 2026-11-16 (Completar actividades con hora del servidor)
+
+- PATCH DH-20261116-CRM-ACTIVITY-COMPLETE-175: POST /api/crm/activities/{id}/complete acepta occurredAt opcional y registra la hora UTC del servidor cuando viene sin fecha; sigue rechazando instantes futuros o sin UTC. Normaliza el alias heredado Completed a COMPLETED sin saltarse la verificación del resultado activo en Config y devuelve errores diferenciados.
+- Pruebas unitarias de timestamp ausente, pasado, futuro, Kind local y normalización de resultados. CRM 1.34.0 → 1.34.1, Web 1.62.7 → 1.62.8, DholeSystem/ecosistema 1.63.9 → 1.63.10. Compatibilidad REST, ACL, Outbox y SignalR conservadas; CI y staging requeridos antes de producción.
+
 ## [1.34.0] - 2026-11-16 (Inventario protegido para API Manager)
 
 - MINOR DH-20261116-API-ROUTES-DEFAULTS-165: expone catálogo runtime de rutas del servicio por JWT con scope integrations.thirdparty.manage; no habilita operaciones externas ni requiere Swagger en producción.
