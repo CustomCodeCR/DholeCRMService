@@ -1,3 +1,8 @@
+## [1.34.0] - 2026-11-16 (Inventario protegido para API Manager)
+
+- MINOR DH-20261116-API-ROUTES-DEFAULTS-165: expone catálogo runtime de rutas del servicio por JWT con scope integrations.thirdparty.manage; no habilita operaciones externas ni requiere Swagger en producción.
+- Conserva autorización existente y oculta rutas internas, credenciales y health.
+
 ## [1.33.0] - 2026-11-14 (API Manager route discovery)
 
 - MINOR: inventario interno de rutas REST reales protegido por integrations.thirdparty.manage; no expone endpoints ni privilegios a terceros.
