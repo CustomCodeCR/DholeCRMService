@@ -1,3 +1,7 @@
+## [1.34.0] - 2026-11-16 (Inventario HTTP protegido en producción)
+
+- MINOR DH-20261116-API-ROUTES-DEFAULTS-165: habilita inventario runtime protegido por integrations.thirdparty.manage, compatible con Gateway y sin dependencia de Swagger de desarrollo. No publica operaciones de usuarios ni cambia scopes de negocio.
+
 ## [1.32.0] - 2026-11-14
 
 - MINOR DH-20261114-CRM-CALENDAR-SPANS-142: el calendario CRM muestra barras continuas entre días y bloques de duración real entre horas, y los seguimientos comerciales admiten fecha/hora de inicio y finalización. Los recordatorios mantienen su disparador de vencimiento, permisos y compatibilidad con los registros anteriores.
