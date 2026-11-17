@@ -10,7 +10,8 @@ namespace Dhole.Crm.Api.Endpoints;
 internal static class HaciendaTaxpayerEndpoints
 {
     private const string Endpoint = "https://api.hacienda.go.cr/fe/ae";
-    private static readonly SemaphoreSlim FetchGate = new(1, 1);
+    // Bound outbound Hacienda concurrency without blocking every taxpayer behind a single slow request.
+    private static readonly SemaphoreSlim FetchGate = new(4, 4);
 
     public static RouteGroupBuilder MapHaciendaTaxpayers(this RouteGroupBuilder group)
     {
@@ -46,7 +47,10 @@ internal static class HaciendaTaxpayerEndpoints
         if (cache.TryGetValue(key, out HaciendaTaxpayer? previous) && previous is not null)
             return Results.Ok(previous);
 
-        await FetchGate.WaitAsync(ct);
+        // A saturated upstream should return quickly instead of exhausting Gateway's timeout.
+        if (!await FetchGate.WaitAsync(TimeSpan.FromSeconds(4), ct))
+            return Results.Problem(statusCode: 503,
+                title: "La consulta de Hacienda tiene demasiadas solicitudes. Volvé a intentar.");
         try
         {
             // Double-check under the gate to avoid bursts of repeated queries.
