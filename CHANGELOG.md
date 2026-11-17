@@ -1,3 +1,9 @@
+## [1.34.2] - 2026-11-17 (CRM: concurrencia Hacienda y recuperación ante saturación)
+
+- PATCH DH-20261117-CRM-HACIENDA-NETWORK-192: evita el cuello de botella de una única consulta Hacienda para todos los contribuyentes. Permite hasta cuatro consultas salientes concurrentes y limita la espera en cola a cuatro segundos, respondiendo 503 controlado ante saturación en vez de agotar el timeout del Gateway.
+- Conserva cache de 12 horas, validación del país y del JWT/scope, contrato REST, mensajes sin datos fiscales en errores, Outbox/SignalR y guardado manual. En Web se reintenta una sola falla de transporte, sin repetir respuestas HTTP.
+- DholeCRMService 1.33.1 → 1.34.2; Web 1.67.0 → 1.67.1; ecosistema 1.70.1 → 1.70.2. CI y staging antes de master y producción.
+
 ## [1.33.1] - 2026-11-16 (Completar actividades con hora del servidor)
 
 - PATCH DH-20261116-CRM-ACTIVITY-COMPLETE-175: POST /api/crm/activities/{id}/complete acepta occurredAt opcional y registra la hora UTC del servidor cuando viene sin fecha; sigue rechazando instantes futuros o sin UTC. Normaliza el alias heredado Completed a COMPLETED sin saltarse la verificación del resultado activo en Config y devuelve errores diferenciados.
