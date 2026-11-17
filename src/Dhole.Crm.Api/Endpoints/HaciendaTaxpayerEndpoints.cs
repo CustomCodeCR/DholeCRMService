@@ -16,8 +16,18 @@ internal static class HaciendaTaxpayerEndpoints
     public static RouteGroupBuilder MapHaciendaTaxpayers(this RouteGroupBuilder group)
     {
         group.MapGet("/hacienda/lookup", Lookup);
+        // Same permission and validation as GET. POST keeps the tax ID out of
+        // URLs and reverse-proxy access logs; it is a read-only operation.
+        group.MapPost("/hacienda/lookup",
+            (HttpContext context, HaciendaLookupInput input,
+                IConfigReferenceService config, IHttpClientFactory clients,
+                IMemoryCache cache, CancellationToken ct) =>
+                Lookup(context, input.Identificacion ?? string.Empty, input.CountryId,
+                    config, clients, cache, ct));
         return group;
     }
+
+    internal sealed record HaciendaLookupInput(string? Identificacion, Guid CountryId);
 
     private static async Task<IResult> Lookup(
         HttpContext context, string identificacion, Guid countryId,
@@ -31,7 +41,7 @@ internal static class HaciendaTaxpayerEndpoints
 
         if (countryId == Guid.Empty) return Results.BadRequest(new { message = "Seleccione el país." });
         // Normalize separators, but never parse the identification as a number (leading zeros matter).
-        var taxId = Regex.Replace(identificacion.Trim(), @"[\s\-]", "");
+        var taxId = Regex.Replace((identificacion ?? string.Empty).Trim(), @"[\s\-]", "");
         if (!Regex.IsMatch(taxId, @"^\d{9,12}$"))
             return Results.BadRequest(new { message = "La identificación debe contener de 9 a 12 dígitos." });
 

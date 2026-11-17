@@ -1,3 +1,8 @@
+## [1.35.0] - 2026-11-17 (CRM: consulta fiscal segura mediante POST)
+
+- MINOR DH-20261117-HACIENDA-POST-197: agrega POST /api/crm/hacienda/lookup con JSON autenticado y los mismos scopes, cache, validación de país, límites de concurrencia y respuesta que el GET anterior. Evita exponer identificaciones en URLs y previene rechazos del proxy vinculados a parámetros fiscales.
+- GET permanece para compatibilidad; no modifica datos, Outbox, SignalR, tablas ni APIs existentes. CRM 1.34.2 → 1.35.0; ecosistema 1.70.6 → 1.71.0. CI y prueba real en staging pendientes; producción no autorizada.
+
 ## [1.34.2] - 2026-11-17 (CRM: concurrencia Hacienda y recuperación ante saturación)
 
 - PATCH DH-20261117-CRM-HACIENDA-NETWORK-192: evita el cuello de botella de una única consulta Hacienda para todos los contribuyentes. Permite hasta cuatro consultas salientes concurrentes y limita la espera en cola a cuatro segundos, respondiendo 503 controlado ante saturación en vez de agotar el timeout del Gateway.
