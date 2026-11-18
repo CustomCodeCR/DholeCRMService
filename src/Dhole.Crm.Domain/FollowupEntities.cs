@@ -36,6 +36,13 @@ public sealed class Followup : CrmRecord
     public string? Outcome { get; set; }
     public DateTime? NextFollowupAt { get; set; }
 }
+// Multiple active Auth users may share one follow-up while retaining a single primary assignee.
+public sealed class FollowupInvitee : CrmRecord
+{
+    public Guid FollowupId { get; set; }
+    public Guid UserId { get; set; }
+}
+
 public sealed class FollowupHistory : CrmRecord
 {
     public Guid FollowupId { get; set; }
