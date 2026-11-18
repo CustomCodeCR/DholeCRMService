@@ -88,6 +88,18 @@ internal sealed class CrmReminderDispatcherWorker(IServiceScopeFactory scopes,IC
                     x.RowVersion==reminder.TargetVersion&&x.Status=="Active",ct),
                 _=>false
             };
+            // Revoked invitations must not leak customer details via queued Email/System jobs.
+            if(active && reminder.DedupeKey.Contains(":invitee:",StringComparison.Ordinal))
+            {
+                active=reminder.EntityType switch
+                {
+                    "Activity"=>await db.ActivityParticipants.AsNoTracking().AnyAsync(p=>
+                        p.ActivityId==reminder.EntityId && p.UserId==reminder.RecipientUserId,ct),
+                    "Followup"=>await db.FollowupInvitees.AsNoTracking().AnyAsync(p=>
+                        p.FollowupId==reminder.EntityId && p.UserId==reminder.RecipientUserId,ct),
+                    _=>false
+                };
+            }
             if(!active){reminder.Status="Cancelled";msg.Status="Cancelled";continue;}
             try
             {
