@@ -5,6 +5,28 @@ namespace Dhole.Crm.Api.Endpoints;
 // Persist advance and exact-start reminder intent together with the activity.
 internal static class CrmReminderEnqueue
 {
+    // Invitation notifications are immediate, durable, idempotent per membership ID.
+    // They reuse the same NotificationService + SignalR pipeline as CRM reminders.
+    internal static async Task QueueInvitationAsync(CrmDbContext db,string entityType,
+        Guid entityId,Guid membershipId,Guid recipientUserId,long targetVersion,
+        Guid actorUserId,CancellationToken ct)
+    {
+        var key=$"crm-invite:{entityType}:{entityId:N}:{membershipId:N}:invitee:{recipientUserId:N}";
+        if(db.Reminders.Local.Any(x=>x.DedupeKey==key) ||
+           await db.Reminders.AsNoTracking().AnyAsync(x=>x.DedupeKey==key,ct))return;
+        var now=DateTime.UtcNow;
+        var reminder=new CrmReminder {
+            EntityType=entityType,EntityId=entityId,RecipientUserId=recipientUserId,
+            Channel="System",NotificationType=entityType=="Activity"
+                ?"crm.activity.invited.v1":"crm.followup.invited.v1",
+            DedupeKey=key,TargetVersion=targetVersion,FireAt=now,
+            CreatedByUserId=actorUserId
+        };
+        db.Reminders.Add(reminder);
+        db.OutboxMessages.Add(new CrmOutboxMessage {
+            Id=reminder.Id,ReminderId=reminder.Id,NextAttemptAt=now
+        });
+    }
     internal static async Task QueueAsync(CrmDbContext db, string entityType, Guid entityId,
         Guid? accountId, Guid recipientUserId, long targetVersion, DateTime dueAt,
         int? leadMinutes, string? channelStrategy, string notificationType,
