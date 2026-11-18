@@ -409,7 +409,9 @@ internal static class CrmFollowupEndpoints
     private static async Task<IResult> Reschedule(Guid id,FollowupRescheduleRequest r,CrmDbContext db,
         HttpContext h,CancellationToken ct)
     {
-        if(!Manage(h)&&!Tasks(h))return CrmAccess.Denied();
+        if(!Manage(h)&&!Tasks(h) &&
+           !(CrmAccess.Scope(h,"crm.activity.update") && await IsInvitee(id,db,h,ct)))
+            return CrmAccess.Denied();
         var x=await db.Followups.FindAsync([id],ct);if(x is null)return Results.NotFound();
         if(!await HasAccess(x,db,h,ct))return CrmAccess.Denied();
         if(x.RowVersion!=r.ExpectedVersion)return CrmDataEndpoints.Conflict("Concurrent followup update");
@@ -477,7 +479,10 @@ internal static class CrmFollowupEndpoints
         {
             if(!await HasAccess(x,db,h,ct))return CrmAccess.Denied();
         }
-        else if(!await CanCompleteActivityCommitment(x,db,h,ct))return CrmAccess.Denied();
+        else if(!(CrmAccess.Scope(h,"crm.activity.update") &&
+                 await IsInvitee(id,db,h,ct)) &&
+                !await CanCompleteActivityCommitment(x,db,h,ct))
+            return CrmAccess.Denied();
         if(x.RowVersion!=r.ExpectedVersion)return CrmDataEndpoints.Conflict("Concurrent followup update");
         if(x.Status is not ("Pending" or "Overdue")||string.IsNullOrWhiteSpace(r.Outcome)||
             r.Outcome.Length>2000||(r.NextFollowupAt is not null&&!Utc(r.NextFollowupAt.Value)))
