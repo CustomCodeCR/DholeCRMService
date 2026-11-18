@@ -83,6 +83,9 @@ public sealed partial class CrmDbContext(DbContextOptions<CrmDbContext> options)
             e.HasOne<Account>().WithMany().HasForeignKey(x => x.AccountId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne<Contact>().WithMany().HasForeignKey(x => x.ContactId).OnDelete(DeleteBehavior.Restrict);
             e.HasIndex(x => x.ContactId);
+            e.HasIndex(x => new { x.AccountId, x.IsOperationsContact });
+            e.HasIndex(x => x.AccountId).IsUnique()
+                .HasFilter("is_primary = true AND active_to IS NULL");
         });
 
         b.Entity<Account>(e =>
