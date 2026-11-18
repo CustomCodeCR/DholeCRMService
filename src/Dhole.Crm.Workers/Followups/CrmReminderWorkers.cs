@@ -114,6 +114,8 @@ internal sealed class CrmReminderDispatcherWorker(IServiceScopeFactory scopes,IC
                     "crm.call.reminder.v1"=>"Próxima llamada comercial",
                     "crm.meeting.reminder.v1"=>"Próxima reunión comercial",
                     "crm.activity.reminder.v1"=>"Actividad comercial programada",
+                    "crm.activity.invited.v1"=>"Te invitaron a una actividad comercial",
+                    "crm.followup.invited.v1"=>"Te asignaron un seguimiento compartido",
                     "crm.activity.overdue.v1"=>"Actividad comercial vencida",
                     "crm.commitment.upcoming.v1"=>"Recordatorio de compromiso comercial",
                     "crm.commitment.start.v1"=>"Compromiso comercial programado para ahora",
