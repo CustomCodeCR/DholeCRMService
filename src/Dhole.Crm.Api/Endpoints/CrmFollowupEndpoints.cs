@@ -372,7 +372,7 @@ internal static class CrmFollowupEndpoints
                 invitee,x.RowVersion,x.DueAt,x.ReminderLeadMinutes,
                 x.ReminderChannelStrategy,"crm.followup.reminder.v1",x.CreatedByUserId,ct,
                 isInvitee:true);
-        foreach(var guest in db.FollowupInvitees.Local.Where(guest=>guest.FollowupId==x.Id))
+        foreach(var guest in db.FollowupInvitees.Local.Where(entry=>entry.FollowupId==x.Id))
         {
             await CrmReminderEnqueue.QueueInvitationAsync(db,"Followup",x.Id,
                 guest.Id,guest.UserId,x.RowVersion,CrmAccess.UserId(h),ct);
