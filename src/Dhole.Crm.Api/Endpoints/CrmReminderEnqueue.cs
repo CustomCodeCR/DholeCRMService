@@ -8,7 +8,7 @@ internal static class CrmReminderEnqueue
     internal static async Task QueueAsync(CrmDbContext db, string entityType, Guid entityId,
         Guid? accountId, Guid recipientUserId, long targetVersion, DateTime dueAt,
         int? leadMinutes, string? channelStrategy, string notificationType,
-        Guid createdByUserId, CancellationToken ct)
+        Guid createdByUserId, CancellationToken ct, bool isInvitee = false)
     {
         var policy=accountId.HasValue
             ? await db.AccountFollowupPolicies.AsNoTracking().FirstOrDefaultAsync(x=>x.AccountId==accountId.Value,ct)
@@ -30,9 +30,14 @@ internal static class CrmReminderEnqueue
         })
         foreach(var stage in stages)
         {
+            // Owner identifiers retain their historical dedupe keys.
+            // Invitees receive separate, idempotent reminders per user and phase.
             var key=stage.Phase=="lead"
-                ? $"{entityType}:{entityId:N}:{targetVersion}:{channel}"
-                : $"crmcommit:{entityType}:{entityId:N}:{targetVersion}:start:owner:{channel}";
+                ? isInvitee
+                    ? $"{entityType}:{entityId:N}:{targetVersion}:invitee:{recipientUserId:N}:{channel}"
+                    : $"{entityType}:{entityId:N}:{targetVersion}:{channel}"
+                : $"crmcommit:{entityType}:{entityId:N}:{targetVersion}:start:"+
+                    (isInvitee?$"invitee:{recipientUserId:N}":"owner")+ $":{channel}";
             if(db.Reminders.Local.Any(x=>x.DedupeKey==key) ||
                 await db.Reminders.AsNoTracking().AnyAsync(x=>x.DedupeKey==key,ct))continue;
             var reminder=new CrmReminder
