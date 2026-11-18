@@ -212,7 +212,7 @@ internal static class CrmFollowupEndpoints
             db.FollowupHistories.Add(new FollowupHistory {FollowupId=id,
                 ActorUserId=CrmAccess.UserId(h),Action="Invited",
                 Reason="Usuario interno: "+added,CreatedByUserId=CrmAccess.UserId(h)});
-            if(record.Status is "Pending" or "Overdue" && record.DueAt>DateTime.UtcNow)
+            if((record.Status is "Pending" or "Overdue") && record.DueAt>DateTime.UtcNow)
                 await CrmReminderEnqueue.QueueAsync(db,"Followup",id,record.AccountId,
                     added,record.RowVersion,record.DueAt,record.ReminderLeadMinutes,
                     record.ReminderChannelStrategy,"crm.followup.reminder.v1",
