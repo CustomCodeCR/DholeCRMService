@@ -504,7 +504,8 @@ internal static class AccountEndpoints
             db.Contacts.Add(contact);
             db.AccountContacts.Add(new AccountContact {
                 AccountId = account.Id, ContactId = contact.Id,
-                RelationRole = item.RelationRole.Trim(), IsPrimary = item.IsPrimary
+                RelationRole = item.RelationRole.Trim(), IsPrimary = item.IsPrimary,
+                IsOperationsContact = item.IsOperationsContact
             });
         }
         foreach (var item in newAddresses)

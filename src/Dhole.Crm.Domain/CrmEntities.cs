@@ -105,6 +105,7 @@ public sealed class AccountContact
     public Guid ContactId { get; set; }
     public string RelationRole { get; set; } = "OTHER";
     public bool IsPrimary { get; set; }
+    public bool IsOperationsContact { get; set; }
     public DateTime ActiveFrom { get; set; } = DateTime.UtcNow;
     public DateTime? ActiveTo { get; set; }
 }
