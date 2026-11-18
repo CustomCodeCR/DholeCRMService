@@ -1,3 +1,9 @@
+## [1.37.0] - 2026-11-18 (CRM: agenda compartida e invitados internos)
+
+- MINOR DH-20261118-CRM-SHARED-AGENDA-229: invitados internos a actividades y seguimientos, modelo de asociaciones individuales, migración PostgreSQL aditiva, consulta de invitados, lectura de agenda compartida y registro de cambios.
+- Recordatorios Email/System por destinatario con claves idempotentes en Outbox y prevención de avisos posteriores a una desinvitación. Las actividades recurrentes heredan invitados. REST compatible.
+- DholeCRMService 1.36.0 → 1.37.0; DholeWeb 1.82.0 → 1.83.0; ecosistema 1.86.0 → 1.87.0. CI/staging pendientes; no producción.
+
 ## [1.36.0] - 2026-11-17 (Contactos operativos de clientes)
 
 - MINOR DH-20261117-CRM-OPS-CONTACTS-204: nueva bandera por vínculo cuenta-contacto para encargados de operaciones, independiente de un único contacto principal por cuenta. Consulta restringida de responsables activos por cliente para expedientes.
