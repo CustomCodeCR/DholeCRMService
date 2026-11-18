@@ -19,7 +19,7 @@ public sealed class Followup : CrmRecord
     public Guid? LeadId { get; set; }
     public Guid? OpportunityId { get; set; }
     public Guid? PolicyId { get; set; }
-    // La actividad padre es la bitácora o reunión que originó este recordatorio.
+    // Source activity for commitments created from agreements and meeting notes.
     public Guid? OriginActivityId { get; set; }
     public DateTime? PolicyOccurrenceAt { get; set; }
     public Guid AssignedUserId { get; set; }
@@ -27,15 +27,22 @@ public sealed class Followup : CrmRecord
     public string? Subject { get; set; }
     public int? ReminderLeadMinutes { get; set; }
     public string? ReminderChannelStrategy { get; set; }
-    // Inclusive start of the scheduled interval. Legacy followups remain point-in-time at DueAt.
+    // Null for legacy one-time reminders; otherwise the start of the interval.
     public DateTime? StartAt { get; set; }
-    // DueAt remains the deadline and reminder trigger, not the visual start.
+    // DueAt is the deadline and continues to drive reminder Outbox delivery.
     public DateTime DueAt { get; set; }
     public string Status { get; set; } = "Pending";
     public DateTime? CompletedAt { get; set; }
     public string? Outcome { get; set; }
     public DateTime? NextFollowupAt { get; set; }
 }
+// Multiple active Auth users may share one follow-up while retaining a single primary assignee.
+public sealed class FollowupInvitee : CrmRecord
+{
+    public Guid FollowupId { get; set; }
+    public Guid UserId { get; set; }
+}
+
 public sealed class FollowupHistory : CrmRecord
 {
     public Guid FollowupId { get; set; }

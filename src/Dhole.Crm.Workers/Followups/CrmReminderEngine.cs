@@ -9,6 +9,7 @@ namespace Dhole.Crm.Workers.Followups;
 // Every generated occurrence and reminder has a unique durable identity.
 public static class CrmReminderEngine
 {
+    public const string PeriodicFollowupSubject = "Seguimiento periódico";
     public static async Task<bool> Acquire(CrmDbContext db,long key,CancellationToken ct) =>
         await db.Database.SqlQuery<bool>(
             $"SELECT pg_try_advisory_xact_lock({key}) AS \"Value\"").SingleAsync(ct);
@@ -31,6 +32,7 @@ public static class CrmReminderEngine
             {
                 var followup=new Followup {AccountId=p.AccountId,PolicyId=p.Id,
                     PolicyOccurrenceAt=due,AssignedUserId=p.OwnerUserId,
+                    Subject=PeriodicFollowupSubject,
                     Channel=p.ChannelStrategy=="EMAIL"?"EMAIL":"SYSTEM",DueAt=due,
                     CreatedByUserId=p.CreatedByUserId};
                 db.Followups.Add(followup);
@@ -83,7 +85,7 @@ public static class CrmReminderEngine
             var next=NextOccurrence(start,source.RepeatEveryDays!.Value,"America/Costa_Rica",now);
             var duration=source.ScheduledEndAt.HasValue
                 ? source.ScheduledEndAt.Value-start : TimeSpan.FromHours(1);
-            db.Activities.Add(new Activity
+            var occurrence=new Activity
             {
                 AccountId=source.AccountId,LeadId=source.LeadId,
                 OpportunityId=source.OpportunityId,ContactId=source.ContactId,
@@ -96,7 +98,16 @@ public static class CrmReminderEngine
                 ReminderRepeatMinutes=source.ReminderRepeatMinutes,
                 RepeatEveryDays=source.RepeatEveryDays,RecurrenceParentId=source.Id,
                 CreatedByUserId=source.CreatedByUserId
-            });
+            };
+            db.Activities.Add(occurrence);
+            var attendees=await db.ActivityParticipants.AsNoTracking()
+                .Where(p=>p.ActivityId==source.Id).ToListAsync(ct);
+            foreach(var attendee in attendees)
+                db.ActivityParticipants.Add(new ActivityParticipant {
+                    ActivityId=occurrence.Id,ContactId=attendee.ContactId,
+                    UserId=attendee.UserId,ParticipantName=attendee.ParticipantName,
+                    Role=attendee.Role,CreatedByUserId=source.CreatedByUserId
+                });
         }
         await db.SaveChangesAsync(ct);
         await tx.CommitAsync(ct);
@@ -129,6 +140,11 @@ public static class CrmReminderEngine
             }
             await AddReminders(db,"Followup",f.Id,f.AssignedUserId,f.RowVersion,f.DueAt,
                 now,lead,channel,"crm.followup.reminder.v1",f.CreatedByUserId,ct);
+            var invitees=await db.FollowupInvitees.AsNoTracking()
+                .Where(i=>i.FollowupId==f.Id).Select(i=>i.UserId).ToListAsync(ct);
+            foreach(var invitee in invitees.Where(x=>x!=f.AssignedUserId))
+                await AddReminders(db,"Followup",f.Id,invitee,f.RowVersion,f.DueAt,
+                    now,lead,channel,"crm.followup.reminder.v1",f.CreatedByUserId,ct,isInvitee:true);
         }
         var visits=await db.Activities.AsNoTracking()
             .Where(x=>x.ArchivedAt==null && x.Status=="Scheduled" &&
@@ -141,25 +157,32 @@ public static class CrmReminderEngine
                 ? await db.AccountFollowupPolicies.AsNoTracking().FirstOrDefaultAsync(x=>x.AccountId==account,ct)
                 : null;
             if(p is {Enabled:false} || p?.PausedUntil>now)continue;
-            await AddReminders(db,"Activity",v.Id,v.OwnerUserId,v.RowVersion,v.ScheduledStartAt!.Value,
-                now,v.ReminderLeadMinutes??p?.ReminderLeadMinutes??60,
-                v.ReminderChannelStrategy??p?.ChannelStrategy??"BOTH",
-                v.Type=="CALL"?"crm.call.reminder.v1":
-                v.Type=="VISIT"?"crm.visit.reminder.v1":
-                v.Type=="MEETING"?"crm.meeting.reminder.v1":"crm.activity.reminder.v1",v.CreatedByUserId,ct);
+            var recipients=await db.ActivityParticipants.AsNoTracking()
+                .Where(i=>i.ActivityId==v.Id && i.UserId.HasValue)
+                .Select(i=>i.UserId!.Value).Distinct().ToListAsync(ct);
+            foreach(var recipient in recipients.Append(v.OwnerUserId).Distinct())
+                await AddReminders(db,"Activity",v.Id,recipient,v.RowVersion,v.ScheduledStartAt!.Value,
+                    now,v.ReminderLeadMinutes??p?.ReminderLeadMinutes??60,
+                    v.ReminderChannelStrategy??p?.ChannelStrategy??"BOTH",
+                    v.Type=="CALL"?"crm.call.reminder.v1":
+                    v.Type=="VISIT"?"crm.visit.reminder.v1":
+                    v.Type=="MEETING"?"crm.meeting.reminder.v1":"crm.activity.reminder.v1",
+                    v.CreatedByUserId,ct,isInvitee:recipient!=v.OwnerUserId);
         }
         await db.SaveChangesAsync(ct);
         await tx.CommitAsync(ct);
     }
     private static async Task AddReminders(CrmDbContext db,string entityType,Guid entityId,
         Guid userId,long version,DateTime due,DateTime now,int leadMinutes,
-        string strategy,string type,Guid createdBy,CancellationToken ct)
+        string strategy,string type,Guid createdBy,CancellationToken ct,bool isInvitee=false)
     {
-        // No customer-directed notifications: these reminders are addressed to the owner only.
+        // Only the organizer and explicitly invited internal users receive these notifications.
         // Calendar tasks require both channels even when a legacy policy says otherwise.
         foreach(var channel in new[]{"Email","System"})
         {
-            var key=$"{entityType}:{entityId:N}:{version}:{channel}";
+            var key=isInvitee
+                ? $"{entityType}:{entityId:N}:{version}:invitee:{userId:N}:{channel}"
+                : $"{entityType}:{entityId:N}:{version}:{channel}";
             // Re-read dedupe across restarts; PostgreSQL unique index is the final arbiter.
             if(db.Reminders.Local.Any(x=>x.DedupeKey==key) ||
                await db.Reminders.AsNoTracking().AnyAsync(x=>x.DedupeKey==key,ct))continue;

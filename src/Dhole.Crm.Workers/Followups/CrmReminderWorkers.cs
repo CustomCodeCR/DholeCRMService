@@ -88,6 +88,18 @@ internal sealed class CrmReminderDispatcherWorker(IServiceScopeFactory scopes,IC
                     x.RowVersion==reminder.TargetVersion&&x.Status=="Active",ct),
                 _=>false
             };
+            // Revoked invitations must not leak customer details via queued Email/System jobs.
+            if(active && reminder.DedupeKey.Contains(":invitee:",StringComparison.Ordinal))
+            {
+                active=reminder.EntityType switch
+                {
+                    "Activity"=>await db.ActivityParticipants.AsNoTracking().AnyAsync(p=>
+                        p.ActivityId==reminder.EntityId && p.UserId==reminder.RecipientUserId,ct),
+                    "Followup"=>await db.FollowupInvitees.AsNoTracking().AnyAsync(p=>
+                        p.FollowupId==reminder.EntityId && p.UserId==reminder.RecipientUserId,ct),
+                    _=>false
+                };
+            }
             if(!active){reminder.Status="Cancelled";msg.Status="Cancelled";continue;}
             try
             {
@@ -102,6 +114,8 @@ internal sealed class CrmReminderDispatcherWorker(IServiceScopeFactory scopes,IC
                     "crm.call.reminder.v1"=>"Próxima llamada comercial",
                     "crm.meeting.reminder.v1"=>"Próxima reunión comercial",
                     "crm.activity.reminder.v1"=>"Actividad comercial programada",
+                    "crm.activity.invited.v1"=>"Te invitaron a una actividad comercial",
+                    "crm.followup.invited.v1"=>"Te asignaron un seguimiento compartido",
                     "crm.activity.overdue.v1"=>"Actividad comercial vencida",
                     "crm.commitment.upcoming.v1"=>"Recordatorio de compromiso comercial",
                     "crm.commitment.start.v1"=>"Compromiso comercial programado para ahora",

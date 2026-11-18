@@ -1,0 +1,54 @@
+{
+  "releaseId": "DH-20261118-CRM-SHARED-AGENDA-229",
+  "component": "DholeCRMService",
+  "ecosystem": "Dhole",
+  "ecosystemVersion": "1.87.0",
+  "releaseType": "MINOR",
+  "previousVersion": "1.36.0",
+  "version": "1.37.0",
+  "relatedComponents": [
+    {
+      "component": "DholeWeb",
+      "previousVersion": "1.82.0",
+      "version": "1.83.0"
+    },
+    {
+      "component": "DholeCRMService",
+      "previousVersion": "1.36.0",
+      "version": "1.37.0"
+    }
+  ],
+  "changes": [
+    "Auth internal users selectable and invited to one shared CRM commercial activity or followup",
+    "Authorized invitees see the same event in their agenda and receive individual Email/System reminders",
+    "Persistent invitations and invitation changes audited; reminder outbox remains idempotent",
+    "Recurring activities inherit invited participants without creating duplicate commercial records"
+  ],
+  "scopes": {
+    "inviteDirectory": [
+      "crm.activity.create",
+      "crm.followup.manage",
+      "crm.task.manage"
+    ],
+    "read": [
+      "crm.activity.read",
+      "crm.activity.read-all"
+    ],
+    "modify": [
+      "crm.activity.update",
+      "crm.followup.manage",
+      "crm.task.manage"
+    ]
+  },
+  "rest": "backward-compatible",
+  "realtime": "Existing CRM reminder outbox and notification SignalR; calendar read reconciliation pending staging validation",
+  "validation": {
+    "unit": "pending",
+    "build": "pending",
+    "ci": "pending",
+    "staging": "pending",
+    "production": "not-approved"
+  },
+  "releaseBranch": "feature/20261118-crm-shared-agenda-invitees",
+  "releaseStatus": "candidate-ci-and-staging-pending"
+}
