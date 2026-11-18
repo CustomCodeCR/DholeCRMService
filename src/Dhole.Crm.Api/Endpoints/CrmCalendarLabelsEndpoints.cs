@@ -78,13 +78,13 @@ internal static class CrmCalendarLabelsEndpoints
             .Where(p=>p.UserId==actor).Select(p=>p.ActivityId);
         var invitedFollowupIds=db.FollowupInvitees.AsNoTracking()
             .Where(p=>p.UserId==actor).Select(p=>p.FollowupId);
-        var accountIds=db.Activities.AsNoTracking()
+        var sharedAccountIds=db.Activities.AsNoTracking()
             .Where(a=>a.ArchivedAt==null && a.AccountId.HasValue && invitedActivityIds.Contains(a.Id))
             .Select(a=>a.AccountId!.Value)
             .Concat(db.Followups.AsNoTracking()
                 .Where(f=>f.ArchivedAt==null && f.AccountId.HasValue && invitedFollowupIds.Contains(f.Id))
                 .Select(f=>f.AccountId!.Value));
-        var leadIds=db.Activities.AsNoTracking()
+        var sharedLeadIds=db.Activities.AsNoTracking()
             .Where(a=>a.ArchivedAt==null && a.LeadId.HasValue && invitedActivityIds.Contains(a.Id))
             .Select(a=>a.LeadId!.Value)
             .Concat(db.Followups.AsNoTracking()
@@ -93,13 +93,13 @@ internal static class CrmCalendarLabelsEndpoints
         var visibleAccountIds=CrmAccess.CalendarVisibleAccounts(db,http).Select(a=>a.Id);
         var accounts=await db.Accounts.AsNoTracking()
             .Where(a=>wantedAccounts.Contains(a.Id)&&a.ArchivedAt==null &&
-                (visibleAccountIds.Contains(a.Id)||accountIds.Contains(a.Id)))
+                (visibleAccountIds.Contains(a.Id)||sharedAccountIds.Contains(a.Id)))
             .Select(a=>new{a.Id,a.DisplayName,a.LegalName})
             .ToListAsync(ct);
         var leadAccess=CrmAccess.Scope(http,"crm.lead.read-all") || CrmAccess.IsCalendarAdministrator(http);
         var leads=await db.Leads.AsNoTracking()
             .Where(l=>wantedLeads.Contains(l.Id)&&l.ArchivedAt==null &&
-                (leadAccess||l.ExecutiveUserId==actor||leadIds.Contains(l.Id)))
+                (leadAccess||l.ExecutiveUserId==actor||sharedLeadIds.Contains(l.Id)))
             .Select(l=>new{l.Id,l.Name,l.CompanyName})
             .ToListAsync(ct);
         var validAccounts=accounts.Select(a=>a.Id).ToArray();
