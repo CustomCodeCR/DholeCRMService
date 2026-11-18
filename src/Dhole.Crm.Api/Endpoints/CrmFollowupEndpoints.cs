@@ -9,11 +9,12 @@ public sealed record FollowupPolicyRequest(long? ExpectedVersion,bool Enabled,Gu
 public sealed record FollowupCreateRequest(Guid? AccountId,Guid? LeadId,Guid? OpportunityId,
     Guid AssignedUserId,string Channel,DateTime DueAt,
     string? Subject = null,int? ReminderLeadMinutes = null,string? ReminderChannelStrategy = null,
-    DateTime? StartAt = null);
+    DateTime? StartAt = null, IReadOnlyList<Guid>? InviteeUserIds = null);
 public sealed record FollowupRescheduleRequest(long ExpectedVersion,DateTime DueAt,string Reason,DateTime? StartAt = null);
 public sealed record FollowupCompleteRequest(long ExpectedVersion,string Outcome,DateTime? NextFollowupAt);
 public sealed record FollowupCancelRequest(long ExpectedVersion,string Reason);
 public sealed record FollowupReopenRequest(long ExpectedVersion,string Reason);
+public sealed record FollowupInviteesRequest(IReadOnlyList<Guid> UserIds);
 
 internal static class CrmFollowupEndpoints
 {
@@ -25,6 +26,8 @@ internal static class CrmFollowupEndpoints
         group.MapGet("/followups/{id:guid}",Get);
         group.MapGet("/followups/{id:guid}/origin",GetOrigin);
         group.MapPost("/followups",Create);
+        group.MapGet("/followups/{id:guid}/invitees",ListInvitees);
+        group.MapPut("/followups/{id:guid}/invitees",ReplaceInvitees);
         group.MapPost("/followups/{id:guid}/reschedule",Reschedule);
         group.MapPost("/followups/{id:guid}/complete",Complete);
         group.MapPost("/followups/{id:guid}/reopen",Reopen);
@@ -59,13 +62,17 @@ internal static class CrmFollowupEndpoints
     }
     private static async Task<bool> AccountVisible(Guid id,CrmDbContext db,HttpContext h,CancellationToken ct)=>
         await CrmAccess.CanSeeAccount(db,h,id,ct);
+    private static Task<bool> IsInvitee(Guid followupId,CrmDbContext db,HttpContext h,CancellationToken ct) =>
+        db.FollowupInvitees.AsNoTracking().AnyAsync(x=>x.FollowupId==followupId &&
+            x.UserId==CrmAccess.UserId(h),ct);
     private static async Task<bool> HasAccess(Followup x,CrmDbContext db,HttpContext h,CancellationToken ct) =>
-        (!x.AccountId.HasValue || await CrmAccess.CanSeeAccount(db,h,x.AccountId.Value,ct)) &&
+        await IsInvitee(x.Id,db,h,ct) ||
+        ((!x.AccountId.HasValue || await CrmAccess.CanSeeAccount(db,h,x.AccountId.Value,ct)) &&
         (CrmAccess.CanManageAgendaAcrossUsers(h) ||
          x.AssignedUserId==CrmAccess.UserId(h) ||
          (x.AccountId.HasValue && CrmAccess.Scope(h,"crm.account.read-all")) ||
          (x.LeadId.HasValue && CrmAccess.Scope(h,"crm.lead.read-all")) ||
-         (x.OpportunityId.HasValue && CrmAccess.Scope(h,"crm.opportunity.read-all")));
+         (x.OpportunityId.HasValue && CrmAccess.Scope(h,"crm.opportunity.read-all"))));
     // Calendar administrators may view other users' followups but cannot
     // reschedule, cancel or complete them without an existing write grant.
     private static Task<bool> HasCalendarAccess(Followup x,CrmDbContext db,HttpContext h,CancellationToken ct) =>
@@ -116,14 +123,17 @@ internal static class CrmFollowupEndpoints
     {
         if(!CanReadCalendar(h))return CrmAccess.Denied();
         var visibleAccountIds = CrmAccess.CalendarVisibleAccounts(db,h).Select(a=>a.Id);
-        var query=db.Followups.AsNoTracking().Where(x => x.ArchivedAt == null &&
-            (!x.AccountId.HasValue || visibleAccountIds.Contains(x.AccountId.Value)));
         var actor=CrmAccess.UserId(h);
+        var inviteeFollowupIds=db.FollowupInvitees.AsNoTracking()
+            .Where(x=>x.UserId==actor).Select(x=>x.FollowupId);
+        var query=db.Followups.AsNoTracking().Where(x => x.ArchivedAt == null &&
+            ((!x.AccountId.HasValue || visibleAccountIds.Contains(x.AccountId.Value)) ||
+             inviteeFollowupIds.Contains(x.Id)));
         var accounts=CrmAccess.Scope(h,"crm.account.read-all");
         var leads=CrmAccess.Scope(h,"crm.lead.read-all");
         var opportunities=CrmAccess.Scope(h,"crm.opportunity.read-all");
         if(!CrmAccess.IsCalendarAdministrator(h) && !CrmAccess.CanManageAgendaAcrossUsers(h))
-            query=query.Where(x=>x.AssignedUserId==actor ||
+            query=query.Where(x=>x.AssignedUserId==actor || inviteeFollowupIds.Contains(x.Id) ||
                 (accounts && x.AccountId!=null) ||
                 (leads && x.LeadId!=null) ||
                 (opportunities && x.OpportunityId!=null));
@@ -153,6 +163,64 @@ internal static class CrmFollowupEndpoints
         if(!CanReadCalendar(h))return CrmAccess.Denied();
         var x=await db.Followups.AsNoTracking().FirstOrDefaultAsync(x=>x.Id==id && x.ArchivedAt==null,ct);
         return x is null?Results.NotFound():await HasCalendarAccess(x,db,h,ct)?Results.Ok(x):CrmAccess.Denied();
+    }
+
+
+    private static async Task<IResult> ListInvitees(Guid id,CrmDbContext db,
+        HttpContext h,CancellationToken ct)
+    {
+        if(!CanReadCalendar(h))return CrmAccess.Denied();
+        var record=await db.Followups.AsNoTracking().FirstOrDefaultAsync(
+            f=>f.Id==id && f.ArchivedAt==null,ct);
+        if(record is null || !await HasCalendarAccess(record,db,h,ct))return Results.NotFound();
+        return Results.Ok(await db.FollowupInvitees.AsNoTracking()
+            .Where(i=>i.FollowupId==id).OrderBy(i=>i.CreatedAt).ToListAsync(ct));
+    }
+    private static async Task<IResult> ReplaceInvitees(Guid id,FollowupInviteesRequest request,
+        CrmDbContext db,HttpContext h,IAuthReferenceService auth,CancellationToken ct)
+    {
+        if(!Manage(h) && !Tasks(h) && !CrmAccess.Scope(h,"crm.activity.create"))
+            return CrmAccess.Denied();
+        var record=await db.Followups.FirstOrDefaultAsync(f=>f.Id==id && f.ArchivedAt==null,ct);
+        if(record is null)return Results.NotFound();
+        if(record.AssignedUserId!=CrmAccess.UserId(h) && !CrmAccess.CanManageAgendaAcrossUsers(h))
+            return CrmAccess.Denied();
+        var requested=(request.UserIds??[]).Distinct().Where(x=>x!=record.AssignedUserId).ToArray();
+        if(requested.Length>30 || requested.Any(x=>x==Guid.Empty))
+            return CrmDataEndpoints.Bad("Invalid invited users");
+        foreach(var userId in requested)
+        {
+            var user=await auth.GetActiveAsync(userId,ct);
+            if(user is null || !CrmAccess.CanOwnAgenda(user))
+                return CrmDataEndpoints.Bad("Invitee needs active CRM agenda access");
+        }
+        var current=await db.FollowupInvitees.Where(x=>x.FollowupId==id).ToListAsync(ct);
+        var old=current.Select(x=>x.UserId).ToHashSet();
+        var next=requested.ToHashSet();
+        foreach(var removed in current.Where(x=>!next.Contains(x.UserId)))
+        {
+            db.FollowupInvitees.Remove(removed);
+            db.FollowupHistories.Add(new FollowupHistory {FollowupId=id,
+                ActorUserId=CrmAccess.UserId(h),Action="Uninvited",
+                Reason="Usuario interno: "+removed.UserId,CreatedByUserId=CrmAccess.UserId(h)});
+        }
+        foreach(var added in requested.Where(x=>!old.Contains(x)))
+        {
+            db.FollowupInvitees.Add(new FollowupInvitee {
+                FollowupId=id,UserId=added,CreatedByUserId=CrmAccess.UserId(h)
+            });
+            db.FollowupHistories.Add(new FollowupHistory {FollowupId=id,
+                ActorUserId=CrmAccess.UserId(h),Action="Invited",
+                Reason="Usuario interno: "+added,CreatedByUserId=CrmAccess.UserId(h)});
+            if(record.Status is "Pending" or "Overdue" && record.DueAt>DateTime.UtcNow)
+                await CrmReminderEnqueue.QueueAsync(db,"Followup",id,record.AccountId,
+                    added,record.RowVersion,record.DueAt,record.ReminderLeadMinutes,
+                    record.ReminderChannelStrategy,"crm.followup.reminder.v1",
+                    CrmAccess.UserId(h),ct,isInvitee:true);
+        }
+        var result=await CrmDataEndpoints.Commit(db,ct);
+        return result is Microsoft.AspNetCore.Http.HttpResults.Ok
+            ? Results.Ok(new {userIds=requested}) : result;
     }
 
     // Resolve the original activity from the append-only creation history.
@@ -271,17 +339,35 @@ internal static class CrmFollowupEndpoints
         if(activeAssignee is null)return CrmDataEndpoints.Bad("Assignee is not active");
         if(!CrmAccess.CanOwnAgenda(activeAssignee))
             return CrmDataEndpoints.Bad("Assignee requires crm.activity.read, crm.activity.read-all or crm.followup.manage");
+        var invitedIds=r.InviteeUserIds?.Distinct().Where(x=>x!=r.AssignedUserId).ToArray() ?? [];
+        if(invitedIds.Length>30 || invitedIds.Any(x=>x==Guid.Empty))
+            return CrmDataEndpoints.Bad("Invalid or excessive invited users");
+        foreach(var id in invitedIds)
+        {
+            var invited=await auth.GetActiveAsync(id,ct);
+            if(invited is null || !CrmAccess.CanOwnAgenda(invited))
+                return CrmDataEndpoints.Bad("Invitee must be an active CRM agenda user");
+        }
         var x=new Followup {AccountId=r.AccountId,LeadId=r.LeadId,OpportunityId=r.OpportunityId,
             AssignedUserId=r.AssignedUserId,Channel=r.Channel,StartAt=r.StartAt,DueAt=r.DueAt,
             Subject=r.Subject?.Trim(),ReminderLeadMinutes=r.ReminderLeadMinutes,
             ReminderChannelStrategy=r.ReminderChannelStrategy,
             CreatedByUserId=CrmAccess.UserId(h)};
         db.Followups.Add(x);
+        foreach(var invitedId in invitedIds)
+            db.FollowupInvitees.Add(new FollowupInvitee {
+                FollowupId=x.Id,UserId=invitedId,CreatedByUserId=CrmAccess.UserId(h)
+            });
         db.FollowupHistories.Add(new FollowupHistory {FollowupId=x.Id,ActorUserId=CrmAccess.UserId(h),
             Action="Created",NewDueAt=r.DueAt,CreatedByUserId=CrmAccess.UserId(h)});
         await CrmReminderEnqueue.QueueAsync(db,"Followup",x.Id,x.AccountId,
             x.AssignedUserId,x.RowVersion,x.DueAt,x.ReminderLeadMinutes,
             x.ReminderChannelStrategy,"crm.followup.reminder.v1",x.CreatedByUserId,ct);
+        foreach(var invitee in invitedIds)
+            await CrmReminderEnqueue.QueueAsync(db,"Followup",x.Id,x.AccountId,
+                invitee,x.RowVersion,x.DueAt,x.ReminderLeadMinutes,
+                x.ReminderChannelStrategy,"crm.followup.reminder.v1",x.CreatedByUserId,ct,
+                isInvitee:true);
         var ok=await CrmDataEndpoints.Commit(db,ct);
         return ok is Microsoft.AspNetCore.Http.HttpResults.Ok?
             Results.Created("/api/crm/followups/"+x.Id,x):ok;
