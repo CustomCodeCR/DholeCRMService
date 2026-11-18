@@ -6,11 +6,13 @@ using Microsoft.EntityFrameworkCore;
 namespace Dhole.Crm.Api.Endpoints;
 
 public sealed record CreateContactRequest(string? Name, string? JobTitle, Guid? CountryId, string? Email,
-    string? Phone, string RelationRole, bool IsPrimary, string? FirstName = null, string? LastName = null);
+    string? Phone, string RelationRole, bool IsPrimary, string? FirstName = null, string? LastName = null,
+    bool IsOperationsContact = false);
 public sealed record PatchContactRequest(long ExpectedVersion, string? Name, string? JobTitle,
     string? Email, string? Phone, string? FirstName = null, string? LastName = null,
     Guid? CountryId = null);
-public sealed record ContactRelationRequest(string RelationRole, bool IsPrimary);
+public sealed record ContactRelationRequest(string RelationRole, bool IsPrimary, bool IsOperationsContact = false);
+public sealed record ContactRoleFlagsRequest(bool IsPrimary, bool IsOperationsContact);
 public sealed record ContactPreferenceRequest(long? ExpectedVersion, string PreferredChannel,
     int PreferredDaysMask, TimeOnly? StartLocalTime, TimeOnly? EndLocalTime,
     string TimezoneId, int? FrequencyDays, bool DoNotContact);
@@ -50,6 +52,8 @@ internal static class ContactEndpoints
     public static RouteGroupBuilder MapContacts(this RouteGroupBuilder group)
     {
         group.MapGet("/accounts/{id:guid}/contacts", ListForAccount);
+        group.MapGet("/accounts/{id:guid}/operations-contacts", ListOperationsContacts);
+        group.MapPatch("/accounts/{id:guid}/contacts/{contactId:guid}/role-flags", PatchRoleFlags);
         group.MapPost("/accounts/{id:guid}/contacts", Create);
         group.MapPost("/accounts/{id:guid}/contacts/{contactId:guid}/link", Link);
         group.MapGet("/contacts", ListContacts);
@@ -82,9 +86,52 @@ internal static class ContactEndpoints
             join contact in db.Contacts.AsNoTracking() on link.ContactId equals contact.Id
             where link.AccountId == id && link.ActiveTo == null && contact.ArchivedAt == null
             orderby link.IsPrimary descending, contact.Name
-            select new { contact, link.IsPrimary, link.RelationRole })
+            select new { contact, link.IsPrimary, link.IsOperationsContact, link.RelationRole })
             .ToListAsync(ct));
     }
+    // Safe account-scoped read model for operational cases (never leaks other accounts).
+    private static async Task<IResult> ListOperationsContacts(Guid id, CrmDbContext db, HttpContext h, CancellationToken ct)
+    {
+        if (!CrmAccess.Scope(h, "crm.contact.read")) return CrmAccess.Denied();
+        if (!await OwnsAccount(id, db, h, ct)) return CrmAccess.Denied();
+        var contacts = await (from link in db.AccountContacts.AsNoTracking()
+            join contact in db.Contacts.AsNoTracking() on link.ContactId equals contact.Id
+            where link.AccountId == id && link.ActiveTo == null &&
+                link.IsOperationsContact && contact.ArchivedAt == null && contact.Status == "Active"
+            orderby contact.Name, contact.Id
+            select new {
+                id = contact.Id, accountId = link.AccountId, contact.Name, contact.FirstName,
+                contact.LastName, contact.JobTitle, contact.Email, contact.Phone,
+                contact.CountryId, link.IsPrimary, link.IsOperationsContact
+            }).ToListAsync(ct);
+        return Results.Ok(contacts);
+    }
+
+    private static async Task<IResult> PatchRoleFlags(
+        Guid id, Guid contactId, ContactRoleFlagsRequest request,
+        CrmDbContext db, HttpContext h, IConfiguration config, CancellationToken ct)
+    {
+        if (!CrmAccess.Scope(h, "crm.contact.update")) return CrmAccess.Denied();
+        if (!await OwnsAccount(id, db, h, ct)) return CrmAccess.Denied();
+        var link = await db.AccountContacts.SingleOrDefaultAsync(x =>
+            x.AccountId == id && x.ContactId == contactId && x.ActiveTo == null, ct);
+        if (link is null) return Results.NotFound();
+        if (request.IsPrimary && await db.AccountContacts.AnyAsync(x =>
+            x.AccountId == id && x.ContactId != contactId && x.ActiveTo == null && x.IsPrimary, ct))
+            return CrmDataEndpoints.Conflict("Account already has a primary contact");
+        if (link.IsPrimary == request.IsPrimary &&
+            link.IsOperationsContact == request.IsOperationsContact) return Results.Ok(link);
+        link.IsPrimary = request.IsPrimary;
+        link.IsOperationsContact = request.IsOperationsContact;
+        var account = await db.Accounts.SingleAsync(a => a.Id == id, ct);
+        account.RowVersion++;
+        account.UpdatedAt = DateTime.UtcNow;
+        account.UpdatedByUserId = CrmAccess.UserId(h);
+        var commit = await CrmDataEndpoints.CommitAccount(db, account, h, config,
+            "crm.account.updated.v1", ct);
+        return commit is Microsoft.AspNetCore.Http.HttpResults.Ok ? Results.Ok(link) : commit;
+    }
+
     // Global contact directory is a read-only, paginated projection of relationships
     // visible to the current executive. No cross-account contact leakage.
     private static async Task<IResult> ListContacts(CrmDbContext db, HttpContext h,
@@ -115,6 +162,7 @@ internal static class ContactEndpoints
                 email = x.contact.Email, phone = x.contact.Phone, status = x.contact.Status,
                 accountId = x.account.Id, accountName = x.account.DisplayName,
                 relationRole = x.link.RelationRole, isPrimary = x.link.IsPrimary,
+                isOperationsContact = x.link.IsOperationsContact,
             }).ToListAsync(ct);
         return Results.Ok(new { items, total, page = number, pageSize = size });
     }
@@ -131,7 +179,9 @@ internal static class ContactEndpoints
             where link.ContactId == id && link.ActiveTo == null &&
                 contact.ArchivedAt == null
             orderby account.DisplayName
-            select new { accountId = account.Id, accountName = account.DisplayName })
+            select new { accountId = account.Id, accountName = account.DisplayName,
+                isPrimary = link.IsPrimary, isOperationsContact = link.IsOperationsContact,
+                relationRole = link.RelationRole })
             .Distinct().ToListAsync(ct);
         return Results.Ok(linked);
     }
@@ -164,7 +214,8 @@ internal static class ContactEndpoints
             Phone = r.Phone?.Trim(), CreatedByUserId = CrmAccess.UserId(h) };
         db.Contacts.Add(contact);
         db.AccountContacts.Add(new AccountContact { AccountId = id, ContactId = contact.Id,
-            IsPrimary = r.IsPrimary, RelationRole = r.RelationRole });
+            IsPrimary = r.IsPrimary, IsOperationsContact = r.IsOperationsContact,
+            RelationRole = r.RelationRole });
         try { await db.SaveChangesAsync(ct); }
         catch (DbUpdateException) { return CrmDataEndpoints.Conflict("Contact association conflict"); }
         return Results.Created("/api/crm/contacts/" + contact.Id, contact);
@@ -180,9 +231,11 @@ internal static class ContactEndpoints
         if (r.IsPrimary && await db.AccountContacts.AnyAsync(x => x.AccountId == id &&
             x.IsPrimary && x.ActiveTo == null, ct))
             return CrmDataEndpoints.Conflict("Account already has primary contact");
-        if (current is not null) { current.ActiveTo = null; current.IsPrimary = r.IsPrimary; current.RelationRole = r.RelationRole; }
+        if (current is not null) { current.ActiveTo = null; current.IsPrimary = r.IsPrimary;
+            current.IsOperationsContact = r.IsOperationsContact; current.RelationRole = r.RelationRole; }
         else db.AccountContacts.Add(new AccountContact { AccountId = id, ContactId = contactId,
-            IsPrimary = r.IsPrimary, RelationRole = r.RelationRole });
+            IsPrimary = r.IsPrimary, IsOperationsContact = r.IsOperationsContact,
+            RelationRole = r.RelationRole });
         return await CrmDataEndpoints.Commit(db, ct);
     }
     private static async Task<IResult> Patch(Guid id, PatchContactRequest r, CrmDbContext db,

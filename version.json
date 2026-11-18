@@ -2,9 +2,9 @@
   "schemaVersion": 1,
   "ecosystem": "Dhole",
   "component": "DholeCRMService",
-  "version": "1.35.0",
-  "ecosystemVersion": "1.71.0",
-  "releaseId": "DH-20261117-HACIENDA-POST-197",
+  "version": "1.36.0",
+  "ecosystemVersion": "1.74.0",
+  "releaseId": "DH-20261117-CRM-OPS-CONTACTS-204",
   "releaseStatus": "candidate-ci-and-staging-pending",
-  "businessReleaseId": "DH-20261117-HACIENDA-POST-197"
+  "businessReleaseId": "DH-20261117-CRM-OPS-CONTACTS-204"
 }

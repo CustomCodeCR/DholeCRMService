@@ -1,3 +1,9 @@
+## [1.36.0] - 2026-11-17 (Contactos operativos de clientes)
+
+- MINOR DH-20261117-CRM-OPS-CONTACTS-204: nueva bandera por vínculo cuenta-contacto para encargados de operaciones, independiente de un único contacto principal por cuenta. Consulta restringida de responsables activos por cliente para expedientes.
+- Migración PostgreSQL aditiva, índice único de contacto principal activo; cambios de bandera publican invalidación realtime transaccional mediante outbox cuando está habilitado el lote universal. Compatibilidad REST conservada.
+- CRM 1.35.0 → 1.36.0; ecosistema 1.73.0 → 1.74.0. Pendientes CI, staging y revisión de duplicados históricos antes de master.
+
 ## [1.35.0] - 2026-11-17 (CRM: consulta fiscal segura mediante POST)
 
 - MINOR DH-20261117-HACIENDA-POST-197: agrega POST /api/crm/hacienda/lookup con JSON autenticado y los mismos scopes, cache, validación de país, límites de concurrencia y respuesta que el GET anterior. Evita exponer identificaciones en URLs y previene rechazos del proxy vinculados a parámetros fiscales.
