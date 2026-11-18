@@ -331,6 +331,11 @@ internal static class CommercialActivityEndpoints
                         activity.Type=="MEETING"?"crm.meeting.reminder.v1":"crm.activity.reminder.v1",
                         activity.CreatedByUserId,ct,isInvitee:recipient!=activity.OwnerUserId);
             }
+            if(activity.Status=="Scheduled")
+                foreach(var guest in db.ActivityParticipants.Local.Where(x=>
+                    x.ActivityId==activity.Id && x.UserId.HasValue))
+                    await CrmReminderEnqueue.QueueInvitationAsync(db,"Activity",
+                        activity.Id,guest.Id,guest.UserId!.Value,activity.RowVersion,current,ct);
             foreach(var followup in nextCommitments)
                 await CrmReminderEnqueue.QueueAsync(db,"Followup",followup.Id,
                     followup.AccountId,followup.AssignedUserId,
@@ -629,6 +634,9 @@ internal static class CommercialActivityEndpoints
         var item=new ActivityParticipant {ActivityId=id,ContactId=r.ContactId,UserId=r.UserId,
             ParticipantName=r.ParticipantName,Role=r.Role,CreatedByUserId=CrmAccess.UserId(h)};
         db.ActivityParticipants.Add(item);
+        if(r.UserId.HasValue && a.Status=="Scheduled")
+            await CrmReminderEnqueue.QueueInvitationAsync(db,"Activity",a.Id,
+                item.Id,r.UserId.Value,a.RowVersion,CrmAccess.UserId(h),ct);
         if(r.UserId.HasValue && a.Status=="Scheduled" &&
            a.ScheduledStartAt is { } scheduled && scheduled>DateTime.UtcNow)
             await CrmReminderEnqueue.QueueAsync(db,"Activity",a.Id,a.AccountId,
