@@ -16,6 +16,7 @@ internal static class CrmCalendarLabelsEndpoints
     {
         group.MapGet("/calendar/labels", Get);
         group.MapGet("/calendar/users", GetUserDirectory);
+        group.MapGet("/calendar/invitees", GetInviteeDirectory);
         return group;
     }
 
@@ -28,6 +29,18 @@ internal static class CrmCalendarLabelsEndpoints
         var size=Math.Clamp(pageSize??100,1,100);
         var result=await auth.GetDirectoryAsync(n,size,search,ct);
         return Results.Ok(result);
+    }
+
+    // Restricted to CRM activity creators. Does not grant permission to read other users' accounts.
+    private static async Task<IResult> GetInviteeDirectory(int? page,int? pageSize,string? search,
+        HttpContext http,IAuthReferenceService auth,CancellationToken ct)
+    {
+        if(!CrmAccess.Scope(http,"crm.activity.create") &&
+           !CrmAccess.Scope(http,"crm.followup.manage") &&
+           !CrmAccess.Scope(http,"crm.task.manage"))return CrmAccess.Denied();
+        if(search?.Length>100)return Results.BadRequest(new{error="Search too long"});
+        return Results.Ok(await auth.GetDirectoryAsync(Math.Max(1,page??1),
+            Math.Clamp(pageSize??100,1,100),search,ct));
     }
 
     private static Guid[] Parse(string? values)
