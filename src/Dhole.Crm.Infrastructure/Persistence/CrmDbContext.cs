@@ -43,6 +43,7 @@ public sealed partial class CrmDbContext(DbContextOptions<CrmDbContext> options)
     public DbSet<AccountFollowupPolicy> AccountFollowupPolicies => Set<AccountFollowupPolicy>();
     public DbSet<Followup> Followups => Set<Followup>();
     public DbSet<FollowupHistory> FollowupHistories => Set<FollowupHistory>();
+    public DbSet<FollowupInvitee> FollowupInvitees => Set<FollowupInvitee>();
     public DbSet<CrmReminder> Reminders => Set<CrmReminder>();
     public DbSet<CrmOutboxMessage> OutboxMessages => Set<CrmOutboxMessage>();
     public DbSet<CrmInboxMessage> InboxMessages => Set<CrmInboxMessage>();

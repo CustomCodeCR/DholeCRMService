@@ -16,6 +16,7 @@ internal static class CrmCalendarLabelsEndpoints
     {
         group.MapGet("/calendar/labels", Get);
         group.MapGet("/calendar/users", GetUserDirectory);
+        group.MapGet("/calendar/invitees", GetInviteeDirectory);
         return group;
     }
 
@@ -28,6 +29,18 @@ internal static class CrmCalendarLabelsEndpoints
         var size=Math.Clamp(pageSize??100,1,100);
         var result=await auth.GetDirectoryAsync(n,size,search,ct);
         return Results.Ok(result);
+    }
+
+    // Restricted to CRM activity creators. Does not grant permission to read other users' accounts.
+    private static async Task<IResult> GetInviteeDirectory(int? page,int? pageSize,string? search,
+        HttpContext http,IAuthReferenceService auth,CancellationToken ct)
+    {
+        if(!CrmAccess.Scope(http,"crm.activity.create") &&
+           !CrmAccess.Scope(http,"crm.followup.manage") &&
+           !CrmAccess.Scope(http,"crm.task.manage"))return CrmAccess.Denied();
+        if(search?.Length>100)return Results.BadRequest(new{error="Search too long"});
+        return Results.Ok(await auth.GetDirectoryAsync(Math.Max(1,page??1),
+            Math.Clamp(pageSize??100,1,100),search,ct));
     }
 
     private static Guid[] Parse(string? values)
@@ -58,15 +71,35 @@ internal static class CrmCalendarLabelsEndpoints
         }
         catch(ArgumentException){return Results.BadRequest(new{error="Invalid calendar label IDs"});}
 
-        var accounts=await CrmAccess.CalendarVisibleAccounts(db,http).AsNoTracking()
-            .Where(a=>wantedAccounts.Contains(a.Id))
+        var actor=CrmAccess.UserId(http);
+        // Invitation grants only the names associated with this specific event,
+        // never a general account/prospect read permission.
+        var invitedActivityIds=db.ActivityParticipants.AsNoTracking()
+            .Where(p=>p.UserId==actor).Select(p=>p.ActivityId);
+        var invitedFollowupIds=db.FollowupInvitees.AsNoTracking()
+            .Where(p=>p.UserId==actor).Select(p=>p.FollowupId);
+        var sharedAccountIds=db.Activities.AsNoTracking()
+            .Where(a=>a.ArchivedAt==null && a.AccountId.HasValue && invitedActivityIds.Contains(a.Id))
+            .Select(a=>a.AccountId!.Value)
+            .Concat(db.Followups.AsNoTracking()
+                .Where(f=>f.ArchivedAt==null && f.AccountId.HasValue && invitedFollowupIds.Contains(f.Id))
+                .Select(f=>f.AccountId!.Value));
+        var sharedLeadIds=db.Activities.AsNoTracking()
+            .Where(a=>a.ArchivedAt==null && a.LeadId.HasValue && invitedActivityIds.Contains(a.Id))
+            .Select(a=>a.LeadId!.Value)
+            .Concat(db.Followups.AsNoTracking()
+                .Where(f=>f.ArchivedAt==null && f.LeadId.HasValue && invitedFollowupIds.Contains(f.Id))
+                .Select(f=>f.LeadId!.Value));
+        var visibleAccountIds=CrmAccess.CalendarVisibleAccounts(db,http).Select(a=>a.Id);
+        var accounts=await db.Accounts.AsNoTracking()
+            .Where(a=>wantedAccounts.Contains(a.Id)&&a.ArchivedAt==null &&
+                (visibleAccountIds.Contains(a.Id)||sharedAccountIds.Contains(a.Id)))
             .Select(a=>new{a.Id,a.DisplayName,a.LegalName})
             .ToListAsync(ct);
-        var actor=CrmAccess.UserId(http);
         var leadAccess=CrmAccess.Scope(http,"crm.lead.read-all") || CrmAccess.IsCalendarAdministrator(http);
         var leads=await db.Leads.AsNoTracking()
             .Where(l=>wantedLeads.Contains(l.Id)&&l.ArchivedAt==null &&
-                (leadAccess||l.ExecutiveUserId==actor))
+                (leadAccess||l.ExecutiveUserId==actor||sharedLeadIds.Contains(l.Id)))
             .Select(l=>new{l.Id,l.Name,l.CompanyName})
             .ToListAsync(ct);
         var validAccounts=accounts.Select(a=>a.Id).ToArray();
@@ -79,13 +112,13 @@ internal static class CrmCalendarLabelsEndpoints
             .Where(a=>a.ArchivedAt==null && wantedOwners.Contains(a.OwnerUserId) &&
                 ((a.AccountId.HasValue&&validAccounts.Contains(a.AccountId.Value))||
                  (a.LeadId.HasValue&&validLeads.Contains(a.LeadId.Value))) &&
-                (a.OwnerUserId==actor||allActivities))
+                (a.OwnerUserId==actor||allActivities||invitedActivityIds.Contains(a.Id)))
             .Select(a=>a.OwnerUserId).Distinct().ToListAsync(ct);
         var ownersFromFollowups=await db.Followups.AsNoTracking()
             .Where(f=>f.ArchivedAt==null && wantedOwners.Contains(f.AssignedUserId) &&
                 ((f.AccountId.HasValue&&validAccounts.Contains(f.AccountId.Value))||
                  (f.LeadId.HasValue&&validLeads.Contains(f.LeadId.Value))) &&
-                (f.AssignedUserId==actor||allAccounts||allLeads))
+                (f.AssignedUserId==actor||allAccounts||allLeads||invitedFollowupIds.Contains(f.Id)))
             .Select(f=>f.AssignedUserId).Distinct().ToListAsync(ct);
         var permitted=ownersFromActivities.Concat(ownersFromFollowups)
             .Append(actor).Distinct().ToArray();

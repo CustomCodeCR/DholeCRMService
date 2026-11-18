@@ -15,7 +15,8 @@ public sealed record ActivityCreateRequest(Guid? AccountId,Guid? LeadId,Guid? Op
     IReadOnlyList<AgreementCommitmentRequest>? AgreementCommitments = null,
     int? RepeatEveryDays = null, int? ReminderRepeatMinutes = null,
     string? Minutes = null, IReadOnlyList<Guid>? ParticipantContactIds = null,
-    decimal? LocationLatitude = null, decimal? LocationLongitude = null);
+    decimal? LocationLatitude = null, decimal? LocationLongitude = null,
+    IReadOnlyList<Guid>? ParticipantUserIds = null);
 public sealed record ActivityPatchRequest(long ExpectedVersion,string Subject,string? LocationText,
     int? RepeatEveryDays = null,int? ReminderLeadMinutes = null,int? ReminderRepeatMinutes = null,
     decimal? LocationLatitude = null, decimal? LocationLongitude = null,
@@ -51,14 +52,19 @@ internal static class CommercialActivityEndpoints
         g.MapGet("/activities/{id:guid}/commitments",Commitments);
         g.MapGet("/activities/{id:guid}/participants",Participants);
         g.MapPost("/activities/{id:guid}/participants",AddParticipant);
+        g.MapDelete("/activities/{id:guid}/participants/{participantId:guid}",RemoveParticipant);
         return g;
     }
     private static bool CanRead(HttpContext h)=>CrmDataEndpoints.HasRead(h,"activity") || CrmAccess.IsCalendarAdministrator(h) || CrmAccess.CanManageAgendaAcrossUsers(h);
     private static async Task<Activity?> FindAllowed(Guid id,CrmDbContext db,HttpContext h,CancellationToken ct)
     {
         var a=await db.Activities.FirstOrDefaultAsync(x=>x.Id==id&&x.ArchivedAt==null,ct);
-        return a is not null && CommercialAccess.ActivityOwns(h,a) &&
-            (!a.AccountId.HasValue || await CrmAccess.CanSeeAccount(db,h,a.AccountId.Value,ct)) ? a : null;
+        if(a is null)return null;
+        var invited=await db.ActivityParticipants.AsNoTracking().AnyAsync(p=>
+            p.ActivityId==id && p.UserId==CrmAccess.UserId(h) && p.Role=="RESPONSIBLE",ct);
+        return (CommercialAccess.ActivityOwns(h,a) &&
+            (!a.AccountId.HasValue || await CrmAccess.CanSeeCalendarAccount(db,h,a.AccountId.Value,ct))) ||
+            (invited && CrmAccess.Scope(h,"crm.activity.update")) ? a : null;
     }
     // Separate read access from the existing owner-scoped mutation path.
     private static async Task<Activity?> FindCalendarReadable(Guid id,CrmDbContext db,HttpContext h,CancellationToken ct)
@@ -66,13 +72,15 @@ internal static class CommercialActivityEndpoints
         var activity=await db.Activities.AsNoTracking()
             .FirstOrDefaultAsync(x=>x.Id==id && x.ArchivedAt==null,ct);
         if (activity is null) return null;
-        if (!CommercialAccess.ActivityOwns(h,activity) &&
+        var invited=await db.ActivityParticipants.AsNoTracking().AnyAsync(p=>
+            p.ActivityId==id && p.UserId==CrmAccess.UserId(h),ct);
+        if (!invited && !CommercialAccess.ActivityOwns(h,activity) &&
             !CrmAccess.IsCalendarAdministrator(h) &&
             !(activity.Status=="Completed" && CrmAccess.Scope(h,"crm.bitacora.read-all"))) return null;
-        if (activity.AccountId.HasValue &&
+        if (!invited && activity.AccountId.HasValue &&
             !await CrmAccess.CanSeeCalendarAccount(db,h,activity.AccountId.Value,ct)) return null;
         // Global log permission does not automatically grant access to prospects.
-        if (activity.LeadId.HasValue &&
+        if (!invited && activity.LeadId.HasValue &&
             !await db.Leads.AsNoTracking().AnyAsync(l=>l.Id==activity.LeadId.Value &&
                 l.ArchivedAt==null && (CrmAccess.Scope(h,"crm.lead.read-all") ||
                 l.ExecutiveUserId==CrmAccess.UserId(h)),ct)) return null;
@@ -84,10 +92,14 @@ internal static class CommercialActivityEndpoints
     {
         if(!CanRead(h))return CrmAccess.Denied();
         var visibleAccounts=CrmAccess.CalendarVisibleAccounts(db,h).Select(a=>a.Id);
+        var actor=CrmAccess.UserId(h);
+        var invitedIds=db.ActivityParticipants.AsNoTracking()
+            .Where(p=>p.UserId==actor).Select(p=>p.ActivityId);
         var query=db.Activities.AsNoTracking().Where(x=>x.ArchivedAt==null &&
-            (!x.AccountId.HasValue || visibleAccounts.Contains(x.AccountId.Value)));
+            ((!x.AccountId.HasValue || visibleAccounts.Contains(x.AccountId.Value)) ||
+             invitedIds.Contains(x.Id)));
         if(!CrmAccess.CanManageAgendaAcrossUsers(h) && !CrmAccess.IsCalendarAdministrator(h))
-            query=query.Where(x=>x.OwnerUserId==CrmAccess.UserId(h));
+            query=query.Where(x=>x.OwnerUserId==actor || invitedIds.Contains(x.Id));
         if(ownerId.HasValue)
         {
             if(ownerId.Value!=CrmAccess.UserId(h) &&
@@ -224,6 +236,15 @@ internal static class CommercialActivityEndpoints
         foreach(var contactId in contactIds)
             if(!await CommercialAccess.ContactBelongsTo(db,contactId,r.AccountId,r.OpportunityId,ct))
                 return CommercialAccess.Invalid("Participant contact does not belong to this account");
+        var invitedUsers=r.ParticipantUserIds?.Distinct().Where(x=>x!=owner).ToArray() ?? [];
+        if(invitedUsers.Length>30 || invitedUsers.Any(x=>x==Guid.Empty))
+            return CommercialAccess.Invalid("Invalid or excessive invited users");
+        foreach(var userId in invitedUsers)
+        {
+            var invited=await auth.GetActiveAsync(userId,ct);
+            if(invited is null || !CrmAccess.CanOwnAgenda(invited))
+                return CommercialAccess.Invalid("Invitees must be active CRM agenda users");
+        }
         var createdAtUtc=DateTime.UtcNow;
         var occurredAt=CommercialRules.ResolveOccurredAt(
             r.ScheduledStartAt,r.ScheduledEndAt,r.OccurredAt,createdAtUtc);
@@ -243,6 +264,11 @@ internal static class CommercialActivityEndpoints
         foreach(var contactId in contactIds)
             db.ActivityParticipants.Add(new ActivityParticipant {
                 ActivityId=activity.Id,ContactId=contactId,Role="ATTENDEE",
+                CreatedByUserId=current
+            });
+        foreach(var userId in invitedUsers)
+            db.ActivityParticipants.Add(new ActivityParticipant {
+                ActivityId=activity.Id,UserId=userId,Role="RESPONSIBLE",
                 CreatedByUserId=current
             });
         if(!string.IsNullOrWhiteSpace(r.Minutes))
@@ -296,13 +322,21 @@ internal static class CommercialActivityEndpoints
         {
             if(activity.Status=="Scheduled" && activity.ScheduledStartAt is { } scheduled &&
                 scheduled > DateTime.UtcNow)
-                await CrmReminderEnqueue.QueueAsync(db,"Activity",activity.Id,activity.AccountId,
-                    activity.OwnerUserId,activity.RowVersion,scheduled,
-                    activity.ReminderLeadMinutes,activity.ReminderChannelStrategy,
-                    activity.Type=="CALL"?"crm.call.reminder.v1":
-                    activity.Type=="VISIT"?"crm.visit.reminder.v1":
-                    activity.Type=="MEETING"?"crm.meeting.reminder.v1":"crm.activity.reminder.v1",
-                    activity.CreatedByUserId,ct);
+            {
+                foreach(var recipient in invitedUsers.Prepend(activity.OwnerUserId))
+                    await CrmReminderEnqueue.QueueAsync(db,"Activity",activity.Id,activity.AccountId,
+                        recipient,activity.RowVersion,scheduled,
+                        activity.ReminderLeadMinutes,activity.ReminderChannelStrategy,
+                        activity.Type=="CALL"?"crm.call.reminder.v1":
+                        activity.Type=="VISIT"?"crm.visit.reminder.v1":
+                        activity.Type=="MEETING"?"crm.meeting.reminder.v1":"crm.activity.reminder.v1",
+                        activity.CreatedByUserId,ct,isInvitee:recipient!=activity.OwnerUserId);
+            }
+            if(activity.Status=="Scheduled")
+                foreach(var guest in db.ActivityParticipants.Local.Where(x=>
+                    x.ActivityId==activity.Id && x.UserId.HasValue))
+                    await CrmReminderEnqueue.QueueInvitationAsync(db,"Activity",
+                        activity.Id,guest.Id,guest.UserId!.Value,activity.RowVersion,current,ct);
             foreach(var followup in nextCommitments)
                 await CrmReminderEnqueue.QueueAsync(db,"Followup",followup.Id,
                     followup.AccountId,followup.AssignedUserId,
@@ -575,6 +609,27 @@ internal static class CommercialActivityEndpoints
         return Results.Ok(await db.ActivityParticipants.AsNoTracking().Where(x=>x.ActivityId==id)
             .OrderBy(x=>x.CreatedAt).ToListAsync(ct));
     }
+    private static async Task<IResult> RemoveParticipant(Guid id,Guid participantId,
+        CrmDbContext db,HttpContext h,CancellationToken ct)
+    {
+        if(!CrmAccess.Scope(h,"crm.activity.update"))return CrmAccess.Denied();
+        var a=await db.Activities.FirstOrDefaultAsync(x=>x.Id==id && x.ArchivedAt==null,ct);
+        if(a is null)return Results.NotFound();
+        if(a.OwnerUserId!=CrmAccess.UserId(h) && !CrmAccess.CanManageAgendaAcrossUsers(h))
+            return CrmAccess.Denied();
+        var participant=await db.ActivityParticipants.FirstOrDefaultAsync(x=>
+            x.Id==participantId && x.ActivityId==id && x.UserId.HasValue,ct);
+        if(participant is null)return Results.NotFound();
+        db.ActivityParticipants.Remove(participant);
+        db.ActivityNotes.Add(new ActivityNote {
+            ActivityId=id,AuthorUserId=CrmAccess.UserId(h),
+            CreatedByUserId=CrmAccess.UserId(h),
+            NoteText="Usuario interno retirado de actividad: "+participant.UserId!.Value
+        });
+        await db.SaveChangesAsync(ct);
+        // The outbox worker re-checks active membership before sending queued reminders.
+        return Results.NoContent();
+    }
     private static async Task<IResult> AddParticipant(Guid id,ActivityParticipantRequest r,CrmDbContext db,
         HttpContext h,IAuthReferenceService auth,CancellationToken ct)
     {
@@ -584,14 +639,40 @@ internal static class CommercialActivityEndpoints
             (!string.IsNullOrWhiteSpace(r.ParticipantName)?1:0);
         if(subjects!=1||string.IsNullOrWhiteSpace(r.Role)||r.Role.Length>60||
             r.ParticipantName?.Length>240)return CommercialAccess.Invalid("Exactly one participant subject is required");
-        if(r.UserId is { } idUser && await auth.GetActiveAsync(idUser,ct) is null)
-            return CommercialAccess.Invalid("Internal participant inactive in Auth");
+        if(r.UserId is { } idUser)
+        {
+            if(a.OwnerUserId!=CrmAccess.UserId(h) && !CrmAccess.CanManageAgendaAcrossUsers(h))
+                return CrmAccess.Denied();
+            var invited=await auth.GetActiveAsync(idUser,ct);
+            if(invited is null || !CrmAccess.CanOwnAgenda(invited))
+                return CommercialAccess.Invalid("Internal invitee needs an active CRM agenda scope");
+            if(idUser==a.OwnerUserId || await db.ActivityParticipants.AsNoTracking()
+                .AnyAsync(p=>p.ActivityId==id && p.UserId==idUser,ct))
+                return CommercialAccess.Conflict("User already participates in this activity");
+        }
         if(r.ContactId is { } idContact &&
             !await CommercialAccess.ContactBelongsTo(db,idContact,a.AccountId,a.OpportunityId,ct))
             return CommercialAccess.Invalid("Contact not associated with activity account");
         var item=new ActivityParticipant {ActivityId=id,ContactId=r.ContactId,UserId=r.UserId,
             ParticipantName=r.ParticipantName,Role=r.Role,CreatedByUserId=CrmAccess.UserId(h)};
-        db.ActivityParticipants.Add(item);await db.SaveChangesAsync(ct);
+        db.ActivityParticipants.Add(item);
+        if(r.UserId.HasValue && a.Status=="Scheduled")
+            await CrmReminderEnqueue.QueueInvitationAsync(db,"Activity",a.Id,
+                item.Id,r.UserId.Value,a.RowVersion,CrmAccess.UserId(h),ct);
+        if(r.UserId.HasValue && a.Status=="Scheduled" &&
+           a.ScheduledStartAt is { } scheduled && scheduled>DateTime.UtcNow)
+            await CrmReminderEnqueue.QueueAsync(db,"Activity",a.Id,a.AccountId,
+                r.UserId.Value,a.RowVersion,scheduled,a.ReminderLeadMinutes,
+                a.ReminderChannelStrategy,a.Type=="CALL"?"crm.call.reminder.v1":
+                a.Type=="VISIT"?"crm.visit.reminder.v1":
+                a.Type=="MEETING"?"crm.meeting.reminder.v1":"crm.activity.reminder.v1",
+                CrmAccess.UserId(h),ct,isInvitee:true);
+        db.ActivityNotes.Add(new ActivityNote {
+            ActivityId=id,AuthorUserId=CrmAccess.UserId(h),CreatedByUserId=CrmAccess.UserId(h),
+            NoteText=r.UserId.HasValue?"Invitado usuario interno: "+r.UserId.Value:
+                "Participante agregado"
+        });
+        await db.SaveChangesAsync(ct);
         return Results.Created("/api/crm/activities/"+id+"/participants",item);
     }
 }

@@ -2,9 +2,9 @@
   "schemaVersion": 1,
   "ecosystem": "Dhole",
   "component": "DholeCRMService",
-  "version": "1.36.0",
-  "ecosystemVersion": "1.74.0",
-  "releaseId": "DH-20261117-CRM-OPS-CONTACTS-204",
+  "version": "1.37.0",
+  "ecosystemVersion": "1.87.0",
+  "releaseId": "DH-20261118-CRM-SHARED-AGENDA-229",
   "releaseStatus": "candidate-ci-and-staging-pending",
-  "businessReleaseId": "DH-20261117-CRM-OPS-CONTACTS-204"
+  "businessReleaseId": "DH-20261118-CRM-SHARED-AGENDA-229"
 }

@@ -8,6 +8,7 @@ public sealed partial class CrmDbContext
         ConfigureRecord<AccountFollowupPolicy>(b,"crm_account_followup_policies");
         ConfigureRecord<Followup>(b,"crm_followups");
         ConfigureRecord<FollowupHistory>(b,"crm_followup_history");
+        ConfigureRecord<FollowupInvitee>(b,"crm_followup_invitees");
         ConfigureRecord<CrmReminder>(b,"crm_reminders");
         b.Entity<AccountFollowupPolicy>(e => {
             e.HasOne<Account>().WithMany().HasForeignKey(x=>x.AccountId).OnDelete(DeleteBehavior.Restrict);
@@ -29,6 +30,11 @@ public sealed partial class CrmDbContext
             e.Property(x=>x.Status).HasMaxLength(22);
             e.HasIndex(x=>new{x.AssignedUserId,x.Status,x.DueAt});
             e.HasIndex(x=>new{x.PolicyId,x.PolicyOccurrenceAt}).IsUnique().HasFilter("policy_id IS NOT NULL");
+        });
+        b.Entity<FollowupInvitee>(e=>{
+            e.HasOne<Followup>().WithMany().HasForeignKey(x=>x.FollowupId).OnDelete(DeleteBehavior.Restrict);
+            e.HasIndex(x=>new{x.FollowupId,x.UserId}).IsUnique();
+            e.HasIndex(x=>x.UserId);
         });
         b.Entity<FollowupHistory>(e=>{
             e.HasOne<Followup>().WithMany().HasForeignKey(x=>x.FollowupId).OnDelete(DeleteBehavior.Restrict);
