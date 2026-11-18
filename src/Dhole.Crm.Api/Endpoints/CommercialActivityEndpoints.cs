@@ -52,6 +52,7 @@ internal static class CommercialActivityEndpoints
         g.MapGet("/activities/{id:guid}/commitments",Commitments);
         g.MapGet("/activities/{id:guid}/participants",Participants);
         g.MapPost("/activities/{id:guid}/participants",AddParticipant);
+        g.MapDelete("/activities/{id:guid}/participants/{participantId:guid}",RemoveParticipant);
         return g;
     }
     private static bool CanRead(HttpContext h)=>CrmDataEndpoints.HasRead(h,"activity") || CrmAccess.IsCalendarAdministrator(h) || CrmAccess.CanManageAgendaAcrossUsers(h);
@@ -607,6 +608,27 @@ internal static class CommercialActivityEndpoints
         if(!CanRead(h)||await FindCalendarReadable(id,db,h,ct) is null)return CrmAccess.Denied();
         return Results.Ok(await db.ActivityParticipants.AsNoTracking().Where(x=>x.ActivityId==id)
             .OrderBy(x=>x.CreatedAt).ToListAsync(ct));
+    }
+    private static async Task<IResult> RemoveParticipant(Guid id,Guid participantId,
+        CrmDbContext db,HttpContext h,CancellationToken ct)
+    {
+        if(!CrmAccess.Scope(h,"crm.activity.update"))return CrmAccess.Denied();
+        var a=await db.Activities.FirstOrDefaultAsync(x=>x.Id==id && x.ArchivedAt==null,ct);
+        if(a is null)return Results.NotFound();
+        if(a.OwnerUserId!=CrmAccess.UserId(h) && !CrmAccess.CanManageAgendaAcrossUsers(h))
+            return CrmAccess.Denied();
+        var participant=await db.ActivityParticipants.FirstOrDefaultAsync(x=>
+            x.Id==participantId && x.ActivityId==id && x.UserId.HasValue,ct);
+        if(participant is null)return Results.NotFound();
+        db.ActivityParticipants.Remove(participant);
+        db.ActivityNotes.Add(new ActivityNote {
+            ActivityId=id,AuthorUserId=CrmAccess.UserId(h),
+            CreatedByUserId=CrmAccess.UserId(h),
+            NoteText="Usuario interno retirado de actividad: "+participant.UserId!.Value
+        });
+        await db.SaveChangesAsync(ct);
+        // The outbox worker re-checks active membership before sending queued reminders.
+        return Results.NoContent();
     }
     private static async Task<IResult> AddParticipant(Guid id,ActivityParticipantRequest r,CrmDbContext db,
         HttpContext h,IAuthReferenceService auth,CancellationToken ct)
