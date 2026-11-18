@@ -206,9 +206,13 @@ internal static class CrmFollowupEndpoints
         }
         foreach(var added in requested.Where(x=>!old.Contains(x)))
         {
-            db.FollowupInvitees.Add(new FollowupInvitee {
+            var invitation=new FollowupInvitee {
                 FollowupId=id,UserId=added,CreatedByUserId=CrmAccess.UserId(h)
-            });
+            };
+            db.FollowupInvitees.Add(invitation);
+            if(record.Status is "Pending" or "Overdue")
+                await CrmReminderEnqueue.QueueInvitationAsync(db,"Followup",id,
+                    invitation.Id,added,record.RowVersion,CrmAccess.UserId(h),ct);
             db.FollowupHistories.Add(new FollowupHistory {FollowupId=id,
                 ActorUserId=CrmAccess.UserId(h),Action="Invited",
                 Reason="Usuario interno: "+added,CreatedByUserId=CrmAccess.UserId(h)});
@@ -368,6 +372,11 @@ internal static class CrmFollowupEndpoints
                 invitee,x.RowVersion,x.DueAt,x.ReminderLeadMinutes,
                 x.ReminderChannelStrategy,"crm.followup.reminder.v1",x.CreatedByUserId,ct,
                 isInvitee:true);
+        foreach(var guest in db.FollowupInvitees.Local.Where(guest=>guest.FollowupId==x.Id))
+        {
+            await CrmReminderEnqueue.QueueInvitationAsync(db,"Followup",x.Id,
+                guest.Id,guest.UserId,x.RowVersion,CrmAccess.UserId(h),ct);
+        }
         var ok=await CrmDataEndpoints.Commit(db,ct);
         return ok is Microsoft.AspNetCore.Http.HttpResults.Ok?
             Results.Created("/api/crm/followups/"+x.Id,x):ok;
