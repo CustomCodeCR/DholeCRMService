@@ -178,7 +178,9 @@ public static class CrmReminderEngine
     {
         // Only the organizer and explicitly invited internal users receive these notifications.
         // Calendar tasks require both channels even when a legacy policy says otherwise.
-        foreach(var channel in new[]{"Email","System"})
+        foreach(var channel in entityType=="Activity" ? new[]{"Email","System"} :
+            strategy switch { "EMAIL"=>new[]{"Email"}, "SYSTEM"=>new[]{"System"},
+                _=>new[]{"Email","System"} })
         {
             var key=isInvitee
                 ? $"{entityType}:{entityId:N}:{version}:invitee:{userId:N}:{channel}"
