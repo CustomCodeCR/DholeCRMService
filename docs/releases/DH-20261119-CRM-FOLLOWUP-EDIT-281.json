@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "ecosystem": "Dhole",
+  "releaseId": "DH-20261119-CRM-FOLLOWUP-EDIT-281",
+  "previousReleaseId": "DH-20261119-WIZARD-ROUTE-RUNTIME-274",
+  "releaseType": "PATCH",
+  "ecosystemVersion": "1.103.3",
+  "component": "DholeCRMService",
+  "previousVersion": "1.42.0",
+  "version": "1.42.1",
+  "candidateBranch": "feature/DH-20261119-CRM-FOLLOWUP-EDIT-281",
+  "targetBranches": [
+    "develop",
+    "master"
+  ],
+  "changeSummary": [
+    "Editable CRM followup and reminder details, consistent with activity/bitacora editing",
+    "Optimistic concurrency, audit and invitation preservation",
+    "Replan pending notifications through existing outbox and realtime delivery"
+  ],
+  "affectedComponents": [
+    "DholeWeb",
+    "DholeCRMService",
+    "DholeSystem"
+  ],
+  "status": "candidate-ci-and-staging-pending",
+  "validation": {
+    "unit": "pending",
+    "build": "pending",
+    "staging": "pending",
+    "production": "not-authorized"
+  },
+  "productionDeploymentAuthorized": false
+}
