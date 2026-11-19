@@ -177,6 +177,7 @@ public sealed partial class CrmDbContext(DbContextOptions<CrmDbContext> options)
             e.Property(x => x.PolCodes).HasColumnType("text[]");
             e.Property(x => x.PoeCodes).HasColumnType("text[]");
             e.Property(x => x.PodCodes).HasColumnType("text[]");
+            e.Property(x => x.ServiceCodes).HasColumnType("text[]");
             e.Property(x => x.CurrencyCode).HasMaxLength(3);
             e.Property(x => x.UnitCode).HasMaxLength(32);
             e.Property(x => x.EquipmentCode).HasMaxLength(80);
