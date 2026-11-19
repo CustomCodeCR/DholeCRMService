@@ -15,7 +15,8 @@ public sealed record AccountPreferentialRateRequest(
     decimal? InsuranceCostPercent = null, decimal? InsuranceSalePercent = null,
     string[]? EquipmentCodes = null, string[]? PolCodes = null,
     string[]? PoeCodes = null, string[]? PodCodes = null, Guid? SourceCostId = null,
-    string? TierSalesJson = null, string? CarrierCode = null, string? IncotermCode = null);
+    string? TierSalesJson = null, string? CarrierCode = null, string? IncotermCode = null,
+    string[]? ServiceCodes = null);
 
 internal static class AccountCommercialBenefitsEndpoints
 {
@@ -198,6 +199,7 @@ internal static class AccountCommercialBenefitsEndpoints
         record.PoeCodes = CommercialBenefitRules.NormalizeSelections(r.PoeCodes ??
             (record.DestinationCode is null ? [] : [record.DestinationCode]));
         record.PodCodes = CommercialBenefitRules.NormalizeSelections(r.PodCodes);
+        record.ServiceCodes = CommercialBenefitRules.NormalizeSelections(r.ServiceCodes ?? record.ServiceCodes);
         // New multi-select data is canonical; no stale single port/equipment shadows.
         record.EquipmentCode = null;
         record.OriginCode = null;
