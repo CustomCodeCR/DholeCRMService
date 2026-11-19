@@ -4,7 +4,7 @@
   "releaseId": "DH-20261119-CRM-FOLLOWUP-EDIT-281",
   "previousReleaseId": "DH-20261119-WIZARD-ROUTE-RUNTIME-274",
   "releaseType": "PATCH",
-  "ecosystemVersion": "1.103.3",
+  "ecosystemVersion": "1.103.4",
   "component": "DholeCRMService",
   "previousVersion": "1.42.0",
   "version": "1.42.1",
