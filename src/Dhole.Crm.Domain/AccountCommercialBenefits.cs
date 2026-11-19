@@ -22,6 +22,8 @@ public sealed class AccountPreferentialRate : CrmRecord
     // Optional commercial scope; null keeps historical agreements valid for any carrier/Incoterm.
     public string? CarrierCode { get; set; }
     public string? IncotermCode { get; set; }
+    // Optional Pricing service catalog codes; empty means any service.
+    public string[] ServiceCodes { get; set; } = [];
     // Negotiated sale per Pricing tier. This JSON stores no costs; the Pricing
     // source cost/rules remain authoritative for the calculation conditions.
     public string? TierSalesJson { get; set; }
