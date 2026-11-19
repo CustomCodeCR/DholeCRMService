@@ -1,3 +1,9 @@
+## [1.40.0] - 2026-11-19 (DH-20261119-PRICING-CLIENT-COUNTRY-269 · País del cliente para perspectiva Incoterm)
+
+- MINOR: `GET /api/crm/pricing-client-options` incorpora `countryId` para cuentas y prospectos visibles, sin cambiar filtros de acceso, paginación ni contrato existente.
+- Pricing utiliza el país registrado de CRM para clasificar importación/exportación/tránsito según POL y POD. Sin migraciones; los campos existentes mantienen compatibilidad.
+- DholeCRMService 1.39.0 → 1.40.0; ecosistema Web/System 1.98.1 → 1.99.0. CI y staging pendientes antes de master.
+
 ## [1.39.0] - 2026-11-19 (DH-20261119-CRM-PREFERENTIAL-SCOPE-267 · Condiciones preferenciales por naviera e Incoterm)
 
 - MINOR: acuerdos de CRM vinculados a cuenta y grupo ahora admiten naviera e Incoterm opcionales como ámbito comercial persistente.
