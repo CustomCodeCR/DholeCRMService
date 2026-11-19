@@ -2,7 +2,7 @@
 
 - PATCH: incorpora PUT /api/crm/followups/{id}/details para modificar asunto, tipo, responsable, inicio, vencimiento, aviso anticipado, canal e invitados sin duplicar el registro. Conserva control de versión, permisos por ámbito, historial de auditoría y compatibilidad REST.
 - Reprograma avisos del responsable e invitados mediante outbox/inbox durable; los mensajes del estado anterior quedan invalidados por TargetVersion. Respeta selección de correo, sistema o ambos en tareas CRM.
-- Coordinado con DholeWeb/DholeSystem 1.103.3; CRM 1.42.0 → 1.42.1. CI y staging pendientes antes de cualquier promoción a master; sin autorización de producción.
+- Coordinado con DholeWeb/DholeSystem 1.103.4; CRM 1.42.0 → 1.42.1. CI y staging pendientes antes de cualquier promoción a master; sin autorización de producción.
 
 ## [1.42.0] - 2026-11-19 (DH-20261119-PRICING-CLIENT-COUNTRY-PROD-271 · Promoción de clasificación Incoterm por país del cliente)
 
