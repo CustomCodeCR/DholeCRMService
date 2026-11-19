@@ -1,0 +1,34 @@
+{
+  "releaseId": "DH-20261118-CRM-PROSPECT-235",
+  "component": "DholeCRMService",
+  "ecosystemVersion": "1.88.0",
+  "releaseType": "MINOR",
+  "previousVersion": "1.37.0",
+  "version": "1.38.0",
+  "relatedComponents": [
+    "DholeWeb",
+    "DholeConfigService",
+    "DholeSystem"
+  ],
+  "changes": [
+    "Prospect source metadata and initial notes",
+    "Nested contact/address creation and lead contact CRUD",
+    "Contact identity/locations copied in serializable account conversion"
+  ],
+  "scopes": [
+    "crm.lead.read",
+    "crm.lead.create",
+    "crm.lead.update",
+    "crm.lead.convert",
+    "crm.contact.create",
+    "crm.contact.update",
+    "crm.account.create"
+  ],
+  "validation": {
+    "build": "pending",
+    "tests": "pending",
+    "staging": "pending",
+    "production": "not-authorized"
+  },
+  "candidateBranch": "feature/DH-20261118-CRM-PROSPECT-235-crm-develop"
+}

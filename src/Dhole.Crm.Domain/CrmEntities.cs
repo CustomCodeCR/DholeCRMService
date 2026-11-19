@@ -49,6 +49,8 @@ public sealed class Lead : CrmRecord
     public Guid? CountryId { get; set; }
     public string? TaxId { get; set; }
     public string? SourceCode { get; set; }
+    public string? SourceDetail { get; set; }
+    public string? InitialNotes { get; set; }
     public string? RelationshipTypeCode { get; set; }
     public Guid ExecutiveUserId { get; set; }
     public string QualificationStatus { get; set; } = "New";
@@ -99,6 +101,17 @@ public sealed class Contact : CrmRecord
     public string Status { get; set; } = "Active";
     public DateTime? ArchivedAt { get; set; }
 }
+public sealed class LeadContact
+{
+    public Guid LeadId { get; set; }
+    public Guid ContactId { get; set; }
+    public string RelationRole { get; set; } = "CONTACT";
+    public bool IsPrimary { get; set; }
+    public bool IsOperationsContact { get; set; }
+    public DateTime ActiveFrom { get; set; } = DateTime.UtcNow;
+    public DateTime? ActiveTo { get; set; }
+}
+
 public sealed class AccountContact
 {
     public Guid AccountId { get; set; }
