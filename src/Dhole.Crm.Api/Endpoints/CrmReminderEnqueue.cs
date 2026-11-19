@@ -37,8 +37,8 @@ internal static class CrmReminderEnqueue
             : null;
         if(policy is { Enabled:false } || policy?.PausedUntil>DateTime.UtcNow)return;
         var advanceMinutes=Math.Clamp(leadMinutes??policy?.ReminderLeadMinutes??60,0,10080);
-        var strategy=entityType is "Activity" or "Followup"
-            ? "BOTH" : channelStrategy??policy?.ChannelStrategy??"BOTH";
+        var strategy=entityType=="Activity" ? "BOTH"
+            : channelStrategy??policy?.ChannelStrategy??"BOTH";
         var now=DateTime.UtcNow;
         var stages=advanceMinutes>0 && (entityType is "Activity" or "Followup")
             ? new[] {(Phase:"lead",FireAt:dueAt.AddMinutes(-advanceMinutes),Type:notificationType),
