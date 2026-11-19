@@ -1,3 +1,10 @@
+## [1.38.0] - 2026-11-18
+
+### Added
+- Prospect capture notes, acquisition detail, linked contacts, geo locations and conversion to accounts.
+- Scope-protected prospect contact endpoints and transactional retention of contact identity on conversion.
+- Durable CRM realtime invalidations and backwards-compatible REST contracts.
+
 ## [1.37.0] - 2026-11-18 (CRM: agenda compartida e invitados internos)
 
 - MINOR DH-20261118-CRM-SHARED-AGENDA-229: invitados internos a actividades y seguimientos, modelo de asociaciones individuales, migración PostgreSQL aditiva, consulta de invitados, lectura de agenda compartida y registro de cambios.
