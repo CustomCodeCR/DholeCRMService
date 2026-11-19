@@ -44,8 +44,11 @@ internal static class LeadContactEndpoints
 
     private static bool Valid(string? first, string? last, string? job, string? email, string? phone) =>
         !string.IsNullOrWhiteSpace(first) && !string.IsNullOrWhiteSpace(last) &&
-        first.Length <= 120 && last.Length <= 120 && job?.Length <= 220 &&
-        email?.Length <= 254 && phone?.Length <= 60 && CrmDataEndpoints.IsEmailValid(email);
+        first.Length <= 120 && last.Length <= 120 &&
+        (job is null || job.Length <= 220) &&
+        (email is null || email.Length <= 254) &&
+        (phone is null || phone.Length <= 60) &&
+        CrmDataEndpoints.IsEmailValid(email);
 
     private static async Task<IResult> Create(Guid id, CreateContactRequest r,
         CrmDbContext db, HttpContext http, IConfigReferenceService config, CancellationToken ct)
