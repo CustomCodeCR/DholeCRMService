@@ -1,3 +1,11 @@
+## [1.41.0] - 2026-11-19 (DH-20261119-CRM-PREFERENTIAL-MATCH-270 · tarifas preferenciales por servicio y coincidencia más específica)
+
+- MINOR: agrega ServiceCodes opcionales y migración PostgreSQL aditiva para acuerdos preferenciales por modalidad, servicio, equipo, puerto, naviera e Incoterm.
+- Permite coexistencia de reglas generales y específicas; conflictos solamente por ámbito idéntico y fechas solapadas.
+- Nuevo resolvedor REST seguro GET /accounts/{id}/commercial-benefits/resolve devuelve la tarifa más específica vigente para un concepto y una combinación.
+- Los costos de Pricing y las APIs anteriores no cambian; la aplicación automática en el wizard de cotizaciones sigue siendo una integración separada.
+- DholeCRMService 1.40.0 → 1.41.0; DholeWeb/DholeSystem 1.99.0 → 1.100.0, release coordinado sujeto a CI y staging.
+
 ## [1.40.0] - 2026-11-19 (DH-20261119-PRICING-CLIENT-COUNTRY-269 · País del cliente para perspectiva Incoterm)
 
 - MINOR: `GET /api/crm/pricing-client-options` incorpora `countryId` para cuentas y prospectos visibles, sin cambiar filtros de acceso, paginación ni contrato existente.
