@@ -1,3 +1,9 @@
+## [1.42.0] - 2026-11-19 (DH-20261119-PRICING-CLIENT-COUNTRY-PROD-271 · Promoción de clasificación Incoterm por país del cliente)
+
+- MINOR: libera de forma coordinada el campo aditivo countryId de cuentas y prospectos en /api/crm/pricing-client-options, preservando permisos y filtros.
+- En master se incorpora el cambio previamente validado en develop. Web y System avanzan 1.100.0 → 1.101.0; CRM 1.41.0 → 1.42.0. Sin migraciones ni modificación de eventos realtime.
+- Release de staging seguido de promoción de master con autorización del usuario.
+
 ## [1.41.0] - 2026-11-19 (DH-20261119-CRM-PREFERENTIAL-MATCH-270 · backport a master de tarifas por servicio)
 
 - MINOR: portado de develop el nuevo ServiceCodes de CRM, migración PostgreSQL aditiva y resolvedor REST por coincidencia más específica.
