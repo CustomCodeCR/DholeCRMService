@@ -1,3 +1,8 @@
+## [1.40.0] - 2026-11-19 (DH-20261119-PRICING-CLIENT-COUNTRY-269 · País del cliente para perspectiva Incoterm)
+
+- MINOR: se expone el campo countryId de cuentas y prospectos autorizados en /api/crm/pricing-client-options, sin cambiar los filtros de visibilidad ni contratos REST existentes.
+- Release coordinado con DholeWeb y DholeSystem 1.99.0; sin migraciones ni modificaciones de SignalR. Promoción a master condicionada a CI y staging.
+
 ## [1.39.0] - 2026-11-19 (DH-20261119-CRM-PREFERENTIAL-SCOPE-267 · alcance preferencial por naviera e Incoterm)
 
 - MINOR: backport desde develop de acuerdos preferenciales condicionados por naviera e Incoterm, con migración PostgreSQL aditiva y validación de conflictos.
