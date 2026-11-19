@@ -183,7 +183,7 @@ internal static class AccountCommercialBenefitsEndpoints
         if (!request.ExpectedVersion.HasValue || rate.RowVersion != request.ExpectedVersion.Value)
             return CrmDataEndpoints.Conflict("Preferential benefit was modified; reload before editing");
         var candidate = new AccountPreferentialRate {
-            AccountId = rate.AccountId, CarrierCode = rate.CarrierCode, IncotermCode = rate.IncotermCode
+            AccountId = rate.AccountId, CarrierCode = rate.CarrierCode, IncotermCode = rate.IncotermCode, ServiceCodes = [.. rate.ServiceCodes]
         };
         Apply(candidate, request);
         if (!CommercialBenefitRules.ValidRate(candidate))
