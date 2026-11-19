@@ -127,7 +127,7 @@ public sealed class CrmCommercialBenefitsTests
     }
 
     [TestMethod]
-    public void Multiselect_overlap_blocks_intersecting_scopes_but_not_unrelated_ports()
+    public void Distinct_overlapping_scopes_can_coexist_for_specificity_resolution()
     {
         var one = new AccountPreferentialRate {
             Modality = "FCL", ChargeCode = "Freight",
@@ -139,11 +139,15 @@ public sealed class CrmCommercialBenefitsTests
             EquipmentCodes = ["40HC"], PolCodes = ["POL-YTN"],
             PoeCodes = ["POE-BALBOA"], PodCodes = ["POD-SJO"]
         };
-        Assert.IsTrue(CommercialBenefitRules.Overlap(one, same));
+        Assert.IsFalse(CommercialBenefitRules.Overlap(one, same));
         same.PodCodes = ["POD-SAP"];
         Assert.IsFalse(CommercialBenefitRules.Overlap(one, same));
         same.PodCodes = [];
-        Assert.IsTrue(CommercialBenefitRules.Overlap(one, same), "Empty selection means all PODs.");
+        Assert.IsFalse(CommercialBenefitRules.Overlap(one, same), "A general POD fallback can coexist with a specific POD.");
+        same.EquipmentCodes = ["20DC", "40HC"];
+        same.PolCodes = ["POL-SHA", "POL-YTN"];
+        same.PodCodes = ["POD-SJO"];
+        Assert.IsTrue(CommercialBenefitRules.Overlap(one, same), "Identical scopes still conflict.");
     }
 
 
@@ -199,10 +203,12 @@ public sealed class CrmCommercialBenefitsTests
         cmaCgmFob.IncotermCode = "FOB";
         Assert.IsTrue(CommercialBenefitRules.Overlap(maerskFob, cmaCgmFob));
         cmaCgmFob.CarrierCode = null;
-        Assert.IsTrue(CommercialBenefitRules.Overlap(maerskFob, cmaCgmFob),
-            "Unrestricted historical scopes must conflict with narrower duplicate agreements.");
+        Assert.IsFalse(CommercialBenefitRules.Overlap(maerskFob, cmaCgmFob),
+            "General conditions and specific conditions must coexist.");
         cmaCgmFob.CarrierCode = "MAERSK";
         cmaCgmFob.IncotermCode = null;
+        Assert.IsFalse(CommercialBenefitRules.Overlap(maerskFob, cmaCgmFob));
+        cmaCgmFob.IncotermCode = "FOB";
         Assert.IsTrue(CommercialBenefitRules.Overlap(maerskFob, cmaCgmFob));
     }
 
@@ -223,6 +229,74 @@ public sealed class CrmCommercialBenefitsTests
         Assert.IsTrue(CommercialBenefitRules.ValidRate(rule));
         rule.CarrierCode = new string('X', 81);
         Assert.IsFalse(CommercialBenefitRules.ValidRate(rule));
+    }
+
+    [TestMethod]
+    public void Preferential_matcher_picks_port_and_carrier_over_port_only()
+    {
+        var general = new AccountPreferentialRate {
+            Id = Guid.NewGuid(), Modality = "FCL", ChargeCode = "Freight",
+            RateType = "FIXED_AMOUNT", Value = 250, PolCodes = ["CNSHA"],
+            CurrencyCode = "USD", UnitCode = "CONTAINER"
+        };
+        var specific = new AccountPreferentialRate {
+            Id = Guid.NewGuid(), Modality = "FCL", ChargeCode = "Freight",
+            RateType = "FIXED_AMOUNT", Value = 210, PolCodes = ["CNSHA"],
+            CarrierCode = "ONE", CurrencyCode = "USD", UnitCode = "CONTAINER"
+        };
+        var request = new PreferentialRateCriteria(
+            "FCL", ChargeCode:"Freight", PolCode:"CNSHA", CarrierCode:"ONE");
+        Assert.IsTrue(CommercialBenefitRules.ValidRate(general));
+        Assert.IsTrue(CommercialBenefitRules.ValidRate(specific));
+        Assert.IsFalse(CommercialBenefitRules.Overlap(general, specific));
+        Assert.AreEqual(specific.Id, CommercialBenefitMatcher.Resolve([general, specific], request)?.Id);
+        Assert.AreEqual(general.Id, CommercialBenefitMatcher.Resolve(
+            [general, specific], request with {CarrierCode="MSC"})?.Id);
+        Assert.IsNull(CommercialBenefitMatcher.Resolve([general, specific],
+            request with {PolCode="CNYTN"}));
+    }
+
+    [TestMethod]
+    public void Missing_qualifier_never_matches_more_specific_rate()
+    {
+        var general = new AccountPreferentialRate {
+            Id = Guid.NewGuid(), Modality="FCL", ChargeCode="Other",
+            CustomChargeName="Fumigación"
+        };
+        var specific = new AccountPreferentialRate {
+            Id = Guid.NewGuid(), Modality="FCL", ChargeCode="Other",
+            CustomChargeName="Fumigación", ServiceCodes=["CUSTOMS"],
+            IncotermCode="FOB", PoeCodes=["CRCAL"]
+        };
+        var request = new PreferentialRateCriteria(
+            "FCL", ChargeCode:"Other", CustomChargeName:"Fumigación", PoeCode:"CRCAL");
+        Assert.AreEqual(general.Id, CommercialBenefitMatcher.Resolve([general,specific], request)?.Id);
+        Assert.AreEqual(specific.Id, CommercialBenefitMatcher.Resolve([general,specific],
+            request with {ServiceCode="CUSTOMS",IncotermCode="FOB"})?.Id);
+        Assert.IsFalse(CommercialBenefitRules.Overlap(general,specific));
+    }
+
+    [TestMethod]
+    public void Expired_disabled_and_invalid_services_do_not_match()
+    {
+        var rate = new AccountPreferentialRate {
+            Id=Guid.NewGuid(), Modality="LCL", ChargeCode="Freight",
+            ValidUntil=new DateTime(2026,11,1,0,0,0,DateTimeKind.Utc)
+        };
+        var request = new PreferentialRateCriteria(
+            "LCL", ChargeCode:"Freight", AtUtc:new DateTime(2026,11,19,0,0,0,DateTimeKind.Utc));
+        Assert.IsNull(CommercialBenefitMatcher.Resolve([rate], request));
+        rate.ValidUntil=null;
+        rate.IsActive=false;
+        Assert.IsNull(CommercialBenefitMatcher.Resolve([rate], request));
+        var manual = new AccountPreferentialRate {
+            Modality="AIR", ChargeCode="Other", CustomChargeName="SED",
+            RateType="FIXED_AMOUNT", Value=35, CurrencyCode="USD",
+            UnitCode="DOCUMENT", ServiceCodes=["ADUANAS","ALMACENAJE"]
+        };
+        Assert.IsTrue(CommercialBenefitRules.ValidRate(manual));
+        manual.ServiceCodes=["ADUANAS","ADUANAS"];
+        Assert.IsFalse(CommercialBenefitRules.ValidRate(manual));
     }
 
 }

@@ -1,3 +1,10 @@
+## [1.41.0] - 2026-11-19 (DH-20261119-CRM-PREFERENTIAL-MATCH-270 · backport a master de tarifas por servicio)
+
+- MINOR: portado de develop el nuevo ServiceCodes de CRM, migración PostgreSQL aditiva y resolvedor REST por coincidencia más específica.
+- Se permiten reglas generales y combinaciones más específicas simultáneamente, con selección por cantidad de condiciones y fallback.
+- Conserva las versiones de componentes no modificados y evita importar otros releases de develop pendientes en master.
+- CRM 1.39.0 → 1.41.0; ecosistema Web/System 1.98.0 → 1.100.0. CI/staging requeridos; sin despliegue de producción manual autorizado.
+
 ## [1.39.0] - 2026-11-19 (DH-20261119-CRM-PREFERENTIAL-SCOPE-267 · alcance preferencial por naviera e Incoterm)
 
 - MINOR: backport desde develop de acuerdos preferenciales condicionados por naviera e Incoterm, con migración PostgreSQL aditiva y validación de conflictos.

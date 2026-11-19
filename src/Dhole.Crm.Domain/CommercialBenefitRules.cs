@@ -82,6 +82,7 @@ public static class CommercialBenefitRules
             rule.OriginCode?.Length > 80 || rule.DestinationCode?.Length > 80 ||
             !ValidCodes(rule.EquipmentCodes) || !ValidCodes(rule.PolCodes) ||
             !ValidCodes(rule.PoeCodes) || !ValidCodes(rule.PodCodes) ||
+            !ValidCodes(rule.ServiceCodes) ||
             rule.Notes?.Length > 2000 ||
             (rule.ValidFrom is not null && rule.ValidFrom.Value.Kind != DateTimeKind.Utc) ||
             (rule.ValidUntil is not null && rule.ValidUntil.Value.Kind != DateTimeKind.Utc) ||
@@ -215,30 +216,33 @@ public static class CommercialBenefitRules
         values is { Length: > 0 } ? values :
         string.IsNullOrWhiteSpace(legacy) ? [] : [legacy];
 
-    private static bool MatchesScope(string[]? a, string? aLegacy,
+    private static bool SameScope(string[]? a, string? aLegacy,
         string[]? b, string? bLegacy)
     {
         var left = Scope(a, aLegacy);
         var right = Scope(b, bLegacy);
-        return left.Length == 0 || right.Length == 0 ||
-            left.Intersect(right, StringComparer.OrdinalIgnoreCase).Any();
+        return left.Length == right.Length &&
+            left.OrderBy(x => x, StringComparer.OrdinalIgnoreCase)
+                .SequenceEqual(right.OrderBy(x => x, StringComparer.OrdinalIgnoreCase),
+                    StringComparer.OrdinalIgnoreCase);
     }
 
+    // Only identical scopes conflict. General + specific, or multiple overlapping
+    // service/port combinations, must coexist so resolution can choose the most specific.
     public static bool Overlap(AccountPreferentialRate one, AccountPreferentialRate other) =>
         one.Modality == other.Modality && one.LaneCode == other.LaneCode &&
-        // Unrestricted historical rates overlap every carrier/Incoterm; specific agreements coexist only when disjoint.
-        (one.CarrierCode is null || other.CarrierCode is null || one.CarrierCode == other.CarrierCode) &&
-        (one.IncotermCode is null || other.IncotermCode is null || one.IncotermCode == other.IncotermCode) &&
-        // Two sourced costs with distinct IDs are separate items, even if labels coincide.
-        (one.SourceCostId.HasValue && other.SourceCostId.HasValue
-            ? one.SourceCostId == other.SourceCostId
+        string.Equals(one.CarrierCode, other.CarrierCode, StringComparison.OrdinalIgnoreCase) &&
+        string.Equals(one.IncotermCode, other.IncotermCode, StringComparison.OrdinalIgnoreCase) &&
+        (one.SourceCostId.HasValue || other.SourceCostId.HasValue
+            ? one.SourceCostId.HasValue && one.SourceCostId == other.SourceCostId
             : CanonicalCharge(one.ChargeCode) == CanonicalCharge(other.ChargeCode) &&
               string.Equals(one.CustomChargeName, other.CustomChargeName,
                   StringComparison.OrdinalIgnoreCase)) &&
-        MatchesScope(one.EquipmentCodes, one.EquipmentCode, other.EquipmentCodes, other.EquipmentCode) &&
-        MatchesScope(one.PolCodes, one.OriginCode, other.PolCodes, other.OriginCode) &&
-        MatchesScope(one.PoeCodes, one.DestinationCode, other.PoeCodes, other.DestinationCode) &&
-        MatchesScope(one.PodCodes, null, other.PodCodes, null) &&
+        SameScope(one.EquipmentCodes, one.EquipmentCode, other.EquipmentCodes, other.EquipmentCode) &&
+        SameScope(one.PolCodes, one.OriginCode, other.PolCodes, other.OriginCode) &&
+        SameScope(one.PoeCodes, one.DestinationCode, other.PoeCodes, other.DestinationCode) &&
+        SameScope(one.PodCodes, null, other.PodCodes, null) &&
+        SameScope(one.ServiceCodes, null, other.ServiceCodes, null) &&
         (!one.ValidFrom.HasValue || !other.ValidUntil.HasValue || one.ValidFrom <= other.ValidUntil) &&
         (!other.ValidFrom.HasValue || !one.ValidUntil.HasValue || other.ValidFrom <= one.ValidUntil);
 }
