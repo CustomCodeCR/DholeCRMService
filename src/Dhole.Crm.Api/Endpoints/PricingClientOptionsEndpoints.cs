@@ -14,6 +14,7 @@ internal static class PricingClientOptionsEndpoints
         public string DisplayName { get; init; } = "";
         public string LegalName { get; init; } = "";
         public string? TaxId { get; init; }
+        public Guid? CountryId { get; init; }
         public Guid ExecutiveUserId { get; init; }
         public bool IsCastroFallasExecutive { get; init; }
     }
@@ -45,7 +46,7 @@ internal static class PricingClientOptionsEndpoints
             .Where(a => accountsAllowed)
             .Select(a => new OptionRow {
                 Kind = "account", Id = a.Id, DisplayName = a.DisplayName,
-                LegalName = a.LegalName, TaxId = a.TaxId,
+                LegalName = a.LegalName, TaxId = a.TaxId, CountryId = a.CountryId,
                 ExecutiveUserId = a.ExecutiveUserId,
                 IsCastroFallasExecutive = a.IsCastroFallasExecutive
             });
@@ -54,7 +55,7 @@ internal static class PricingClientOptionsEndpoints
                 (leadReadAll || x.ExecutiveUserId == actor))
             .Select(x => new OptionRow {
                 Kind = "lead", Id = x.Id, DisplayName = x.CompanyName ?? x.Name,
-                LegalName = x.CompanyName ?? x.Name, TaxId = x.TaxId,
+                LegalName = x.CompanyName ?? x.Name, TaxId = x.TaxId, CountryId = x.CountryId,
                 // A lead's operational Auth owner is not its institutional commercial owner.
                 // Preserve the flag so Pricing labels Castro Fallas rather than the creator.
                 ExecutiveUserId = x.ExecutiveUserId,
@@ -92,7 +93,7 @@ internal static class PricingClientOptionsEndpoints
         return Results.Ok(new {
             items = rows.Select(x => new {
                 kind = x.Kind, id = x.Id, displayName = x.DisplayName,
-                legalName = x.LegalName, taxId = x.TaxId,
+                legalName = x.LegalName, taxId = x.TaxId, countryId = x.CountryId,
                 executiveUserId = x.ExecutiveUserId,
                 isCastroFallasExecutive = x.IsCastroFallasExecutive,
                 executiveName = x.IsCastroFallasExecutive ? "Castro Fallas" :
