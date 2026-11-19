@@ -9,9 +9,12 @@ namespace Dhole.Crm.Api.Endpoints;
 
 public sealed record CreateLeadRequest(string Name, string? CompanyName, Guid? CountryId, string? TaxId,
     string? SourceCode, string? RelationshipTypeCode, Guid? ExecutiveUserId,
-    string? ContactEmail, string? Phone, bool AssignToCastroFallas = false);
+    string? ContactEmail, string? Phone, bool AssignToCastroFallas = false,
+    string? SourceDetail = null, string? InitialNotes = null,
+    List<CreateContactRequest>? Contacts = null, List<AddressRequest>? Addresses = null);
 public sealed record PatchLeadRequest(long ExpectedVersion, string Name, string? CompanyName, string? SourceCode,
-    string? RelationshipTypeCode, string QualificationStatus, string? ContactEmail, string? Phone);
+    string? RelationshipTypeCode, string QualificationStatus, string? ContactEmail, string? Phone,
+    string? SourceDetail = null, string? InitialNotes = null);
 public sealed record ConvertLeadRequest(Guid? ExistingAccountId, string? Notes,
     string? TaxIdTypeCode, string CustomerTypeCode, string CategoryType, string CategoryCode);
 public sealed record AssignLeadRequest(long ExpectedVersion, Guid? ExecutiveUserId, bool AssignToCastroFallas = false);
@@ -193,6 +196,39 @@ internal static class LeadEndpoints
             return CrmDataEndpoints.Bad("Invalid lead identity/contact");
         if (!await CrmDataEndpoints.ValidCountry(config, request.CountryId, ct))
             return CrmDataEndpoints.Bad("Unknown country");
+        if (request.SourceCode?.Length > 120 || request.SourceDetail?.Length > 500 ||
+            request.InitialNotes?.Length > 5000)
+            return CrmDataEndpoints.Bad("Invalid prospect capture notes");
+        var newContacts = request.Contacts ?? [];
+        var newAddresses = request.Addresses ?? [];
+        if (newContacts.Count > 20 || newAddresses.Count > 20)
+            return CrmDataEndpoints.Bad("At most 20 contacts and 20 locations are allowed");
+        if (newContacts.Count > 0 && !CrmAccess.Scope(http, "crm.contact.create"))
+            return CrmAccess.Denied();
+        if (newAddresses.Count > 0 && !CrmAccess.Scope(http, "crm.lead.update"))
+            return CrmAccess.Denied();
+        if (newContacts.Count(c => c.IsPrimary) > 1)
+            return CrmDataEndpoints.Bad("Only one primary prospect contact is allowed");
+        foreach (var c in newContacts)
+        {
+            if (string.IsNullOrWhiteSpace(c.FirstName) || string.IsNullOrWhiteSpace(c.LastName) ||
+                c.FirstName.Length > 120 || c.LastName.Length > 120 ||
+                c.JobTitle?.Length > 220 || c.Phone?.Length > 60 ||
+                c.Email?.Length > 254 || !CrmDataEndpoints.IsEmailValid(c.Email) ||
+                !await CrmDataEndpoints.ValidCountry(config, c.CountryId ?? request.CountryId, ct))
+                return CrmDataEndpoints.Bad("Invalid prospect contact");
+        }
+        foreach (var a in newAddresses)
+        {
+            if (a.ContactId is not null || a.AddressText?.Length > 4000 ||
+                string.IsNullOrWhiteSpace(a.AddressType) || a.AddressType.Length > 40 ||
+                (string.IsNullOrWhiteSpace(a.AddressText) && string.IsNullOrWhiteSpace(a.Admin1Name)) ||
+                a.Location?.Length > 2000 || a.CountryCode?.Length > 2 ||
+                new[] { a.Admin1Code, a.Admin1Name, a.Admin2Code, a.Admin2Name, a.Admin3Code, a.Admin3Name }
+                    .Any(x => x is { Length: > 160 }) || a.PostalCode?.Length > 32 ||
+                !await CrmDataEndpoints.ValidCountry(config, a.CountryId ?? request.CountryId, ct))
+                return CrmDataEndpoints.Bad("Invalid prospect location");
+        }
         if (await auth.GetActiveAsync(executiveId, ct) is null)
             return CrmDataEndpoints.Bad("Unknown or inactive executive");
         // Check the entire CRM collection, never only the requesting seller's visible leads.
@@ -281,11 +317,48 @@ internal static class LeadEndpoints
 
         var lead = new Lead { Name = request.Name.Trim().ToUpperInvariant(), CompanyName = request.CompanyName?.Trim().ToUpperInvariant(),
             CountryId = request.CountryId, TaxId = request.TaxId?.Trim(),
-            SourceCode = request.SourceCode?.Trim(), RelationshipTypeCode = request.RelationshipTypeCode?.Trim(),
+            SourceCode = request.SourceCode?.Trim(), SourceDetail = request.SourceDetail?.Trim(),
+            InitialNotes = request.InitialNotes?.Trim(),
+            RelationshipTypeCode = request.RelationshipTypeCode?.Trim(),
             ExecutiveUserId = executiveId, IsCastroFallasExecutive = request.AssignToCastroFallas,
             ContactEmail = request.ContactEmail?.Trim(),
             Phone = request.Phone?.Trim(), CreatedByUserId = owner };
         db.Leads.Add(lead);
+        foreach (var c in newContacts)
+        {
+            var first = c.FirstName!.Trim();
+            var last = c.LastName!.Trim();
+            var contact = new Contact {
+                FirstName = first, LastName = last, Name = first + " " + last,
+                JobTitle = c.JobTitle?.Trim(), CountryId = c.CountryId ?? request.CountryId,
+                Email = c.Email?.Trim().ToLowerInvariant(), Phone = c.Phone?.Trim(),
+                CreatedByUserId = owner
+            };
+            db.Contacts.Add(contact);
+            db.LeadContacts.Add(new LeadContact {
+                LeadId = lead.Id, ContactId = contact.Id,
+                RelationRole = string.IsNullOrWhiteSpace(c.RelationRole) ? "CONTACT" : c.RelationRole.Trim(),
+                IsPrimary = c.IsPrimary, IsOperationsContact = c.IsOperationsContact
+            });
+        }
+        foreach (var a in newAddresses)
+        {
+            var iso = a.CountryCode?.Trim().ToUpperInvariant();
+            var locationText = string.IsNullOrWhiteSpace(a.AddressText)
+                ? string.Join(", ", new[] { a.Admin3Name, a.Admin2Name, a.Admin1Name }
+                    .Where(x => !string.IsNullOrWhiteSpace(x))) : a.AddressText.Trim();
+            db.LeadAddresses.Add(new LeadAddress {
+                LeadId = lead.Id, CountryId = a.CountryId ?? request.CountryId,
+                AddressType = a.AddressType.Trim(), AddressText = locationText,
+                Location = a.Location?.Trim(), CountryCode = iso,
+                Admin1Code = a.Admin1Code?.Trim(), Admin1Name = a.Admin1Name?.Trim(),
+                Admin2Code = a.Admin2Code?.Trim(), Admin2Name = a.Admin2Name?.Trim(),
+                Admin3Code = a.Admin3Code?.Trim(), Admin3Name = a.Admin3Name?.Trim(),
+                PostalCode = CrmGeoEndpoints.PostalCodeForCostaRica(iso,
+                    a.Admin1Code, a.Admin2Code, a.Admin3Code) ?? a.PostalCode?.Trim(),
+                CreatedByUserId = owner
+            });
+        }
         await CrmCollectionRealtimeCommit.SaveLeadAsync(db,
             http.RequestServices.GetRequiredService<IConfiguration>(), http.TraceIdentifier, ct);
         await duplicateGuard.CommitAsync(ct);
@@ -302,11 +375,15 @@ internal static class LeadEndpoints
         if (lead.ConvertedAt is not null) return CrmDataEndpoints.Conflict("Converted leads are immutable");
         if (lead.RowVersion != request.ExpectedVersion) return CrmDataEndpoints.Conflict("Stale row version");
         if (string.IsNullOrWhiteSpace(request.Name) || request.Name.Length > 220 ||
-            !CrmDataEndpoints.IsEmailValid(request.ContactEmail))
+            !CrmDataEndpoints.IsEmailValid(request.ContactEmail) ||
+            request.SourceCode?.Length > 120 || request.SourceDetail?.Length > 500 ||
+            request.InitialNotes?.Length > 5000)
             return CrmDataEndpoints.Bad("Invalid lead");
         lead.Name = request.Name.Trim().ToUpperInvariant();
         lead.CompanyName = request.CompanyName?.Trim().ToUpperInvariant();
         lead.SourceCode = request.SourceCode?.Trim();
+        if (request.SourceDetail is not null) lead.SourceDetail = request.SourceDetail.Trim();
+        if (request.InitialNotes is not null) lead.InitialNotes = request.InitialNotes.Trim();
         lead.RelationshipTypeCode = request.RelationshipTypeCode?.Trim();
         lead.QualificationStatus = request.QualificationStatus;
         lead.ContactEmail = request.ContactEmail?.Trim();
@@ -392,6 +469,7 @@ internal static class LeadEndpoints
             if (leadTax is null && !CrmAccess.Scope(http, "crm.account.assign"))
                 return CrmAccess.Denied();
             var currentUser = CrmAccess.UserId(http);
+            await CopyProspectRelations(db, id, matched.Id, currentUser, ct);
             lead.ConvertedAt = DateTime.UtcNow;
             lead.ConvertedAccountId = matched.Id;
             lead.QualificationStatus = "Converted";
@@ -431,7 +509,7 @@ internal static class LeadEndpoints
         var owner = CrmAccess.UserId(http);
         var account = new Account
         {
-            DisplayName = lead.CompanyName ?? lead.Name, LegalName = lead.CompanyName ?? lead.Name,
+            DisplayName = lead.Name, LegalName = lead.CompanyName ?? lead.Name,
             CountryId = lead.CountryId, TaxId = lead.TaxId,
             NormalizedTaxId = tax, TaxIdTypeCode = request.TaxIdTypeCode,
             CustomerTypeCode = request.CustomerTypeCode, CategoryType = request.CategoryType,
@@ -441,6 +519,7 @@ internal static class LeadEndpoints
             CreatedByUserId = owner
         };
         db.Accounts.Add(account);
+        await CopyProspectRelations(db, id, account.Id, owner, ct);
         db.AccountAssignments.Add(new AccountAssignment { AccountId = account.Id,
             ExecutiveUserId = lead.ExecutiveUserId, IsCastroFallasExecutive = lead.IsCastroFallasExecutive,
             AssignedBy = owner, CreatedByUserId = owner });
@@ -466,5 +545,47 @@ internal static class LeadEndpoints
                 new { leadId = id, accountId = account.Id, alreadyConverted = false });
         }
         catch (DbUpdateException) { return CrmDataEndpoints.Conflict("Concurrent conversion or duplicate fiscal identity"); }
+    }
+
+    // Contact IDs are retained: conversion never creates a second person record.
+    // These inserts share the serializable account-conversion transaction.
+    private static async Task CopyProspectRelations(CrmDbContext db, Guid leadId,
+        Guid accountId, Guid actorId, CancellationToken ct)
+    {
+        var links = await db.LeadContacts.AsNoTracking()
+            .Where(x => x.LeadId == leadId && x.ActiveTo == null).ToListAsync(ct);
+        var currentLinks = await db.AccountContacts.AsNoTracking()
+            .Where(x => x.AccountId == accountId && x.ActiveTo == null).ToListAsync(ct);
+        var known = currentLinks.Select(x => x.ContactId).ToHashSet();
+        var hasPrimary = currentLinks.Any(x => x.IsPrimary);
+        foreach (var link in links.Where(x => !known.Contains(x.ContactId)))
+        {
+            var primary = link.IsPrimary && !hasPrimary;
+            db.AccountContacts.Add(new AccountContact {
+                AccountId = accountId, ContactId = link.ContactId,
+                RelationRole = link.RelationRole, IsPrimary = primary,
+                IsOperationsContact = link.IsOperationsContact
+            });
+            if (primary) hasPrimary = true;
+        }
+        var addresses = await db.LeadAddresses.AsNoTracking()
+            .Where(x => x.LeadId == leadId).ToListAsync(ct);
+        var existing = await db.Addresses.AsNoTracking()
+            .Where(x => x.AccountId == accountId)
+            .Select(x => new { x.CountryCode, x.AddressText, x.AddressType })
+            .ToListAsync(ct);
+        foreach (var a in addresses.Where(a => !existing.Any(x =>
+            x.AddressType == a.AddressType && x.AddressText == a.AddressText &&
+            x.CountryCode == a.CountryCode)))
+        {
+            db.Addresses.Add(new Address {
+                AccountId = accountId, CountryId = a.CountryId, AddressType = a.AddressType,
+                AddressText = a.AddressText, Location = a.Location, CountryCode = a.CountryCode,
+                Admin1Code = a.Admin1Code, Admin1Name = a.Admin1Name,
+                Admin2Code = a.Admin2Code, Admin2Name = a.Admin2Name,
+                Admin3Code = a.Admin3Code, Admin3Name = a.Admin3Name,
+                PostalCode = a.PostalCode, CreatedByUserId = actorId
+            });
+        }
     }
 }

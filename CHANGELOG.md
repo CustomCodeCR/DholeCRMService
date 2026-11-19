@@ -1,3 +1,11 @@
+## [1.38.0] - 2026-11-18
+
+### Added
+- CRM prospect initial notes, acquisition detail, optional contacts and hierarchical addresses, including first creation.
+- Dedicated prospect contact endpoints with scope checks, optimistic versioning and single-primary constraint.
+- Transactional contact and address transfer on prospect conversion while preserving contact identity.
+- Prospect list realtime writes continue through CRM durable Outbox; REST remains backwards compatible.
+
 ## [1.37.0] - 2026-11-18 (CRM: agenda compartida e invitados internos)
 
 - MINOR DH-20261118-CRM-SHARED-AGENDA-229: invitados internos a actividades y seguimientos, modelo de asociaciones individuales, migración PostgreSQL aditiva, consulta de invitados, lectura de agenda compartida y registro de cambios.

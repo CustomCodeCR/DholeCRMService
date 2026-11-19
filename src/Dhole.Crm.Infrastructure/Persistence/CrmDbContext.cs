@@ -17,6 +17,7 @@ public sealed partial class CrmDbContext(DbContextOptions<CrmDbContext> options)
     public DbSet<AccountPreferentialRate> AccountPreferentialRates => Set<AccountPreferentialRate>();
     public DbSet<Contact> Contacts => Set<Contact>();
     public DbSet<AccountContact> AccountContacts => Set<AccountContact>();
+    public DbSet<LeadContact> LeadContacts => Set<LeadContact>();
     public DbSet<Address> Addresses => Set<Address>();
     public DbSet<LeadAddress> LeadAddresses => Set<LeadAddress>();
     public DbSet<ContactPreference> ContactPreferences => Set<ContactPreference>();
@@ -77,6 +78,16 @@ public sealed partial class CrmDbContext(DbContextOptions<CrmDbContext> options)
         ConfigureRecord<ContactPreference>(b, "crm_contact_preferences");
         ConfigureRecord<MarketingConsent>(b, "crm_marketing_consents");
         ConfigureRecord<AccountBusinessActivity>(b, "crm_account_business_activities");
+        b.Entity<LeadContact>(e =>
+        {
+            e.ToTable("crm_lead_contacts");
+            e.HasKey(x => new { x.LeadId, x.ContactId });
+            e.HasOne<Lead>().WithMany().HasForeignKey(x => x.LeadId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne<Contact>().WithMany().HasForeignKey(x => x.ContactId).OnDelete(DeleteBehavior.Restrict);
+            e.Property(x => x.RelationRole).HasMaxLength(60);
+            e.HasIndex(x => x.ContactId);
+            e.HasIndex(x => x.LeadId).IsUnique().HasFilter("is_primary = true AND active_to IS NULL");
+        });
         b.Entity<AccountContact>(e =>
         {
             e.ToTable("crm_account_contacts");
@@ -111,6 +122,8 @@ public sealed partial class CrmDbContext(DbContextOptions<CrmDbContext> options)
         b.Entity<Lead>(e =>
         {
             e.Property(x => x.Name).HasMaxLength(220);
+            e.Property(x => x.SourceDetail).HasMaxLength(500);
+            e.Property(x => x.InitialNotes).HasMaxLength(5000);
             e.Property(x => x.ContactEmail).HasMaxLength(254);
             e.HasIndex(x => x.ExecutiveUserId);
             e.HasIndex(x => x.ConvertedAccountId);
