@@ -17,6 +17,9 @@ public static class CommercialBenefitRules
         "INSURANCE", "SED", "HANDLING", "VGM", "TICA", "SEAL",
         "DOCUMENTATION", "FORWARDING", "OTHER"
     ];
+    public static readonly string[] Incoterms = [
+        "EXW", "FCA", "FAS", "FOB", "CFR", "CIF", "CPT", "CIP", "DAP", "DPU", "DDP"
+    ];
     public static readonly string[] RateTypes = [
         "FIXED_AMOUNT", "DISCOUNT_AMOUNT", "DISCOUNT_PERCENT",
         "INSURANCE_PERCENT", "WAIVE", "NEGOTIATED", "TIERED_SALE"
@@ -71,6 +74,8 @@ public static class CommercialBenefitRules
             (rule.LaneCode == "MIAMI" && rule.Modality != "LCL") ||
             (rule.LaneCode == "OWN" && rule.Modality is not ("LCL" or "LTL")) ||
             (rule.SourceCostId == Guid.Empty) ||
+            rule.CarrierCode?.Length > 80 ||
+            (rule.IncotermCode is not null && !Incoterms.Contains(rule.IncotermCode, StringComparer.Ordinal)) ||
             (CanonicalCharge(rule.ChargeCode) == "Other" && string.IsNullOrWhiteSpace(rule.CustomChargeName)) ||
             rule.CustomChargeName?.Length > 120 ||
             rule.EquipmentCode?.Length > 80 ||
@@ -221,6 +226,9 @@ public static class CommercialBenefitRules
 
     public static bool Overlap(AccountPreferentialRate one, AccountPreferentialRate other) =>
         one.Modality == other.Modality && one.LaneCode == other.LaneCode &&
+        // Unrestricted historical rates overlap every carrier/Incoterm; specific agreements coexist only when disjoint.
+        (one.CarrierCode is null || other.CarrierCode is null || one.CarrierCode == other.CarrierCode) &&
+        (one.IncotermCode is null || other.IncotermCode is null || one.IncotermCode == other.IncotermCode) &&
         // Two sourced costs with distinct IDs are separate items, even if labels coincide.
         (one.SourceCostId.HasValue && other.SourceCostId.HasValue
             ? one.SourceCostId == other.SourceCostId
