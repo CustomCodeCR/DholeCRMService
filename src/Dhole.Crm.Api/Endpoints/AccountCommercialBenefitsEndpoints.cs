@@ -23,6 +23,7 @@ internal static class AccountCommercialBenefitsEndpoints
     public static RouteGroupBuilder MapAccountCommercialBenefits(this RouteGroupBuilder group)
     {
         group.MapGet("/accounts/{accountId:guid}/commercial-benefits", Get);
+        group.MapGet("/accounts/{accountId:guid}/commercial-benefits/resolve", ResolveRate);
         group.MapPut("/accounts/{accountId:guid}/commercial-benefits/settings", SaveSettings);
         group.MapPost("/accounts/{accountId:guid}/commercial-benefits/rates", CreateRate);
         group.MapPut("/accounts/{accountId:guid}/commercial-benefits/rates/{rateId:guid}", UpdateRate);
@@ -65,6 +66,41 @@ internal static class AccountCommercialBenefitsEndpoints
             rates,
             pricingIntegrationStatus = "NOT_CONNECTED",
             note = "CRM-only negotiated benefits; Pricing must not apply them until explicitly integrated."
+        });
+    }
+
+    // Read-only resolver for an individual quotation charge.
+    // Pricing can consume this endpoint later; CRM does not alter Pricing records.
+    private static async Task<IResult> ResolveRate(Guid accountId, CrmDbContext db,
+        HttpContext http, CancellationToken ct)
+    {
+        if (!CanRead(http)) return CrmAccess.Denied();
+        if (!await Visible(accountId, db, http, ct)) return Results.NotFound();
+        string? Param(string name) => Clean(http.Request.Query[name].ToString());
+        var modality = Param("modality");
+        var sourceText = Param("sourceCostId");
+        if (modality is null || !CommercialBenefitRules.Modalities.Contains(modality.ToUpperInvariant()))
+            return CrmDataEndpoints.Bad("A valid modality is required");
+        if (sourceText is not null && !Guid.TryParse(sourceText, out _))
+            return CrmDataEndpoints.Bad("Invalid sourceCostId");
+        Guid? sourceId = sourceText is null ? null : Guid.Parse(sourceText);
+        var chargeCode = Param("chargeCode");
+        if (sourceId is null && chargeCode is null)
+            return CrmDataEndpoints.Bad("A sourceCostId or chargeCode is required");
+        var criteria = new PreferentialRateCriteria(
+            modality.ToUpperInvariant(), Param("laneCode"), sourceId,
+            chargeCode, Param("customChargeName"), Param("equipmentCode"),
+            Param("polCode"), Param("poeCode"), Param("podCode"),
+            Param("carrierCode"), Param("incotermCode"), Param("serviceCode"));
+        var groupIds = await AccountGroupAccess.VisibleIdsAsync(db, http, accountId, ct);
+        var rates = await db.AccountPreferentialRates.AsNoTracking()
+            .Where(x => groupIds.Contains(x.AccountId) && x.IsActive &&
+                x.Modality == criteria.Modality).ToListAsync(ct);
+        var selected = CommercialBenefitMatcher.Resolve(rates, criteria);
+        return Results.Ok(new {
+            accountId, rate = selected,
+            specificity = selected is null ? 0 : CommercialBenefitMatcher.Specificity(selected),
+            evaluatedAtUtc = DateTime.UtcNow
         });
     }
 
