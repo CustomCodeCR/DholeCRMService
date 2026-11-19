@@ -1,3 +1,10 @@
+## [1.39.0] - 2026-11-19 (DH-20261119-CRM-PREFERENTIAL-SCOPE-267 · alcance preferencial por naviera e Incoterm)
+
+- MINOR: backport desde develop de acuerdos preferenciales condicionados por naviera e Incoterm, con migración PostgreSQL aditiva y validación de conflictos.
+- Preserva los acuerdos sin ámbito específico y no modifica los costos de Pricing.
+- DholeCRMService 1.38.0 → 1.39.0; ecosistema Web/System 1.97.9 → 1.98.0; conservar correcciones CIF ya incluidas en master.
+- Promoción coordinada a master luego de CI y verificación staging; no autorizar despliegue de producción automáticamente.
+
 ## [1.38.0] - 2026-11-18
 
 ### Added

@@ -19,6 +19,9 @@ public sealed class AccountPreferentialRate : CrmRecord
     public string? LaneCode { get; set; }
     // Stable identity of the original Pricing cost / surcharge. Never copy or overwrite its cost.
     public Guid? SourceCostId { get; set; }
+    // Optional commercial scope; null keeps historical agreements valid for any carrier/Incoterm.
+    public string? CarrierCode { get; set; }
+    public string? IncotermCode { get; set; }
     // Negotiated sale per Pricing tier. This JSON stores no costs; the Pricing
     // source cost/rules remain authoritative for the calculation conditions.
     public string? TierSalesJson { get; set; }
