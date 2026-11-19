@@ -220,7 +220,7 @@ internal static class LeadEndpoints
         }
         foreach (var a in newAddresses)
         {
-            if (a.ContactId is not null || a.AddressText.Length > 4000 ||
+            if (a.ContactId is not null || a.AddressText?.Length > 4000 ||
                 string.IsNullOrWhiteSpace(a.AddressType) || a.AddressType.Length > 40 ||
                 (string.IsNullOrWhiteSpace(a.AddressText) && string.IsNullOrWhiteSpace(a.Admin1Name)) ||
                 a.Location?.Length > 2000 || a.CountryCode?.Length > 2 ||
