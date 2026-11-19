@@ -2,9 +2,9 @@
   "schemaVersion": 1,
   "ecosystem": "Dhole",
   "component": "DholeCRMService",
-  "version": "1.40.0",
-  "ecosystemVersion": "1.99.0",
-  "releaseId": "DH-20261119-PRICING-CLIENT-COUNTRY-269",
+  "version": "1.41.0",
+  "ecosystemVersion": "1.100.0",
+  "releaseId": "DH-20261119-CRM-PREFERENTIAL-MATCH-270",
   "releaseStatus": "candidate-ci-and-staging-pending",
-  "businessReleaseId": "DH-20261119-PRICING-CLIENT-COUNTRY-269"
+  "businessReleaseId": "DH-20261119-CRM-PREFERENTIAL-MATCH-270"
 }
