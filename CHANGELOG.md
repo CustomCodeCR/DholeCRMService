@@ -1,3 +1,10 @@
+## [1.39.0] - 2026-11-19 (DH-20261119-CRM-PREFERENTIAL-SCOPE-267 · Condiciones preferenciales por naviera e Incoterm)
+
+- MINOR: acuerdos de CRM vinculados a cuenta y grupo ahora admiten naviera e Incoterm opcionales como ámbito comercial persistente.
+- Migración PostgreSQL aditiva, validación de Incoterm, detección de superposición y preservación de acuerdos históricos sin restricciones.
+- Costos base de Pricing inalterados; sigue sin aplicación automática de beneficios a cotizaciones.
+- DholeCRMService 1.38.0 → 1.39.0; DholeWeb/DholeSystem 1.97.7 → 1.98.0. Integración en develop, CI y staging pendientes; sin despliegue a producción.
+
 ## [1.38.0] - 2026-11-18
 
 ### Added

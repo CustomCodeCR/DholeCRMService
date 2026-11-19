@@ -180,4 +180,49 @@ public sealed class CrmCommercialBenefitsTests
         Assert.IsFalse(CommercialBenefitRules.ValidRate(rule));
     }
 
+
+    [TestMethod]
+    public void Carrier_and_incoterm_scope_allows_distinct_commercial_agreements()
+    {
+        var maerskFob = new AccountPreferentialRate {
+            Modality = "FCL", ChargeCode = "Freight", CarrierCode = "MAERSK",
+            IncotermCode = "FOB"
+        };
+        var cmaCgmFob = new AccountPreferentialRate {
+            Modality = "FCL", ChargeCode = "Freight", CarrierCode = "CMA-CGM",
+            IncotermCode = "FOB"
+        };
+        Assert.IsFalse(CommercialBenefitRules.Overlap(maerskFob, cmaCgmFob));
+        cmaCgmFob.CarrierCode = "MAERSK";
+        cmaCgmFob.IncotermCode = "CIF";
+        Assert.IsFalse(CommercialBenefitRules.Overlap(maerskFob, cmaCgmFob));
+        cmaCgmFob.IncotermCode = "FOB";
+        Assert.IsTrue(CommercialBenefitRules.Overlap(maerskFob, cmaCgmFob));
+        cmaCgmFob.CarrierCode = null;
+        Assert.IsTrue(CommercialBenefitRules.Overlap(maerskFob, cmaCgmFob),
+            "Unrestricted historical scopes must conflict with narrower duplicate agreements.");
+        cmaCgmFob.CarrierCode = "MAERSK";
+        cmaCgmFob.IncotermCode = null;
+        Assert.IsTrue(CommercialBenefitRules.Overlap(maerskFob, cmaCgmFob));
+    }
+
+    [TestMethod]
+    public void Only_canonical_incoterm_codes_are_accepted()
+    {
+        var rule = new AccountPreferentialRate {
+            Modality = "FCL", ChargeCode = "Freight",
+            RateType = "FIXED_AMOUNT", Value = 250m, CurrencyCode = "USD",
+            UnitCode = "CONTAINER", CarrierCode = "CAR-2026-001", IncotermCode = "CIF"
+        };
+        Assert.IsTrue(CommercialBenefitRules.ValidRate(rule));
+        rule.IncotermCode = "UNKNOWN";
+        Assert.IsFalse(CommercialBenefitRules.ValidRate(rule));
+        rule.IncotermCode = "cif";
+        Assert.IsFalse(CommercialBenefitRules.ValidRate(rule));
+        rule.IncotermCode = null;
+        Assert.IsTrue(CommercialBenefitRules.ValidRate(rule));
+        rule.CarrierCode = new string('X', 81);
+        Assert.IsFalse(CommercialBenefitRules.ValidRate(rule));
+    }
+
 }

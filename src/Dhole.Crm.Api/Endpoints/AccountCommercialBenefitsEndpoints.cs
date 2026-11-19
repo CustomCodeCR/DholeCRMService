@@ -15,7 +15,7 @@ public sealed record AccountPreferentialRateRequest(
     decimal? InsuranceCostPercent = null, decimal? InsuranceSalePercent = null,
     string[]? EquipmentCodes = null, string[]? PolCodes = null,
     string[]? PoeCodes = null, string[]? PodCodes = null, Guid? SourceCostId = null,
-    string? TierSalesJson = null);
+    string? TierSalesJson = null, string? CarrierCode = null, string? IncotermCode = null);
 
 internal static class AccountCommercialBenefitsEndpoints
 {
@@ -145,7 +145,9 @@ internal static class AccountCommercialBenefitsEndpoints
         if (rate is null) return Results.NotFound();
         if (!request.ExpectedVersion.HasValue || rate.RowVersion != request.ExpectedVersion.Value)
             return CrmDataEndpoints.Conflict("Preferential benefit was modified; reload before editing");
-        var candidate = new AccountPreferentialRate { AccountId = rate.AccountId };
+        var candidate = new AccountPreferentialRate {
+            AccountId = rate.AccountId, CarrierCode = rate.CarrierCode, IncotermCode = rate.IncotermCode
+        };
         Apply(candidate, request);
         if (!CommercialBenefitRules.ValidRate(candidate))
             return CrmDataEndpoints.Bad("Invalid modality, charge, financial value, unit or validity");
@@ -167,6 +169,12 @@ internal static class AccountCommercialBenefitsEndpoints
         record.Modality = r.Modality?.Trim().ToUpperInvariant() ?? "";
         record.LaneCode = Clean(r.LaneCode)?.ToUpperInvariant();
         record.SourceCostId = r.SourceCostId;
+        // Omitted qualifiers from older REST clients preserve the existing scope.
+        // Empty strings explicitly clear a qualifier back to the unrestricted legacy scope.
+        if (r.CarrierCode is not null)
+            record.CarrierCode = CommercialBenefitRules.NormalizeScopeCode(r.CarrierCode);
+        if (r.IncotermCode is not null)
+            record.IncotermCode = CommercialBenefitRules.NormalizeScopeCode(r.IncotermCode);
         record.TierSalesJson = Clean(r.TierSalesJson);
         var incomingCharge = Clean(r.ChargeCode);
         record.ChargeCode = CommercialBenefitRules.CanonicalCharge(incomingCharge);
