@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "ecosystem": "Dhole",
+  "releaseId": "DH-20261119-CRM-FOLLOWUP-EDIT-PROMOTION-285",
+  "previousReleaseId": "DH-20261119-PRICING-LTL-DDP-FREIGHT-284",
+  "sourceReleaseId": "DH-20261119-CRM-FOLLOWUP-EDIT-281",
+  "releaseType": "PATCH",
+  "ecosystemVersion": "1.103.9",
+  "component": "DholeCRMService",
+  "previousVersion": "1.42.0",
+  "version": "1.42.1",
+  "masterCandidateBranch": "release/DH-20261119-CRM-FOLLOWUP-EDIT-285-master",
+  "affectedComponents": [
+    "DholeSystem",
+    "DholeWeb",
+    "DholeCRMService"
+  ],
+  "changes": [
+    "Editable CRM followups and reminders with versioned save and audit history",
+    "No duplication of original record; durable reminder requeue and existing invitee access preserved"
+  ],
+  "stagingEvidence": {
+    "crm": "https://github.com/CustomCodeCR/DholeCRMService/actions/runs/44631744897",
+    "web": "https://github.com/CustomCodeCR/DholeWeb/actions/runs/44631800014",
+    "result": "success"
+  },
+  "ci": "pending",
+  "masterPromotionAuthorized": true
+}
