@@ -55,7 +55,9 @@ internal static class CommercialActivityEndpoints
         g.MapDelete("/activities/{id:guid}/participants/{participantId:guid}",RemoveParticipant);
         return g;
     }
-    private static bool CanRead(HttpContext h)=>CrmDataEndpoints.HasRead(h,"activity") || CrmAccess.IsCalendarAdministrator(h) || CrmAccess.CanManageAgendaAcrossUsers(h);
+    private static bool CanRead(HttpContext h)=>CrmDataEndpoints.HasRead(h,"activity") ||
+        CrmAccess.Scope(h,"crm.followup.manage") || CrmAccess.Scope(h,"crm.task.manage") ||
+        CrmAccess.IsCalendarAdministrator(h) || CrmAccess.CanManageAgendaAcrossUsers(h);
     private static async Task<Activity?> FindAllowed(Guid id,CrmDbContext db,HttpContext h,CancellationToken ct)
     {
         var a=await db.Activities.FirstOrDefaultAsync(x=>x.Id==id&&x.ArchivedAt==null,ct);
@@ -623,11 +625,33 @@ internal static class CommercialActivityEndpoints
         return Results.Ok(rows);
     }
 
-    private static async Task<IResult> Participants(Guid id,CrmDbContext db,HttpContext h,CancellationToken ct)
+    private static async Task<IResult> Participants(Guid id,CrmDbContext db,HttpContext h,
+        IAuthReferenceService auth,CancellationToken ct)
     {
         if(!CanRead(h)||await FindCalendarReadable(id,db,h,ct) is null)return CrmAccess.Denied();
-        return Results.Ok(await db.ActivityParticipants.AsNoTracking().Where(x=>x.ActivityId==id)
-            .OrderBy(x=>x.CreatedAt).ToListAsync(ct));
+        var participants=await db.ActivityParticipants.AsNoTracking()
+            .Where(x=>x.ActivityId==id).OrderBy(x=>x.CreatedAt).ToListAsync(ct);
+        // Resolve only members of this authorized activity, never expose the Auth directory.
+        // Preserve persisted memberships if Auth is temporarily unavailable.
+        var names=new Dictionary<Guid,string>();
+        foreach(var userId in participants.Where(p=>p.UserId.HasValue)
+            .Select(p=>p.UserId!.Value).Distinct())
+        {
+            try
+            {
+                var user=await auth.GetActiveAsync(userId,ct);
+                if(!string.IsNullOrWhiteSpace(user?.DisplayName))
+                    names[userId]=user.DisplayName;
+            }
+            catch(OperationCanceledException) when(ct.IsCancellationRequested){throw;}
+            catch(Exception){/* Identity lookup failure must not hide saved invitations. */}
+        }
+        return Results.Ok(participants.Select(p=>new {
+            p.Id,p.ActivityId,p.ContactId,p.UserId,p.ParticipantName,p.Role,
+            p.CreatedAt,p.CreatedByUserId,p.RowVersion,
+            internalUserName=p.UserId.HasValue && names.TryGetValue(p.UserId.Value,out var name)
+                ? name : null
+        }));
     }
     private static async Task<IResult> RemoveParticipant(Guid id,Guid participantId,
         CrmDbContext db,HttpContext h,CancellationToken ct)
