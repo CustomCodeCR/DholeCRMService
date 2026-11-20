@@ -63,6 +63,9 @@ internal static class ActivityDetailsEditing
         await using var transaction = await db.Database.BeginTransactionAsync(
             System.Data.IsolationLevel.Serializable, ct);
         var storedNotes = await db.ActivityNotes.Where(x => x.ActivityId == id).ToListAsync(ct);
+        var activityInvitees = await db.ActivityParticipants.AsNoTracking()
+            .Where(p => p.ActivityId == id && p.UserId.HasValue && p.Role == "RESPONSIBLE")
+            .Select(p => p.UserId!.Value).Distinct().ToArrayAsync(ct);
         var noteById = storedNotes.ToDictionary(x => x.Id);
         var origins = new List<string> {
             "Acuerdo registrado en actividad comercial " + id,
@@ -189,6 +192,13 @@ internal static class ActivityDetailsEditing
                         followup.DueAt, followup.ReminderLeadMinutes,
                         followup.ReminderChannelStrategy, "crm.followup.reminder.v1",
                         followup.CreatedByUserId, ct);
+                if (!change.Remove && !change.Completed && change.DueAt > now)
+                    foreach (var invitee in await db.FollowupInvitees.AsNoTracking()
+                        .Where(i => i.FollowupId == followup.Id).Select(i => i.UserId).ToArrayAsync(ct))
+                        await CrmReminderEnqueue.QueueAsync(db, "Followup", followup.Id,
+                            followup.AccountId, invitee, followup.RowVersion, followup.DueAt,
+                            followup.ReminderLeadMinutes, followup.ReminderChannelStrategy,
+                            "crm.followup.reminder.v1", actor, ct, isInvitee: true);
             }
             else
             {
@@ -213,6 +223,8 @@ internal static class ActivityDetailsEditing
                         followup.AccountId, followup.AssignedUserId, followup.RowVersion,
                         followup.DueAt, followup.ReminderLeadMinutes,
                         followup.ReminderChannelStrategy, "crm.followup.reminder.v1", actor, ct);
+                await CrmCommitmentInvitees.AttachAsync(db, followup,
+                    activityInvitees, actor, ct);
             }
         }
 
