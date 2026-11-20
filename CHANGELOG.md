@@ -1,3 +1,10 @@
+## [1.42.2] - 2026-11-19 (DH-20261119-CRM-INVITATIONS-SAVE-290 · guardado de actividades CRM con invitados)
+
+- PATCH: valida invitados internos con el directorio activo y autorizado de Auth compartido con el selector de agenda, evitando la consulta individual de permisos por invitado.
+- Persistencia de memberships estables con invitaciones y avisos individuales por outbox, manteniendo REST, SignalR e idempotencia.
+- Pruebas de dos invitados, usuario no autorizado, usuarios paginados y lista vacía; fallas de Auth controladas con 503.
+- DholeCRMService 1.42.1 → 1.42.2, ecosistema Web/System 1.103.11. Producción pendiente de autorización y staging.
+
 ## [1.42.1] - 2026-11-19 (DH-20261119-CRM-FOLLOWUP-EDIT-PROMOTION-286 · edición completa de seguimientos)
 
 - PATCH: promueve desde staging el endpoint PUT /api/crm/followups/{id}/details. Actualiza asunto, fechas, responsable, invitados y estrategias de notificación sin duplicar la tarea, con control de versión e historial de cambios.
