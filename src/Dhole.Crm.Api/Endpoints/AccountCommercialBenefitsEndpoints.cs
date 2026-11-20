@@ -64,8 +64,8 @@ internal static class AccountCommercialBenefitsEndpoints
             miamiLclPlanCode = CommercialBenefitRules.MiamiTier(account.CategoryType, account.CategoryCode),
             settings,
             rates,
-            pricingIntegrationStatus = "NOT_CONNECTED",
-            note = "CRM-only negotiated benefits; Pricing must not apply them until explicitly integrated."
+            pricingIntegrationStatus = "CONNECTED",
+            note = "Pricing reads scoped customer agreements for new quotations, preserving existing quote snapshots."
         });
     }
 
