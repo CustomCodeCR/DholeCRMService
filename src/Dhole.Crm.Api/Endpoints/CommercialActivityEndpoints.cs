@@ -239,11 +239,21 @@ internal static class CommercialActivityEndpoints
         var invitedUsers=r.ParticipantUserIds?.Distinct().Where(x=>x!=owner).ToArray() ?? [];
         if(invitedUsers.Length>30 || invitedUsers.Any(x=>x==Guid.Empty))
             return CommercialAccess.Invalid("Invalid or excessive invited users");
-        foreach(var userId in invitedUsers)
+        // Match the same active, internal, agenda-authorized directory displayed by the UI.
+        // Per-user Auth permission lookups can fail independently of the directory and
+        // must not turn an otherwise valid multi-user invitation into an HTTP 500.
+        try
         {
-            var invited=await auth.GetActiveAsync(userId,ct);
-            if(invited is null || !CrmAccess.CanOwnAgenda(invited))
+            if(!await CrmInviteeDirectoryValidation.AllEligibleAsync(auth,invitedUsers,ct))
                 return CommercialAccess.Invalid("Invitees must be active CRM agenda users");
+        }
+        catch(HttpRequestException)
+        {
+            return Results.Problem("No se pudo verificar el directorio de invitados en Auth.",statusCode:503);
+        }
+        catch(OperationCanceledException) when(!ct.IsCancellationRequested)
+        {
+            return Results.Problem("La verificación de invitados en Auth agotó el tiempo de espera.",statusCode:503);
         }
         var createdAtUtc=DateTime.UtcNow;
         var occurredAt=CommercialRules.ResolveOccurredAt(
@@ -266,11 +276,11 @@ internal static class CommercialActivityEndpoints
                 ActivityId=activity.Id,ContactId=contactId,Role="ATTENDEE",
                 CreatedByUserId=current
             });
-        foreach(var userId in invitedUsers)
-            db.ActivityParticipants.Add(new ActivityParticipant {
-                ActivityId=activity.Id,UserId=userId,Role="RESPONSIBLE",
-                CreatedByUserId=current
-            });
+        var invitedMemberships=invitedUsers.Select(userId=>new ActivityParticipant {
+            ActivityId=activity.Id,UserId=userId,Role="RESPONSIBLE",
+            CreatedByUserId=current
+        }).ToArray();
+        db.ActivityParticipants.AddRange(invitedMemberships);
         if(!string.IsNullOrWhiteSpace(r.Minutes))
             db.ActivityNotes.Add(new ActivityNote {
                 ActivityId=activity.Id,AuthorUserId=current,CreatedByUserId=current,
@@ -333,8 +343,7 @@ internal static class CommercialActivityEndpoints
                         activity.CreatedByUserId,ct,isInvitee:recipient!=activity.OwnerUserId);
             }
             if(activity.Status=="Scheduled")
-                foreach(var guest in db.ActivityParticipants.Local.Where(x=>
-                    x.ActivityId==activity.Id && x.UserId.HasValue))
+                foreach(var guest in invitedMemberships)
                     await CrmReminderEnqueue.QueueInvitationAsync(db,"Activity",
                         activity.Id,guest.Id,guest.UserId!.Value,activity.RowVersion,current,ct);
             foreach(var followup in nextCommitments)
@@ -643,9 +652,19 @@ internal static class CommercialActivityEndpoints
         {
             if(a.OwnerUserId!=CrmAccess.UserId(h) && !CrmAccess.CanManageAgendaAcrossUsers(h))
                 return CrmAccess.Denied();
-            var invited=await auth.GetActiveAsync(idUser,ct);
-            if(invited is null || !CrmAccess.CanOwnAgenda(invited))
-                return CommercialAccess.Invalid("Internal invitee needs an active CRM agenda scope");
+            try
+            {
+                if(!await CrmInviteeDirectoryValidation.AllEligibleAsync(auth,[idUser],ct))
+                    return CommercialAccess.Invalid("Internal invitee needs an active CRM agenda scope");
+            }
+            catch(HttpRequestException)
+            {
+                return Results.Problem("No se pudo verificar el directorio de invitados en Auth.",statusCode:503);
+            }
+            catch(OperationCanceledException) when(!ct.IsCancellationRequested)
+            {
+                return Results.Problem("La verificación de invitados en Auth agotó el tiempo de espera.",statusCode:503);
+            }
             if(idUser==a.OwnerUserId || await db.ActivityParticipants.AsNoTracking()
                 .AnyAsync(p=>p.ActivityId==id && p.UserId==idUser,ct))
                 return CommercialAccess.Conflict("User already participates in this activity");
