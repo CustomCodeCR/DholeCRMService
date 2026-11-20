@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "ecosystem": "Dhole",
+  "releaseId": "DH-20261120-CRM-INVITEE-VISIBILITY-323",
+  "releaseType": "PATCH",
+  "ecosystemVersion": "1.104.3",
+  "branch": "fix/DH-20261120-CRM-INVITEE-VISIBILITY-323",
+  "targetBranches": [
+    "develop",
+    "master"
+  ],
+  "components": [
+    {
+      "repository": "CustomCodeCR/DholeSystem",
+      "previousVersion": "1.104.2",
+      "version": "1.104.3"
+    },
+    {
+      "repository": "CustomCodeCR/DholeWeb",
+      "previousVersion": "1.104.1",
+      "version": "1.104.3"
+    },
+    {
+      "repository": "CustomCodeCR/DholeCRMService",
+      "previousVersion": "1.42.6",
+      "version": "1.42.7"
+    }
+  ],
+  "checks": {
+    "ci": "pending",
+    "staging": "pending",
+    "production": "not-authorized"
+  },
+  "productionDeploymentAuthorized": false
+}
