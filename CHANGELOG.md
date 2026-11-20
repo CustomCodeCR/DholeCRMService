@@ -2,7 +2,7 @@
 
 - PATCH: el endpoint de participantes resuelve con Auth el nombre de cada invitado interno autorizado, sin exponer el directorio; mantiene los invitados persistidos aun si Auth falla.
 - Agenda compartida permite lectura a invitados internos con permisos de seguimiento/tareas respetando membresía del evento; REST y SignalR existentes conservados.
-- Release coordinado: CRM 1.42.6 → 1.42.7, DholeWeb/DholeSystem 1.104.1 → 1.104.2; otros 14 componentes sin cambios. CI y staging pendientes; producción no autorizada.
+- Release coordinado: CRM 1.42.6 → 1.42.7, DholeSystem 1.104.2 → 1.104.3 y DholeWeb 1.104.1 → 1.104.3; otros 14 componentes sin cambios. CI y staging pendientes; producción no autorizada.
 
 ## [1.42.6] - 2026-11-20 (DH-20261120-CRM-INVITEE-SYNC-309 · promoción de persistencia de invitados CRM)
 
