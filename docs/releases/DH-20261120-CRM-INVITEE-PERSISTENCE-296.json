@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "releaseId": "DH-20261120-CRM-INVITEE-PERSISTENCE-296",
+  "kind": "patch",
+  "ecosystemVersion": "1.103.19",
+  "summary": "Persist guests on activity and already-created agreement followups, verify followup membership in calendar",
+  "components": [
+    {
+      "repository": "CustomCodeCR/DholeCRMService",
+      "previousVersion": "1.42.4",
+      "version": "1.42.5"
+    },
+    {
+      "repository": "CustomCodeCR/DholeWeb",
+      "previousVersion": "1.103.18",
+      "version": "1.103.19"
+    },
+    {
+      "repository": "CustomCodeCR/DholeSystem",
+      "previousVersion": "1.103.18",
+      "version": "1.103.19"
+    }
+  ],
+  "branch": "release/DH-20261120-CRM-INVITEE-PERSISTENCE-296-master",
+  "targetBranches": [
+    "develop",
+    "master"
+  ],
+  "checks": {
+    "ci": "pending",
+    "staging": "pending",
+    "production": "not-authorized"
+  },
+  "productionDeploymentAuthorized": false
+}
