@@ -11,6 +11,24 @@ namespace Dhole.Crm.Api.Endpoints;
 /// </summary>
 public static class CrmCommitmentInvitees
 {
+    /// <summary>
+    /// A guest added after the main activity was created must also be invited
+    /// to its existing, still-open dated agreement followups. Keep the entire
+    /// change in the caller's SaveChanges transaction and reuse outbox dedupe.
+    /// </summary>
+    public static async Task AttachToExistingAsync(
+        CrmDbContext db, Guid activityId, Guid guestUserId, Guid actor,
+        CancellationToken ct)
+    {
+        var commitments = await db.Followups
+            .Where(f => f.OriginActivityId == activityId &&
+                f.ArchivedAt == null &&
+                (f.Status == "Pending" || f.Status == "Overdue"))
+            .ToListAsync(ct);
+        foreach (var followup in commitments)
+            await AttachAsync(db, followup, [guestUserId], actor, ct);
+    }
+
     public static async Task AttachAsync(CrmDbContext db, Followup followup,
         IEnumerable<Guid> activityInvitedUserIds, Guid actor, CancellationToken ct)
     {
