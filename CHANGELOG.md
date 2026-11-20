@@ -1,3 +1,11 @@
+## [1.42.3] - 2026-11-19 (DH-20261119-CRM-AGREEMENT-INVITEES-294 · invitados de acuerdos y seguimientos)
+
+- PATCH: los seguimientos generados desde acuerdos, notas y edición de actividades heredan participantes internos de su actividad origen y los conservan al volver a abrir el registro.
+- La misma transacción registra cada invitado en crm_followup_invitees, historial, recordatorio individual e invitación con outbox durable e idempotente; no se generan avisos retroactivos para compromisos cerrados.
+- Migración aditiva PostgreSQL 20261120014500 recupera invitaciones faltantes en compromisos previos pendientes/vencidos, respetando el historial explícito de invitaciones y bajas; sin correos retroactivos.
+- Los formularios de seguimiento crean, actualizan y reemplazan invitados verificando el directorio Auth activo, con errores 503 controlados si Auth no responde.
+- Regresión con dos usuarios, deduplicación, correo/sistema y compromisos cerrados. CRM 1.42.2 → 1.42.3; ecosistema 1.103.16. Requiere CI/staging previo a master.
+
 ## [1.42.2] - 2026-11-19 (DH-20261119-CRM-INVITATIONS-SAVE-290 · guardado de actividades CRM con invitados)
 
 - PATCH: valida invitados contra el mismo directorio Auth de usuarios internos activos con permisos efectivos de agenda que utiliza el selector, evitando una consulta adicional de permisos por cada invitado.
