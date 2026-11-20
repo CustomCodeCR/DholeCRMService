@@ -2,9 +2,9 @@
   "schemaVersion": 1,
   "ecosystem": "Dhole",
   "component": "DholeCRMService",
-  "version": "1.42.1",
-  "ecosystemVersion": "1.103.10",
-  "releaseId": "DH-20261119-CRM-FOLLOWUP-EDIT-PROMOTION-286",
-  "releaseStatus": "candidate-ci-and-production-pending",
-  "businessReleaseId": "DH-20261119-CRM-FOLLOWUP-EDIT-PROMOTION-286"
+  "version": "1.42.2",
+  "ecosystemVersion": "1.103.11",
+  "releaseId": "DH-20261119-CRM-INVITATIONS-SAVE-290",
+  "releaseStatus": "candidate-ci-and-staging-pending",
+  "businessReleaseId": "DH-20261119-CRM-INVITATIONS-SAVE-290"
 }
