@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "releaseId": "DH-20261119-CRM-TIERED-CHECK-293",
+  "kind": "patch",
+  "ecosystemVersion": "1.103.16",
+  "components": [
+    {
+      "repository": "CustomCodeCR/DholeCRMService",
+      "previousVersion": "1.42.2",
+      "version": "1.42.3"
+    },
+    {
+      "repository": "CustomCodeCR/DholeWeb",
+      "version": "1.103.16"
+    },
+    {
+      "repository": "CustomCodeCR/DholeSystem",
+      "version": "1.103.16"
+    }
+  ],
+  "summary": "Allow TIERED_SALE in CRM PostgreSQL constraint and protect partial bulk edits",
+  "branch": "release/DH-20261119-CRM-TIERED-CHECK-293-master",
+  "checks": {
+    "ci": "pending",
+    "staging": "pending",
+    "production": "not deployed"
+  },
+  "productionDeploymentAuthorized": false
+}
