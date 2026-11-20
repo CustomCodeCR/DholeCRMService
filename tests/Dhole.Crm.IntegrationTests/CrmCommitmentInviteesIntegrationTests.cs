@@ -65,11 +65,10 @@ public sealed class CrmCommitmentInviteesIntegrationTests
         Assert.AreEqual(2, await db.Reminders.CountAsync(x =>
             x.EntityType == "Followup" && x.EntityId == commitment.Id &&
             x.NotificationType == "crm.followup.invited.v1"));
-        Assert.AreEqual(2, await db.Reminders.CountAsync(x =>
+        Assert.AreEqual(4, await db.Reminders.CountAsync(x =>
             x.EntityType == "Followup" && x.EntityId == commitment.Id &&
-            x.RecipientUserId == first && x.NotificationType == "crm.followup.reminder.v1" ||
-            x.EntityType == "Followup" && x.EntityId == commitment.Id &&
-            x.RecipientUserId == second && x.NotificationType == "crm.followup.reminder.v1"));
+            (x.RecipientUserId == first || x.RecipientUserId == second) &&
+            x.NotificationType == "crm.followup.reminder.v1"));
         var reminders = await db.Reminders.AsNoTracking()
             .Where(x => x.EntityType == "Followup" && x.EntityId == commitment.Id)
             .Select(x => x.Id).ToListAsync();
