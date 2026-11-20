@@ -686,6 +686,11 @@ internal static class CommercialActivityEndpoints
         var item=new ActivityParticipant {ActivityId=id,ContactId=r.ContactId,UserId=r.UserId,
             ParticipantName=r.ParticipantName,Role=r.Role,CreatedByUserId=CrmAccess.UserId(h)};
         db.ActivityParticipants.Add(item);
+        // Agreements created earlier are separate followup records. Inherit
+        // the newly invited user in the same transaction as the activity guest.
+        if(r.UserId.HasValue && r.Role=="RESPONSIBLE")
+            await CrmCommitmentInvitees.AttachToExistingAsync(db,a.Id,
+                r.UserId.Value,CrmAccess.UserId(h),ct);
         if(r.UserId.HasValue && a.Status=="Scheduled")
             await CrmReminderEnqueue.QueueInvitationAsync(db,"Activity",a.Id,
                 item.Id,r.UserId.Value,a.RowVersion,CrmAccess.UserId(h),ct);
