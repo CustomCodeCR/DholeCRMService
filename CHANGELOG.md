@@ -3,7 +3,7 @@
 - PATCH: corrige la restricción ck_crm_preferential_rate_type que solo admitía seis tipos; añade TIERED_SALE, previamente admitido por el dominio y persistido en tier_sales_json.
 - Migración EF Core aditiva no destructiva; PostgreSQL deja guardar ventas preferenciales por tramos para cargos existentes, conservando los registros previamente creados.
 - Prueba de integración del CHECK en PostgreSQL; migrador de staging/producción aplica la migración antes de reiniciar API. Compatible con REST, CQRS, SignalR y outbox/inbox.
-- Coordinado con DholeWeb/DholeSystem 1.103.15; pasar CI y staging antes del release master.
+- Coordinado con DholeWeb/DholeSystem 1.103.16; pasar CI y staging antes del release master.
 
 ## [1.42.2] - 2026-11-19 (DH-20261119-CRM-INVITATIONS-SAVE-290 · guardado de actividades CRM con invitados)
 
