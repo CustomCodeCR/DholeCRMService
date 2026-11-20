@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "ecosystem": "Dhole",
+  "releaseId": "DH-20261119-CRM-FOLLOWUP-EDIT-PROMOTION-286",
+  "sourceReleaseId": "DH-20261119-CRM-FOLLOWUP-EDIT-281",
+  "releaseType": "PATCH",
+  "component": "DholeCRMService",
+  "previousVersion": "1.42.0",
+  "version": "1.42.1",
+  "ecosystemVersion": "1.103.10",
+  "candidateBranch": "release/DH-20261119-CRM-FOLLOWUP-EDIT-286-master",
+  "affectedComponents": [
+    "DholeWeb",
+    "DholeSystem",
+    "DholeCRMService"
+  ],
+  "stagingValidation": "success",
+  "status": "production-candidate"
+}
