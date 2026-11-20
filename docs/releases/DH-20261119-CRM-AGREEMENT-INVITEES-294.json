@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "releaseId": "DH-20261119-CRM-AGREEMENT-INVITEES-294",
+  "kind": "patch",
+  "ecosystemVersion": "1.103.16",
+  "summary": "Fix inherited CRM followup invitees and backfill missing associations",
+  "components": [
+    {
+      "repository": "CustomCodeCR/DholeCRMService",
+      "previousVersion": "1.42.2",
+      "version": "1.42.3"
+    },
+    {
+      "repository": "CustomCodeCR/DholeWeb",
+      "previousVersion": "1.103.15",
+      "version": "1.103.16"
+    },
+    {
+      "repository": "CustomCodeCR/DholeSystem",
+      "previousVersion": "1.103.15",
+      "version": "1.103.16"
+    }
+  ],
+  "checks": {
+    "ci": "pending",
+    "staging": "pending",
+    "production": "not-authorized"
+  },
+  "productionDeploymentAuthorized": false
+}
