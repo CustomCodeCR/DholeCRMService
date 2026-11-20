@@ -1,3 +1,8 @@
+## [1.42.8] - 2026-11-20 (DH-20261120-PRICING-CRM-PREFERRED-324 · beneficios preferenciales conectados a Pricing)
+
+- PATCH: habilita estado CONNECTED de acuerdos de CRM visibles para Pricing; preserva autorización, resolver existente y contratos REST; sin migraciones.
+- Coordinado con Web/System 1.104.5; CI y staging pendientes.
+
 ## [1.42.6] - 2026-11-20 (DH-20261120-CRM-INVITEE-SYNC-309 · promoción de persistencia de invitados CRM)
 
 - PATCH: corrige la propagación de invitados añadidos a actividades hacia compromisos pendientes ya existentes, guardados atómicamente y con notificaciones durables idempotentes.
