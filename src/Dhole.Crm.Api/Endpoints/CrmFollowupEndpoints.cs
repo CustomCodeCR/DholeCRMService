@@ -194,11 +194,18 @@ internal static class CrmFollowupEndpoints
         var requested=(request.UserIds??[]).Distinct().Where(x=>x!=record.AssignedUserId).ToArray();
         if(requested.Length>30 || requested.Any(x=>x==Guid.Empty))
             return CrmDataEndpoints.Bad("Invalid invited users");
-        foreach(var userId in requested)
+        try
         {
-            var user=await auth.GetActiveAsync(userId,ct);
-            if(user is null || !CrmAccess.CanOwnAgenda(user))
+            if(!await CrmInviteeDirectoryValidation.AllEligibleAsync(auth,requested,ct))
                 return CrmDataEndpoints.Bad("Invitee needs active CRM agenda access");
+        }
+        catch(HttpRequestException)
+        {
+            return Results.Problem("No se pudo consultar el directorio Auth de invitados.",statusCode:503);
+        }
+        catch(OperationCanceledException) when(!ct.IsCancellationRequested)
+        {
+            return Results.Problem("Tiempo de espera agotado al verificar invitados.",statusCode:503);
         }
         var current=await db.FollowupInvitees.Where(x=>x.FollowupId==id).ToListAsync(ct);
         var old=current.Select(x=>x.UserId).ToHashSet();
@@ -352,11 +359,18 @@ internal static class CrmFollowupEndpoints
         var invitedIds=r.InviteeUserIds?.Distinct().Where(x=>x!=r.AssignedUserId).ToArray() ?? [];
         if(invitedIds.Length>30 || invitedIds.Any(x=>x==Guid.Empty))
             return CrmDataEndpoints.Bad("Invalid or excessive invited users");
-        foreach(var id in invitedIds)
+        try
         {
-            var invited=await auth.GetActiveAsync(id,ct);
-            if(invited is null || !CrmAccess.CanOwnAgenda(invited))
+            if(!await CrmInviteeDirectoryValidation.AllEligibleAsync(auth,invitedIds,ct))
                 return CrmDataEndpoints.Bad("Invitee must be an active CRM agenda user");
+        }
+        catch(HttpRequestException)
+        {
+            return Results.Problem("No se pudo consultar el directorio Auth de invitados.",statusCode:503);
+        }
+        catch(OperationCanceledException) when(!ct.IsCancellationRequested)
+        {
+            return Results.Problem("Tiempo de espera agotado al verificar invitados.",statusCode:503);
         }
         var x=new Followup {AccountId=r.AccountId,LeadId=r.LeadId,OpportunityId=r.OpportunityId,
             AssignedUserId=r.AssignedUserId,Channel=r.Channel,StartAt=r.StartAt,DueAt=r.DueAt,
@@ -431,11 +445,19 @@ internal static class CrmFollowupEndpoints
             : r.InviteeUserIds.Distinct().Where(userId=>userId!=r.AssignedUserId).ToArray();
         if(invited.Length>30||invited.Any(userId=>userId==Guid.Empty))
             return CrmDataEndpoints.Bad("Invalid invited users");
-        foreach(var userId in invited.Where(userId=>!previous.Contains(userId)))
+        try
         {
-            var user=await auth.GetActiveAsync(userId,ct);
-            if(user is null||!CrmAccess.CanOwnAgenda(user))
+            if(!await CrmInviteeDirectoryValidation.AllEligibleAsync(auth,
+                invited.Where(userId=>!previous.Contains(userId)).ToArray(),ct))
                 return CrmDataEndpoints.Bad("Invitee needs active CRM agenda access");
+        }
+        catch(HttpRequestException)
+        {
+            return Results.Problem("No se pudo consultar el directorio Auth de invitados.",statusCode:503);
+        }
+        catch(OperationCanceledException) when(!ct.IsCancellationRequested)
+        {
+            return Results.Problem("Tiempo de espera agotado al verificar invitados.",statusCode:503);
         }
         var next=invited.ToHashSet();
         foreach(var removed in existing.Where(i=>!next.Contains(i.UserId)))
