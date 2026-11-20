@@ -76,4 +76,25 @@ public sealed class CrmSchemaIntegrationTests
         catch (DbUpdateException) { rejected = true; }
         Assert.IsTrue(rejected, "Multiple conversions of a lead must be rejected.");
     }
+    [TestMethod]
+    public async Task Tiered_preferential_sales_are_allowed_by_the_PostgreSQL_constraint()
+    {
+        var cs = Environment.GetEnvironmentVariable("CRM_TEST_POSTGRES");
+        if (string.IsNullOrWhiteSpace(cs)) Assert.Inconclusive("Real PostgreSQL required.");
+        var options = new DbContextOptionsBuilder<CrmDbContext>().UseNpgsql(cs).Options;
+        await using var db = new CrmDbContext(options);
+        await db.Database.MigrateAsync();
+        var definition = await db.Database.SqlQueryRaw<string>(
+            """
+            SELECT pg_get_constraintdef(c.oid)::text AS "Value"
+            FROM pg_constraint c
+            JOIN pg_class t ON t.oid = c.conrelid
+            JOIN pg_namespace n ON n.oid = t.relnamespace
+            WHERE n.nspname = 'crm' AND t.relname = 'crm_account_preferential_rates'
+              AND c.conname = 'ck_crm_preferential_rate_type'
+            """).SingleAsync();
+        StringAssert.Contains(definition, "TIERED_SALE");
+        StringAssert.Contains(definition, "FIXED_AMOUNT");
+    }
+
 }
