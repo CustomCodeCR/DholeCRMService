@@ -1,3 +1,10 @@
+## [1.42.4] - 2026-11-20 (DH-20261120-CRM-AGREEMENT-INVITEES-295 · persistencia de invitados en acuerdos CRM)
+
+- PATCH: los acuerdos convertidos en seguimientos heredan invitados internos de la actividad principal (creación, notas, conversión de nota y edición completa).
+- Alta atómica de memberships, historial, invitaciones y avisos individuales con outbox. Los seguimientos antiguos abiertos recuperan sus invitados con migración aditiva PostgreSQL sin revertir bajas voluntarias.
+- Los endpoints de seguimiento validan invitados con el directorio autorizado de Auth; errores de disponibilidad devuelven 503.
+- Pruebas de persistencia con 2 usuarios, idempotencia, avisos y compromisos cerrados. Versiones: CRM 1.42.3 → 1.42.4, global 1.103.17. Se preserva el release de tarifas 1.42.3 ya integrado.
+
 ## [1.42.3] - 2026-11-19 (DH-20261119-CRM-TIERED-CHECK-293 · habilitar TIERED_SALE en PostgreSQL)
 
 - PATCH: corrige la restricción ck_crm_preferential_rate_type que solo admitía seis tipos; añade TIERED_SALE, previamente admitido por el dominio y persistido en tier_sales_json.
