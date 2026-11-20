@@ -116,4 +116,57 @@ public sealed class CrmCommitmentInviteesIntegrationTests
         Assert.AreEqual(0, await db.Reminders.CountAsync(x =>
             x.EntityType == "Followup" && x.EntityId == commitment.Id));
     }
+
+    [TestMethod]
+    public async Task Adding_activity_guest_later_inherits_pending_agreements_idempotently()
+    {
+        await using var db = await Open();
+        var owner = Guid.NewGuid();
+        var guest = Guid.NewGuid();
+        var account = AccountFor(owner);
+        db.Accounts.Add(account);
+        var activity = new Activity {
+            AccountId = account.Id, OwnerUserId = owner, Type = "MEETING",
+            Subject = "Reunión comercial", Status = "Scheduled",
+            ScheduledStartAt = DateTime.UtcNow.AddHours(1),
+            ScheduledEndAt = DateTime.UtcNow.AddHours(2),
+            CreatedByUserId = owner
+        };
+        db.Activities.Add(activity);
+        var commitment = new Followup {
+            AccountId = account.Id, OriginActivityId = activity.Id,
+            AssignedUserId = owner, Subject = "Acuerdo pendiente",
+            DueAt = DateTime.UtcNow.AddDays(1), CreatedByUserId = owner
+        };
+        var completed = new Followup {
+            AccountId = account.Id, OriginActivityId = activity.Id,
+            AssignedUserId = owner, Subject = "Acuerdo completado",
+            Status = "Completed", DueAt = DateTime.UtcNow.AddHours(-1),
+            CompletedAt = DateTime.UtcNow, CreatedByUserId = owner
+        };
+        db.Followups.AddRange(commitment, completed);
+        await db.SaveChangesAsync();
+        db.ChangeTracker.Clear();
+
+        db.ActivityParticipants.Add(new ActivityParticipant {
+            ActivityId = activity.Id, UserId = guest, Role = "RESPONSIBLE",
+            CreatedByUserId = owner
+        });
+        await CrmCommitmentInvitees.AttachToExistingAsync(
+            db, activity.Id, guest, owner, CancellationToken.None);
+        await CrmCommitmentInvitees.AttachToExistingAsync(
+            db, activity.Id, guest, owner, CancellationToken.None);
+        await db.SaveChangesAsync();
+        db.ChangeTracker.Clear();
+
+        Assert.AreEqual(1, await db.FollowupInvitees.CountAsync(i =>
+            i.FollowupId == commitment.Id && i.UserId == guest));
+        Assert.AreEqual(0, await db.FollowupInvitees.CountAsync(i =>
+            i.FollowupId == completed.Id && i.UserId == guest));
+        Assert.AreEqual(1, await db.Reminders.CountAsync(r =>
+            r.EntityType == "Followup" && r.EntityId == commitment.Id &&
+            r.RecipientUserId == guest && r.NotificationType == "crm.followup.invited.v1"));
+        Assert.AreEqual(1, await db.FollowupHistories.CountAsync(h =>
+            h.FollowupId == commitment.Id && h.Action == "Invited"));
+    }
 }
