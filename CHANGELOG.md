@@ -1,3 +1,9 @@
+## [1.42.5] - 2026-11-20 (DH-20261120-CRM-INVITEE-PERSISTENCE-296 · invitaciones y compromisos CRM)
+
+- PATCH: guardar invitados de actividad y propagarlos a acuerdos pendientes ya creados, idempotente y con notificaciones durables por outbox/SignalR.
+- Web muestra invitados persistidos aunque no aparezcan en la primera página del directorio Auth y confirma guardado con GET después del PUT.
+- Coordinación CRM 1.42.4 → 1.42.5 y Web/System 1.103.17 → 1.103.19; selección específica del hotfix sobre master, sin importar otras modificaciones de develop. CI y staging obligatorios; producción no autorizada aún.
+
 ## [1.42.4] - 2026-11-20 (DH-20261120-CRM-AGREEMENT-INVITEES-295 · invitados en acuerdos derivados)
 
 - PATCH: los compromisos derivados de actividades heredan y persisten invitados internos, invitaciones y recordatorios por outbox; se cubren creación, notas y edición.
