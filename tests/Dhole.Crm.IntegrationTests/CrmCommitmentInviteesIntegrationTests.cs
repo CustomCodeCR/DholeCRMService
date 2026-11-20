@@ -19,6 +19,13 @@ public sealed class CrmCommitmentInviteesIntegrationTests
         return db;
     }
 
+    private static Account AccountFor(Guid owner) => new()
+    {
+        DisplayName = "Cuenta para invitaciones", LegalName = "Cuenta para invitaciones",
+        ExecutiveUserId = owner, CategoryType = "CUSTOMER", CategoryCode = "D",
+        CreatedByUserId = owner
+    };
+
     [TestMethod]
     public async Task Agreement_followup_persists_two_distinct_invitees_and_durable_outbox()
     {
@@ -26,9 +33,11 @@ public sealed class CrmCommitmentInviteesIntegrationTests
         var owner = Guid.NewGuid();
         var first = Guid.NewGuid();
         var second = Guid.NewGuid();
+        var account = AccountFor(owner);
+        db.Accounts.Add(account);
         var activity = new Activity
         {
-            OwnerUserId = owner, Type = "COMMERCIAL_FOLLOWUP",
+            AccountId = account.Id, OwnerUserId = owner, Type = "COMMERCIAL_FOLLOWUP",
             Subject = "Actividad original", Status = "Scheduled",
             ScheduledStartAt = DateTime.UtcNow.AddHours(1),
             ScheduledEndAt = DateTime.UtcNow.AddHours(2),
@@ -36,7 +45,7 @@ public sealed class CrmCommitmentInviteesIntegrationTests
         };
         var commitment = new Followup
         {
-            OriginActivityId = activity.Id, AssignedUserId = owner,
+            AccountId = account.Id, OriginActivityId = activity.Id, AssignedUserId = owner,
             Subject = "Acuerdo de la actividad", DueAt = DateTime.UtcNow.AddHours(4),
             ReminderLeadMinutes = 60, ReminderChannelStrategy = "BOTH",
             CreatedByUserId = owner
@@ -82,15 +91,17 @@ public sealed class CrmCommitmentInviteesIntegrationTests
         await using var db = await Open();
         var owner = Guid.NewGuid();
         var guest = Guid.NewGuid();
+        var account = AccountFor(owner);
+        db.Accounts.Add(account);
         var activity = new Activity
         {
-            OwnerUserId = owner, Type = "CALL", Subject = "Bitácora histórica",
+            AccountId = account.Id, OwnerUserId = owner, Type = "CALL", Subject = "Bitácora histórica",
             Status = "Completed", OccurredAt = DateTime.UtcNow,
             CreatedByUserId = owner
         };
         var commitment = new Followup
         {
-            OriginActivityId = activity.Id, AssignedUserId = owner,
+            AccountId = account.Id, OriginActivityId = activity.Id, AssignedUserId = owner,
             Subject = "Acuerdo cerrado", DueAt = DateTime.UtcNow.AddHours(-1),
             Status = "Completed", CompletedAt = DateTime.UtcNow,
             CreatedByUserId = owner
