@@ -1,3 +1,8 @@
+## [1.42.8] - 2026-11-20 (DH-20261120-PRICING-CRM-PREFERRED-324 · integración de beneficios preferenciales en Pricing)
+
+- PATCH: habilita integración de lectura ya existente de acuerdos comerciales CRM por cuenta visible; el endpoint conserva la autorización de cuentas y el solucionador de coincidencias. Indica CONNECTED en vez de NOT_CONNECTED, sin migraciones ni alteraciones de ventas/proveedores existentes.
+- Coordinado con DholeWeb/DholeSystem 1.104.5; sin cambiar rutas REST, eventos SignalR ni outbox. Validación CI y staging pendiente.
+
 ## [1.42.7] - 2026-11-20 (DH-20261120-CRM-INVITEE-VISIBILITY-323 · nombres de invitados en calendario)
 
 - PATCH: el endpoint de participantes resuelve con Auth el nombre de cada invitado interno autorizado, sin exponer el directorio; mantiene los invitados persistidos aun si Auth falla.
