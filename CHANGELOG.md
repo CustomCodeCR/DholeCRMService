@@ -1,3 +1,10 @@
+## [1.42.4] - 2026-11-20 (DH-20261120-CRM-AGREEMENT-INVITEES-295 · invitados en acuerdos derivados)
+
+- PATCH: los compromisos derivados de actividades heredan y persisten invitados internos, invitaciones y recordatorios por outbox; se cubren creación, notas y edición.
+- Migración aditiva reconstruye relaciones faltantes en compromisos abiertos sin revertir invitados retirados voluntariamente. Los formularios consultan Auth para validar permisos efectivos.
+- Pruebas de persistencia real, idempotencia y no generar avisos retroactivos. CRM 1.42.3 → 1.42.4; ecosistema 1.103.17. Release independiente de cambios recientes de tarifas.
+- CI/staging previos a master, producción no autorizada.
+
 ## [1.42.3] - 2026-11-19 (DH-20261119-CRM-TIERED-CHECK-293 · habilitar TIERED_SALE en PostgreSQL)
 
 - PATCH: corrige la restricción ck_crm_preferential_rate_type que solo admitía seis tipos; añade TIERED_SALE, previamente admitido por el dominio y persistido en tier_sales_json.

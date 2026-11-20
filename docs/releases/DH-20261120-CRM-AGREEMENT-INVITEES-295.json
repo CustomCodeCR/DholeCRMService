@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "releaseId": "DH-20261120-CRM-AGREEMENT-INVITEES-295",
+  "kind": "patch",
+  "ecosystemVersion": "1.103.17",
+  "summary": "Persist activity guests on child followups and repair historical membership",
+  "components": [
+    {
+      "repository": "CustomCodeCR/DholeCRMService",
+      "previousVersion": "1.42.3",
+      "version": "1.42.4"
+    },
+    {
+      "repository": "CustomCodeCR/DholeWeb",
+      "previousVersion": "1.103.16",
+      "version": "1.103.17"
+    },
+    {
+      "repository": "CustomCodeCR/DholeSystem",
+      "previousVersion": "1.103.16",
+      "version": "1.103.17"
+    }
+  ],
+  "checks": {
+    "ci": "pending",
+    "staging": "pending",
+    "production": "not-authorized"
+  },
+  "productionDeploymentAuthorized": false
+}
