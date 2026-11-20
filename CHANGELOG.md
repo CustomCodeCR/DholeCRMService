@@ -1,3 +1,10 @@
+## [1.42.3] - 2026-11-19 (DH-20261119-CRM-AGREEMENT-INVITEES-294 · invitados persistidos en seguimientos CRM)
+
+- PATCH: creación, notas y edición de actividades heredan sus invitados en los seguimientos derivados. Persistencia atómica con invitación, recordatorios y outbox por destinatario.
+- Migración PostgreSQL 20261120014500 recupera vínculos previos abiertos sin revertir invitaciones revocadas explícitamente. No envía correos retroactivos.
+- Los endpoints manuales de seguimiento validan a los invitados mediante el directorio autorizado de Auth. Dos invitados, deduplicación y compromisos completados incluidos en regresiones.
+- DholeCRMService 1.42.2 → 1.42.3; ecosistema Web/System 1.103.16. Versión de producción sujeta a CI, staging y aprobación expresa.
+
 ## [1.42.2] - 2026-11-19 (DH-20261119-CRM-INVITATIONS-SAVE-290 · guardado de actividades CRM con invitados)
 
 - PATCH: valida invitados internos con el directorio activo y autorizado de Auth compartido con el selector de agenda, evitando la consulta individual de permisos por invitado.
