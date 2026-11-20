@@ -1,3 +1,9 @@
+## [1.42.7] - 2026-11-20 (DH-20261120-CRM-INVITEE-VISIBILITY-323 · promoción selectiva a master)
+
+- PATCH: muestra nombres reales de invitados internos en actividades mediante consulta restringida a Auth; preserva los registros de participantes ante fallos del directorio.
+- Agenda compartida autoriza lectura de actividades propias o invitadas a usuarios internos con permisos de tareas/seguimientos; sin ampliar acceso a otras cuentas ni cambiar los contratos REST o SignalR existentes.
+- Promoción selectiva desde develop: DholeCRMService 1.42.6 → 1.42.7, ecosistema y Web hasta 1.104.3. Los demás componentes no se modifican. CI, staging y smoke tests obligatorios antes de producción.
+
 ## [1.42.6] - 2026-11-20 (DH-20261120-CRM-INVITEE-SYNC-309 · promoción de persistencia de invitados CRM)
 
 - PATCH: corrige la propagación de invitados añadidos a actividades hacia compromisos pendientes ya existentes, guardados atómicamente y con notificaciones durables idempotentes.
