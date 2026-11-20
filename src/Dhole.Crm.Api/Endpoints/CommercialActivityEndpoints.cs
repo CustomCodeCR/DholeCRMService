@@ -347,11 +347,14 @@ internal static class CommercialActivityEndpoints
                     await CrmReminderEnqueue.QueueInvitationAsync(db,"Activity",
                         activity.Id,guest.Id,guest.UserId!.Value,activity.RowVersion,current,ct);
             foreach(var followup in nextCommitments)
+            {
                 await CrmReminderEnqueue.QueueAsync(db,"Followup",followup.Id,
                     followup.AccountId,followup.AssignedUserId,
                     followup.RowVersion,followup.DueAt,
                     followup.ReminderLeadMinutes,"BOTH",
                     "crm.followup.reminder.v1",followup.CreatedByUserId,ct);
+                await CrmCommitmentInvitees.AttachAsync(db,followup,invitedUsers,current,ct);
+            }
             await db.SaveChangesAsync(ct);
             return Results.Created("/api/crm/activities/"+activity.Id,activity);
         }
@@ -506,6 +509,9 @@ internal static class CommercialActivityEndpoints
         var note=new ActivityNote {ActivityId=id,
             AuthorUserId=actor,CreatedByUserId=actor,NoteText=r.NoteText.Trim()};
         db.ActivityNotes.Add(note);
+        var activityInvitees=await db.ActivityParticipants.AsNoTracking()
+            .Where(p=>p.ActivityId==id && p.UserId.HasValue && p.Role=="RESPONSIBLE")
+            .Select(p=>p.UserId!.Value).Distinct().ToArrayAsync(ct);
         var generated=new List<Followup>();
         foreach(var item in agreed.DistinctBy(x=>(x.Subject.Trim().ToUpperInvariant(),x.DueAt)))
         {
@@ -528,6 +534,7 @@ internal static class CommercialActivityEndpoints
                 followup.AccountId,followup.AssignedUserId,followup.RowVersion,
                 followup.DueAt,followup.ReminderLeadMinutes,"BOTH",
                 "crm.followup.reminder.v1",actor,ct);
+            await CrmCommitmentInvitees.AttachAsync(db,followup,activityInvitees,actor,ct);
         }
         // Notes and their dated commitments must succeed or fail together.
         var result=await CommercialAccess.Save(db,ct);
@@ -562,6 +569,9 @@ internal static class CommercialActivityEndpoints
             .AnyAsync(x=>x.Reason==existingReason,ct);
         if(exists)return CommercialAccess.Conflict("This observation already has calendar commitments.");
         var actor=CrmAccess.UserId(h);
+        var activityInvitees=await db.ActivityParticipants.AsNoTracking()
+            .Where(p=>p.ActivityId==id && p.UserId.HasValue && p.Role=="RESPONSIBLE")
+            .Select(p=>p.UserId!.Value).Distinct().ToArrayAsync(ct);
         var generated=new List<Followup>();
         foreach(var item in entries.DistinctBy(x=>(x.Subject.Trim().ToUpperInvariant(),x.DueAt)))
         {
@@ -583,6 +593,7 @@ internal static class CommercialActivityEndpoints
                 followup.AccountId,followup.AssignedUserId,followup.RowVersion,
                 followup.DueAt,followup.ReminderLeadMinutes,"BOTH",
                 "crm.followup.reminder.v1",actor,ct);
+            await CrmCommitmentInvitees.AttachAsync(db,followup,activityInvitees,actor,ct);
         }
         var committed=await CommercialAccess.Save(db,ct);
         if(committed is not Microsoft.AspNetCore.Http.HttpResults.Ok)return committed;
