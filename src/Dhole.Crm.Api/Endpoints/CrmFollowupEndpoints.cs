@@ -11,6 +11,11 @@ public sealed record FollowupCreateRequest(Guid? AccountId,Guid? LeadId,Guid? Op
     string? Subject = null,int? ReminderLeadMinutes = null,string? ReminderChannelStrategy = null,
     DateTime? StartAt = null, IReadOnlyList<Guid>? InviteeUserIds = null);
 public sealed record FollowupRescheduleRequest(long ExpectedVersion,DateTime DueAt,string Reason,DateTime? StartAt = null);
+// Full-detail editing is versioned and does not silently erase invitees when omitted.
+public sealed record FollowupDetailsRequest(long ExpectedVersion,string Subject,
+    Guid AssignedUserId,string Channel,DateTime DueAt,DateTime? StartAt,
+    int? ReminderLeadMinutes,string? ReminderChannelStrategy,
+    IReadOnlyList<Guid>? InviteeUserIds = null);
 public sealed record FollowupCompleteRequest(long ExpectedVersion,string Outcome,DateTime? NextFollowupAt);
 public sealed record FollowupCancelRequest(long ExpectedVersion,string Reason);
 public sealed record FollowupReopenRequest(long ExpectedVersion,string Reason);
@@ -28,6 +33,7 @@ internal static class CrmFollowupEndpoints
         group.MapPost("/followups",Create);
         group.MapGet("/followups/{id:guid}/invitees",ListInvitees);
         group.MapPut("/followups/{id:guid}/invitees",ReplaceInvitees);
+        group.MapPut("/followups/{id:guid}/details",UpdateDetails);
         group.MapPost("/followups/{id:guid}/reschedule",Reschedule);
         group.MapPost("/followups/{id:guid}/complete",Complete);
         group.MapPost("/followups/{id:guid}/reopen",Reopen);
@@ -381,6 +387,111 @@ internal static class CrmFollowupEndpoints
         return ok is Microsoft.AspNetCore.Http.HttpResults.Ok?
             Results.Created("/api/crm/followups/"+x.Id,x):ok;
     }
+    // Reuse the same followup aggregate, permissions, optimistic concurrency and
+    // durable reminder pipeline used by creation/rescheduling. No replacement row.
+    private static async Task<IResult> UpdateDetails(Guid id,FollowupDetailsRequest r,
+        CrmDbContext db,HttpContext h,IAuthReferenceService auth,CancellationToken ct)
+    {
+        if(!Manage(h)&&!Tasks(h))return CrmAccess.Denied();
+        var x=await db.Followups.FindAsync([id],ct);
+        if(x is null||x.ArchivedAt is not null)return Results.NotFound();
+        if(!await HasAccess(x,db,h,ct))return CrmAccess.Denied();
+        var actor=CrmAccess.UserId(h);
+        var canManageOthers=CrmAccess.CanManageAgendaAcrossUsers(h) ||
+            CrmAccess.Scope(h,"crm.account.read-all") ||
+            CrmAccess.Scope(h,"crm.opportunity.assign");
+        if(x.AssignedUserId!=actor&&!canManageOthers)return CrmAccess.Denied();
+        if(x.RowVersion!=r.ExpectedVersion)
+            return CrmDataEndpoints.Conflict("Concurrent followup update");
+        if(!await CommercialAccess.SubjectCanRead(db,h,x.AccountId,x.LeadId,x.OpportunityId,ct))
+            return CrmAccess.Denied();
+        var now=DateTime.UtcNow;
+        if(string.IsNullOrWhiteSpace(r.Subject)||r.Subject.Trim().Length>250 ||
+            r.AssignedUserId==Guid.Empty ||
+            r.Channel is not ("EMAIL" or "SYSTEM" or "PHONE" or "VISIT") ||
+            !Utc(r.DueAt) ||
+            (r.StartAt.HasValue && (!Utc(r.StartAt.Value)||r.StartAt.Value>=r.DueAt)) ||
+            r.ReminderLeadMinutes is < 0 or > 10080 ||
+            r.ReminderChannelStrategy is not null and not ("BOTH" or "EMAIL" or "SYSTEM") ||
+            (r.DueAt!=x.DueAt && r.DueAt<now && x.Status is ("Pending" or "Overdue")))
+            return CrmDataEndpoints.Bad("Invalid followup details, dates or notification options");
+        if(r.AssignedUserId!=x.AssignedUserId&&!canManageOthers)
+            return CrmAccess.Denied();
+        if(r.AssignedUserId!=x.AssignedUserId)
+        {
+            var owner=await auth.GetActiveAsync(r.AssignedUserId,ct);
+            if(owner is null||!CrmAccess.CanOwnAgenda(owner))
+                return CrmDataEndpoints.Bad("Assignee needs active CRM agenda access");
+        }
+        var existing=await db.FollowupInvitees
+            .Where(i=>i.FollowupId==id).ToListAsync(ct);
+        var previous=existing.Select(i=>i.UserId).ToHashSet();
+        var invited=r.InviteeUserIds is null
+            ? previous.Where(userId=>userId!=r.AssignedUserId).ToArray()
+            : r.InviteeUserIds.Distinct().Where(userId=>userId!=r.AssignedUserId).ToArray();
+        if(invited.Length>30||invited.Any(userId=>userId==Guid.Empty))
+            return CrmDataEndpoints.Bad("Invalid invited users");
+        foreach(var userId in invited.Where(userId=>!previous.Contains(userId)))
+        {
+            var user=await auth.GetActiveAsync(userId,ct);
+            if(user is null||!CrmAccess.CanOwnAgenda(user))
+                return CrmDataEndpoints.Bad("Invitee needs active CRM agenda access");
+        }
+        var next=invited.ToHashSet();
+        foreach(var removed in existing.Where(i=>!next.Contains(i.UserId)))
+        {
+            db.FollowupInvitees.Remove(removed);
+            db.FollowupHistories.Add(new FollowupHistory {FollowupId=id,
+                ActorUserId=actor,Action="Uninvited",Reason="Usuario interno: "+removed.UserId,
+                CreatedByUserId=actor});
+        }
+        foreach(var newId in invited.Where(userId=>!previous.Contains(userId)))
+        {
+            var invitation=new FollowupInvitee {FollowupId=id,UserId=newId,
+                CreatedByUserId=actor};
+            db.FollowupInvitees.Add(invitation);
+            db.FollowupHistories.Add(new FollowupHistory {FollowupId=id,
+                ActorUserId=actor,Action="Invited",Reason="Usuario interno: "+newId,
+                CreatedByUserId=actor});
+            if(x.Status is "Pending" or "Overdue")
+                await CrmReminderEnqueue.QueueInvitationAsync(db,"Followup",id,
+                    invitation.Id,newId,x.RowVersion+1,actor,ct);
+        }
+        var summary=new List<string>();
+        if(x.Subject!=r.Subject.Trim())summary.Add("asunto");
+        if(x.AssignedUserId!=r.AssignedUserId)summary.Add("responsable");
+        if(x.Channel!=r.Channel)summary.Add("tipo de gestión");
+        if(x.DueAt!=r.DueAt||x.StartAt!=r.StartAt)summary.Add("fechas");
+        if(x.ReminderLeadMinutes!=r.ReminderLeadMinutes||
+           x.ReminderChannelStrategy!=r.ReminderChannelStrategy)summary.Add("recordatorios");
+        if(!previous.SetEquals(next))summary.Add("invitados");
+        var oldDue=x.DueAt;
+        x.Subject=r.Subject.Trim();x.AssignedUserId=r.AssignedUserId;
+        x.Channel=r.Channel;x.StartAt=r.StartAt;x.DueAt=r.DueAt;
+        x.ReminderLeadMinutes=r.ReminderLeadMinutes;
+        x.ReminderChannelStrategy=r.ReminderChannelStrategy;
+        if(x.Status=="Overdue"&&x.DueAt>now)x.Status="Pending";
+        x.RowVersion++;x.UpdatedAt=now;x.UpdatedByUserId=actor;
+        db.FollowupHistories.Add(new FollowupHistory {FollowupId=id,ActorUserId=actor,
+            Action="Edited",Reason=summary.Count==0?"Sin cambios de contenido":string.Join(", ",summary),
+            PreviousDueAt=oldDue,NewDueAt=x.DueAt,CreatedByUserId=actor});
+        // Old pending outbox messages are rejected by TargetVersion; the current
+        // version must receive freshly scheduled reminders, including invitees.
+        if(x.Status is ("Pending" or "Overdue") && x.DueAt>now)
+        {
+            await CrmReminderEnqueue.QueueAsync(db,"Followup",id,x.AccountId,
+                x.AssignedUserId,x.RowVersion,x.DueAt,x.ReminderLeadMinutes,
+                x.ReminderChannelStrategy,"crm.followup.reminder.v1",actor,ct);
+            foreach(var invitedUserId in invited)
+                await CrmReminderEnqueue.QueueAsync(db,"Followup",id,x.AccountId,
+                    invitedUserId,x.RowVersion,x.DueAt,x.ReminderLeadMinutes,
+                    x.ReminderChannelStrategy,"crm.followup.reminder.v1",actor,ct,
+                    isInvitee:true);
+        }
+        var result=await CrmDataEndpoints.Commit(db,ct);
+        return result is Microsoft.AspNetCore.Http.HttpResults.Ok?Results.Ok(x):result;
+    }
+
     private static async Task<IResult> Reopen(Guid id,FollowupReopenRequest r,
         CrmDbContext db,HttpContext h,CancellationToken ct)
     {

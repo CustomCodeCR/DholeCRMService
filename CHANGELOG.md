@@ -1,3 +1,9 @@
+## [1.42.1] - 2026-11-19 (DH-20261119-CRM-FOLLOWUP-EDIT-PROMOTION-286 · edición completa de seguimientos)
+
+- PATCH: promueve desde staging el endpoint PUT /api/crm/followups/{id}/details. Actualiza asunto, fechas, responsable, invitados y estrategias de notificación sin duplicar la tarea, con control de versión e historial de cambios.
+- Reprograma avisos durables del responsable e invitados vía outbox; versiones antiguas del recordatorio quedan invalidadas. Conserva contratos REST y realtime.
+- DholeCRMService 1.42.0 → 1.42.1, ecosistema Dhole 1.103.9 → 1.103.10. Coordinado con DholeSystem y DholeWeb; staging previamente validado.
+
 ## [1.42.0] - 2026-11-19 (DH-20261119-PRICING-CLIENT-COUNTRY-PROD-271 · Promoción de clasificación Incoterm por país del cliente)
 
 - MINOR: libera de forma coordinada el campo aditivo countryId de cuentas y prospectos en /api/crm/pricing-client-options, preservando permisos y filtros.
