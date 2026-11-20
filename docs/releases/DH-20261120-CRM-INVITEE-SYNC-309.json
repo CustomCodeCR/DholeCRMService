@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 1,
+  "ecosystem": "Dhole",
+  "releaseId": "DH-20261120-CRM-INVITEE-SYNC-309",
+  "releaseType": "PATCH",
+  "ecosystemVersion": "1.103.21",
+  "branch": "release/DH-20261120-CRM-INVITEE-SYNC-309-master",
+  "targetBranches": [
+    "develop",
+    "master"
+  ],
+  "affectedComponents": [
+    {
+      "repository": "CustomCodeCR/DholeCRMService",
+      "component": "DholeCRMService",
+      "version": "1.42.6"
+    },
+    {
+      "repository": "CustomCodeCR/DholeWeb",
+      "component": "DholeWeb",
+      "version": "1.103.21"
+    },
+    {
+      "repository": "CustomCodeCR/DholeSystem",
+      "component": "DholeSystem",
+      "version": "1.103.21"
+    }
+  ],
+  "ci": "pending",
+  "stagingValidation": "previous-patch-deployed;new-release-ci-pending",
+  "productionDeploymentAuthorized": true,
+  "releaseComponents": [
+    "DholeSystem",
+    "DholeWeb",
+    "DholeCRMService"
+  ]
+}
