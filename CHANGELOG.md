@@ -1,3 +1,9 @@
+## [1.42.6] - 2026-11-20 (DH-20261120-CRM-INVITEE-SYNC-309 · promoción de persistencia de invitados CRM)
+
+- PATCH: corrige la propagación de invitados añadidos a actividades hacia compromisos pendientes ya existentes, guardados atómicamente y con notificaciones durables idempotentes.
+- La agenda Web conserva invitados seleccionados fuera de la primera página de Auth y verifica por GET la persistencia antes de confirmar actualizaciones; mantiene compatibilidad REST y SignalR.
+- Coordinación global Web/System 1.42.4 → 1.103.21, CRM 1.42.5 → 1.42.6; no se arrastran cambios de módulos no relacionados. CI y staging obligatorios; producción autorizada mediante solicitud expresa de promoción a master.
+
 ## [1.42.4] - 2026-11-20 (DH-20261120-CRM-AGREEMENT-INVITEES-295 · invitados en acuerdos derivados)
 
 - PATCH: los compromisos derivados de actividades heredan y persisten invitados internos, invitaciones y recordatorios por outbox; se cubren creación, notas y edición.
