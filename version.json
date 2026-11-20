@@ -2,9 +2,9 @@
   "schemaVersion": 1,
   "ecosystem": "Dhole",
   "component": "DholeCRMService",
-  "version": "1.42.3",
-  "ecosystemVersion": "1.103.16",
-  "releaseId": "DH-20261119-CRM-TIERED-CHECK-293",
+  "version": "1.42.4",
+  "ecosystemVersion": "1.103.17",
+  "releaseId": "DH-20261120-CRM-AGREEMENT-INVITEES-295",
   "releaseStatus": "candidate-ci-and-staging-pending",
-  "businessReleaseId": "DH-20261119-CRM-TIERED-CHECK-293"
+  "businessReleaseId": "DH-20261120-CRM-AGREEMENT-INVITEES-295"
 }
