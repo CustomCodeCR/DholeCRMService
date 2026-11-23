@@ -33,6 +33,8 @@ internal static class AccountEndpoints
         group.MapGet("/accounts/realtime-access", (HttpContext http) =>
             CrmDataEndpoints.HasRead(http, "account") ? Results.Ok() : CrmAccess.Denied());
         group.MapGet("/accounts/filter-options", AccountFilterOptions);
+        // Case lists resolve account labels in one authorized SQL query.
+        group.MapGet("/accounts/labels", AccountLabels);
         group.MapGet("/accounts/{id:guid}", Get);
         group.MapGet("/accounts/{id:guid}/change-history", ChangeHistory);
         group.MapPost("/accounts", Create);
@@ -57,6 +59,27 @@ internal static class AccountEndpoints
         if (value.Length > 256) return false;
         var types = value.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
         return types.Length <= 10 && types.All(x => x.Length is > 0 and <= 64);
+    }
+
+    /// <summary>
+    /// Read-only batch labels for case and quote summaries. Do not disclose hidden accounts,
+    /// personal contacts, tax identifiers, or internal business profile fields.
+    /// </summary>
+    private static async Task<IResult> AccountLabels(
+        string? ids, CrmDbContext db, HttpContext http, CancellationToken ct)
+    {
+        if (!CrmDataEndpoints.HasRead(http, "account")) return CrmAccess.Denied();
+        var tokens = ids?.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries) ?? [];
+        if (tokens.Length is < 1 or > 100 || ids is { Length: > 3700 } ||
+            tokens.Any(token => !Guid.TryParse(token, out var parsed) || parsed == Guid.Empty))
+            return CrmDataEndpoints.Bad("Invalid account identifier list");
+
+        var accountIds = tokens.Select(Guid.Parse).Distinct().ToArray();
+        var items = await CrmAccess.VisibleAccounts(db, http).AsNoTracking()
+            .Where(account => accountIds.Contains(account.Id))
+            .Select(account => new { account.Id, account.DisplayName, account.LegalName })
+            .ToArrayAsync(ct);
+        return Results.Ok(new { items });
     }
 
     // Values for CRM filters must come from accounts the requesting user is allowed to see.
