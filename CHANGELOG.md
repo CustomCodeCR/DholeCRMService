@@ -1,3 +1,9 @@
+## [1.43.1] - 2026-11-23 · DH-20261123-CRM-LEAD-AUDIT-431
+
+- PATCH: historial persistente por prospecto con antes/después, actor Auth, fecha y paginación. Captura altas, ediciones, asignaciones, conversiones, archivos y ubicaciones en la transacción de PostgreSQL del evento.
+- GET /api/crm/leads/{id}/change-history respeta los permisos de prospecto y su propietario. Migración con fecha real de creación para prospectos anteriores, sin inventar revisiones históricas; preserva Outbox/Inbox y REST.
+- Coordinado con DholeWeb 1.120.10. CRM 1.43.0 → 1.43.1, versión global 1.120.10. CI y staging pendientes; producción no autorizada.
+
 ## [1.43.0] - 2026-11-22 · DH-20261122-OPS-CASE-OVERVIEW-414
 
 - MINOR: consulta `GET /api/crm/accounts/labels?ids=...` para resolver nombres de cuentas en lotes (hasta 100 IDs) desde Operaciones; consulta con `CrmAccess.VisibleAccounts` y `crm.account.read`, sin filtrar cuentas ocultas.

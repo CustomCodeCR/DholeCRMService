@@ -8,6 +8,7 @@ public sealed partial class CrmDbContext(DbContextOptions<CrmDbContext> options)
 {
     public DbSet<Account> Accounts => Set<Account>();
     public DbSet<AccountChangeHistory> AccountChangeHistories => Set<AccountChangeHistory>();
+    public DbSet<LeadChangeHistory> LeadChangeHistories => Set<LeadChangeHistory>();
     public DbSet<Lead> Leads => Set<Lead>();
     public DbSet<LeadConversion> LeadConversions => Set<LeadConversion>();
     public DbSet<AccountAssignment> AccountAssignments => Set<AccountAssignment>();
@@ -70,6 +71,15 @@ public sealed partial class CrmDbContext(DbContextOptions<CrmDbContext> options)
             e.Property(x => x.ChangesJson).HasColumnType("jsonb").IsRequired();
         });
         ConfigureRecord<Lead>(b, "crm_leads");
+        ConfigureRecord<LeadChangeHistory>(b, "crm_lead_change_history");
+        b.Entity<LeadChangeHistory>(e =>
+        {
+            e.HasOne<Lead>().WithMany().HasForeignKey(x => x.LeadId).OnDelete(DeleteBehavior.Restrict);
+            e.HasIndex(x => new { x.LeadId, x.CreatedAt });
+            e.Property(x => x.ActionCode).HasMaxLength(24).IsRequired();
+            e.Property(x => x.AreaCode).HasMaxLength(24).IsRequired();
+            e.Property(x => x.ChangesJson).HasColumnType("jsonb").IsRequired();
+        });
         ConfigureRecord<LeadConversion>(b, "crm_lead_conversions");
         ConfigureRecord<AccountAssignment>(b, "crm_account_assignments");
         ConfigureRecord<Contact>(b, "crm_contacts");
