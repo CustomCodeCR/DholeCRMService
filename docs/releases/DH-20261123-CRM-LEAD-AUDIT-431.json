@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "ecosystem": "Dhole",
+  "releaseId": "DH-20261123-CRM-LEAD-AUDIT-431",
+  "kind": "PATCH",
+  "date": "2026-11-23",
+  "ecosystemVersion": "1.120.10",
+  "components": [
+    {
+      "repository": "CustomCodeCR/DholeCRMService",
+      "previousVersion": "1.43.0",
+      "version": "1.43.1"
+    },
+    {
+      "repository": "CustomCodeCR/DholeWeb",
+      "previousVersion": "1.120.9",
+      "version": "1.120.10"
+    }
+  ],
+  "unchangedComponents": [
+    "DholeAuth",
+    "DholeAuditLog",
+    "DholeApiGateway",
+    "DholeOperationsService",
+    "DholeNotifications",
+    "DholeStorage"
+  ],
+  "changes": [
+    "Auditoría de prospectos en PostgreSQL con lectura autorizada",
+    "Historial de creación sin inferir modificaciones anteriores",
+    "Vista web con componentes DH"
+  ],
+  "ci": "pending",
+  "staging": "pending",
+  "productionDeploymentAuthorized": false
+}
