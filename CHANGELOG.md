@@ -1,3 +1,10 @@
+## [1.43.0] - 2026-11-22 · DH-20261122-OPS-CASE-OVERVIEW-414
+
+- MINOR: consulta `GET /api/crm/accounts/labels?ids=...` para resolver nombres de cuentas en lotes (hasta 100 IDs) desde Operaciones; consulta con `CrmAccess.VisibleAccounts` y `crm.account.read`, sin filtrar cuentas ocultas.
+- Respuesta mínima `id`, `displayName`, `legalName`; no expone documentos, contactos, datos comerciales ni modifica registros CRM.
+- DholeCRMService 1.42.8 → 1.43.0, ecosistema 1.118.0 → 1.119.0. CI y staging pendientes; producción no autorizada.
+
+
 ## [1.42.8] - 2026-11-20 (DH-20261120-PRICING-CRM-PREFERRED-324 · beneficios preferenciales conectados a Pricing)
 
 - PATCH: habilita estado CONNECTED de acuerdos de CRM visibles para Pricing; preserva autorización, resolver existente y contratos REST; sin migraciones.
