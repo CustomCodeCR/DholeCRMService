@@ -21,6 +21,24 @@ internal static class LeadContactEndpoints
         return group;
     }
 
+    // Contact updates are made on shared Contact rows. Record the prospect-specific
+    // event explicitly in the same SaveChanges transaction instead of auditing all contacts.
+    private static void RecordContactChange(CrmDbContext db, Guid leadId, Guid actor,
+        string action, IEnumerable<AccountFieldChange> fields)
+    {
+        var changes = fields.Where(x => !string.Equals(x.Before, x.After, StringComparison.Ordinal)).ToList();
+        if (changes.Count == 0) return;
+        var when = DateTime.UtcNow;
+        db.LeadChangeHistories.Add(new LeadChangeHistory
+        {
+            LeadId = leadId, ActorUserId = actor, CreatedByUserId = actor,
+            CreatedAt = when, UpdatedAt = when, ActionCode = action, AreaCode = "CONTACT",
+            ChangesJson = System.Text.Json.JsonSerializer.Serialize(changes,
+                new System.Text.Json.JsonSerializerOptions
+                { PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase })
+        });
+    }
+
     private static async Task<Lead?> VisibleLead(Guid id, CrmDbContext db,
         HttpContext http, CancellationToken ct)
     {
@@ -78,6 +96,12 @@ internal static class LeadContactEndpoints
         lead.RowVersion++;
         lead.UpdatedAt = DateTime.UtcNow;
         lead.UpdatedByUserId = owner;
+        RecordContactChange(db, id, owner, "CONTACT_CREATED", new[]
+        {
+            new AccountFieldChange("ContactName", null, contact.Name),
+            new AccountFieldChange("ContactEmail", null, contact.Email),
+            new AccountFieldChange("ContactPhone", null, contact.Phone)
+        });
         try
         {
             await CrmCollectionRealtimeCommit.SaveLeadAsync(db,
@@ -107,6 +131,12 @@ internal static class LeadContactEndpoints
         if (r.IsPrimary && !link.IsPrimary && await db.LeadContacts.AnyAsync(x =>
             x.LeadId == id && x.ContactId != contactId && x.IsPrimary && x.ActiveTo == null, ct))
             return CrmDataEndpoints.Conflict("Prospect already has a primary contact");
+        var previousName = contact.Name;
+        var previousEmail = contact.Email;
+        var previousPhone = contact.Phone;
+        var previousJobTitle = contact.JobTitle;
+        var previousPrimary = link.IsPrimary;
+        var previousOperations = link.IsOperationsContact;
         contact.FirstName = r.FirstName.Trim();
         contact.LastName = r.LastName.Trim();
         contact.Name = contact.FirstName + " " + contact.LastName;
@@ -122,6 +152,15 @@ internal static class LeadContactEndpoints
         lead.RowVersion++;
         lead.UpdatedAt = DateTime.UtcNow;
         lead.UpdatedByUserId = CrmAccess.UserId(http);
+        RecordContactChange(db, id, CrmAccess.UserId(http), "CONTACT_UPDATED", new[]
+        {
+            new AccountFieldChange("ContactName", previousName, contact.Name),
+            new AccountFieldChange("ContactEmail", previousEmail, contact.Email),
+            new AccountFieldChange("ContactPhone", previousPhone, contact.Phone),
+            new AccountFieldChange("JobTitle", previousJobTitle, contact.JobTitle),
+            new AccountFieldChange("IsPrimary", previousPrimary ? "true" : "false", link.IsPrimary ? "true" : "false"),
+            new AccountFieldChange("IsOperationsContact", previousOperations ? "true" : "false", link.IsOperationsContact ? "true" : "false")
+        });
         try
         {
             await CrmCollectionRealtimeCommit.SaveLeadAsync(db,
@@ -142,10 +181,14 @@ internal static class LeadContactEndpoints
         var link = await db.LeadContacts.FirstOrDefaultAsync(x =>
             x.LeadId == id && x.ContactId == contactId && x.ActiveTo == null, ct);
         if (link is null) return Results.NotFound();
+        var contactName = await db.Contacts.AsNoTracking()
+            .Where(x => x.Id == contactId).Select(x => x.Name).FirstOrDefaultAsync(ct);
         link.ActiveTo = DateTime.UtcNow;
         lead.RowVersion++;
         lead.UpdatedAt = DateTime.UtcNow;
         lead.UpdatedByUserId = CrmAccess.UserId(http);
+        RecordContactChange(db, id, CrmAccess.UserId(http), "CONTACT_REMOVED",
+            new[] { new AccountFieldChange("ContactName", contactName ?? "Contacto", null) });
         await CrmCollectionRealtimeCommit.SaveLeadAsync(db,
             http.RequestServices.GetRequiredService<IConfiguration>(), http.TraceIdentifier, ct);
         return Results.NoContent();
