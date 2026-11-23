@@ -28,6 +28,7 @@ internal static class LeadEndpoints
         group.MapGet("/leads/realtime-access", (HttpContext http) =>
             CrmDataEndpoints.HasRead(http, "lead") ? Results.Ok() : CrmAccess.Denied());
         group.MapGet("/leads/{id:guid}", Get);
+        group.MapGet("/leads/{id:guid}/change-history", ChangeHistory);
         group.MapGet("/leads/{id:guid}/opportunities", ListLeadOpportunities);
         group.MapGet("/leads/{id:guid}/quotes", ListLeadQuotes);
         group.MapPost("/leads", Create);
@@ -38,6 +39,56 @@ internal static class LeadEndpoints
 
         return group;
     }
+    private static async Task<IResult> ChangeHistory(Guid id, CrmDbContext db,
+        HttpContext http, IAuthReferenceService auth, IMemoryCache cache,
+        int? page, int? pageSize, CancellationToken ct)
+    {
+        if (!CrmDataEndpoints.HasRead(http, "lead")) return CrmAccess.Denied();
+        var lead = await db.Leads.AsNoTracking()
+            .FirstOrDefaultAsync(x => x.Id == id && x.ArchivedAt == null, ct);
+        if (lead is null) return Results.NotFound();
+        if (!CrmAccess.LeadAccess(http, lead.ExecutiveUserId)) return CrmAccess.Denied();
+
+        var currentPage = Math.Max(1, page ?? 1);
+        var size = Math.Clamp(pageSize ?? 25, 1, 50);
+        var query = db.LeadChangeHistories.AsNoTracking().Where(x => x.LeadId == id);
+        var total = await query.CountAsync(ct);
+        var entries = await query.OrderByDescending(x => x.CreatedAt).ThenByDescending(x => x.Id)
+            .Skip((currentPage - 1) * size).Take(size).ToListAsync(ct);
+
+        // Resolve only users belonging to the authorized page of this prospect.
+        var actors = entries.Where(x => x.ActorUserId.HasValue)
+            .Select(x => x.ActorUserId!.Value).Distinct().ToArray();
+        var actorNames = await Task.WhenAll(actors.Select(async userId =>
+        {
+            var cacheKey = "crm:lead-audit-actor:" + userId.ToString("N");
+            if (!cache.TryGetValue(cacheKey, out string? displayName))
+            {
+                try
+                {
+                    var user = await auth.GetActiveAsync(userId, ct);
+                    displayName = user?.DisplayName ?? user?.Email ?? "";
+                }
+                catch (Exception) when (!ct.IsCancellationRequested) { displayName = ""; }
+                cache.Set(cacheKey, displayName, TimeSpan.FromMinutes(10));
+            }
+            return (Id: userId, Name: displayName);
+        }));
+        var names = actorNames.ToDictionary(x => x.Id, x => x.Name);
+        return Results.Ok(new
+        {
+            total, page = currentPage, pageSize = size,
+            items = entries.Select(x => new
+            {
+                x.Id, x.ActionCode, x.AreaCode, x.ChangesJson, x.CreatedAt,
+                x.ActorUserId,
+                actorDisplayName = x.ActorUserId.HasValue &&
+                    names.TryGetValue(x.ActorUserId.Value, out var displayName) &&
+                    !string.IsNullOrWhiteSpace(displayName) ? displayName : null
+            })
+        });
+    }
+
     private static async Task<IResult> CommitLeadAsync(CrmDbContext db, HttpContext http,
         CancellationToken ct)
     {
