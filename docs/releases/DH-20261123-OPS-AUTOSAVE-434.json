@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "releaseId": "DH-20261123-OPS-AUTOSAVE-434",
+  "ecosystemVersion": "1.122.0",
+  "releaseType": "MINOR",
+  "status": "candidate-ci-and-staging-pending",
+  "productionDeploymentAuthorized": false,
+  "component": "DholeCRMService",
+  "previousVersion": "1.43.1",
+  "version": "1.44.0",
+  "target": "develop",
+  "branch": "feature/DH-20261123-OPS-AUTOSAVE-434",
+  "changes": [
+    "Read-only account and executive projection over secured internal HTTP contract",
+    "Require manually configured active Auth reader with crm.account.read-all",
+    "Reject unassigned/inactive account executives"
+  ],
+  "tests": [
+    "CrmOperationsIntegrationAccessPolicyTests"
+  ],
+  "integrationDependencies": [
+    "Pricing accepted QUO event",
+    "Operations pricing consumer"
+  ],
+  "staging": "pending"
+}
