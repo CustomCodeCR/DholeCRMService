@@ -1,5 +1,4 @@
-using System.Security.Cryptography;
-using System.Text;
+using Dhole.Crm.Domain;
 using Dhole.Crm.Infrastructure.Persistence;
 using Dhole.Crm.Infrastructure.References;
 using Microsoft.EntityFrameworkCore;
@@ -24,7 +23,7 @@ internal static class OperationsAccountContractEndpoints
             var presentedKey = http.Request.Headers["X-Dhole-Service-Key"].ToString();
             if (string.IsNullOrWhiteSpace(expectedKey) ||
                 string.IsNullOrWhiteSpace(presentedKey) ||
-                !ConstantTimeEqual(expectedKey, presentedKey))
+                !CrmOperationsIntegrationAccessPolicy.HasServiceKey(expectedKey, presentedKey))
                 return Results.Unauthorized();
 
             if (!Guid.TryParse(configuration["OperationsIntegration:ReaderUserId"], out var readerId)
@@ -43,9 +42,9 @@ internal static class OperationsAccountContractEndpoints
                     statusCode: StatusCodes.Status503ServiceUnavailable);
             }
 
-            if (serviceActor is null || !serviceActor.Active ||
-                !serviceActor.Scopes.Contains("crm.account.read-all",
-                    StringComparer.OrdinalIgnoreCase))
+            if (serviceActor is null ||
+                !CrmOperationsIntegrationAccessPolicy.IsAuthorized(
+                    serviceActor.Active, serviceActor.Scopes))
                 return Results.Forbid();
 
             var account = await db.Accounts.AsNoTracking()
@@ -72,13 +71,5 @@ internal static class OperationsAccountContractEndpoints
             });
         });
         return app;
-    }
-
-    private static bool ConstantTimeEqual(string expected, string presented)
-    {
-        var left = Encoding.UTF8.GetBytes(expected);
-        var right = Encoding.UTF8.GetBytes(presented);
-        return left.Length == right.Length &&
-            CryptographicOperations.FixedTimeEquals(left, right);
     }
 }
