@@ -1,8 +1,9 @@
 ## [1.44.0] - 2026-11-23 · DH-20261123-OPS-AUTOSAVE-434
 
-- MINOR candidato: consulta interna dedicada GET /api/internal/crm/operations/accounts/{accountId} para resolver la cuenta activa, nombre comercial y ejecutivo responsable, sin duplicar catálogos ni contactos.
-- Requiere clave de servicio válida + lector Auth real configurado manualmente con crm.account.read-all; verifica además que el ejecutivo esté activo. Sin lector autorizado devuelve 503/403, nunca crea una identidad o una asignación ficticia.
-- Pruebas de credenciales y scopes; versión global candidata 1.122.0; CI, UAT y staging pendientes, sin integrar en master.
+- MINOR candidato: contrato interno seguro de cuenta y ejecutivo para apertura automática de una QUO aceptada, sin crear usuarios ni duplicar CRM.
+- Verifica clave de servicio, identidad real de Auth con permiso crm.account.read-all y ejecutivo activo; carecer de identidad válida impide la generación de expediente.
+- CI .NET, contratos y versionamiento aprobados. Integración Redis/UI y staging no verificados.
+- CRM 1.43.1 → 1.44.0; release global 1.122.0. PR borrador para develop, master/producción intactos.
 
 ## [1.43.1] - 2026-11-23 · DH-20261123-CRM-LEAD-AUDIT-431
 
