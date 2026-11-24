@@ -6,10 +6,10 @@ using Microsoft.EntityFrameworkCore;
 namespace Dhole.Crm.Api.Endpoints;
 
 /// <summary>
-/// Minimal CRM-owned identity projection for the durable Pricing -> Operations
-/// acceptance processor. No public account or contact directory is exposed.
-/// Configure OperationsIntegration:ReaderUserId manually in the CRM environment:
-/// it must be a real active Auth identity with crm.account.read-all.
+/// CRM-owned, read-only, internal acceptance projection. Both routes require
+/// the internal service key plus a real active Auth identity with
+/// crm.account.read-all (configured service reader, or verified accepting actor).
+/// Name recovery never guesses: exactly one active account must match.
 /// </summary>
 internal static class OperationsAccountContractEndpoints
 {
@@ -19,57 +19,104 @@ internal static class OperationsAccountContractEndpoints
             Guid accountId, HttpContext http, IConfiguration configuration,
             IAuthReferenceService auth, CrmDbContext db, CancellationToken ct) =>
         {
-            var expectedKey = configuration["Auth:Client:InternalServiceKey"];
-            var presentedKey = http.Request.Headers["X-Dhole-Service-Key"].ToString();
-            if (string.IsNullOrWhiteSpace(expectedKey) ||
-                string.IsNullOrWhiteSpace(presentedKey) ||
-                !CrmOperationsIntegrationAccessPolicy.HasServiceKey(expectedKey, presentedKey))
-                return Results.Unauthorized();
+            var denial = await VerifyReaderAsync(http, configuration, auth, ct);
+            if (denial is not null) return denial;
+            if (accountId == Guid.Empty) return Results.BadRequest();
+            return await ProjectAccountAsync(db, auth, accountId, ct);
+        });
 
-            if (!Guid.TryParse(configuration["OperationsIntegration:ReaderUserId"], out var readerId)
-                || readerId == Guid.Empty)
-                return Results.Problem(title: "CRM Operations reader identity not configured",
-                    statusCode: StatusCodes.Status503ServiceUnavailable);
+        // Legacy Pricing quotes may contain a saved client name but no CRM
+        // account GUID. Recover only when CRM confirms one exact active match.
+        // Ambiguous/nonexistent names remain pending; no phantom accounts.
+        app.MapGet("/api/internal/crm/operations/accounts/by-name", async (
+            string? name, HttpContext http, IConfiguration configuration,
+            IAuthReferenceService auth, CrmDbContext db, CancellationToken ct) =>
+        {
+            var denial = await VerifyReaderAsync(http, configuration, auth, ct);
+            if (denial is not null) return denial;
+            var normalized = name?.Trim();
+            if (string.IsNullOrWhiteSpace(normalized) || normalized.Length > 200)
+                return Results.BadRequest();
 
-            AuthUserReference? serviceActor;
-            try
-            {
-                serviceActor = await auth.GetActiveAsync(readerId, ct);
-            }
-            catch (Exception error) when (error is not OperationCanceledException)
-            {
-                return Results.Problem(title: "CRM Auth verification unavailable",
-                    statusCode: StatusCodes.Status503ServiceUnavailable);
-            }
-
-            if (serviceActor is null ||
-                !CrmOperationsIntegrationAccessPolicy.IsAuthorized(
-                    serviceActor.Active, serviceActor.Scopes))
-                return Results.Forbid();
-
-            var account = await db.Accounts.AsNoTracking()
-                .Where(a => a.Id == accountId && a.ArchivedAt == null &&
-                    a.Status == "Active")
-                .Select(a => new { a.Id, a.DisplayName, a.ExecutiveUserId,
-                    a.IsCastroFallasExecutive })
-                .SingleOrDefaultAsync(ct);
-            if (account is null) return Results.NotFound();
-            if (account.ExecutiveUserId == Guid.Empty)
-                return Results.Conflict(new { code = "CRM_EXECUTIVE_UNASSIGNED" });
-
-            // A removed/inactive executive may not receive a new active case.
-            var executive = await auth.GetActiveAsync(account.ExecutiveUserId, ct);
-            if (executive is null || !executive.Active)
-                return Results.Conflict(new { code = "CRM_EXECUTIVE_INACTIVE" });
-
-            return Results.Ok(new {
-                accountId = account.Id,
-                accountName = account.DisplayName,
-                executiveUserId = account.ExecutiveUserId,
-                executiveName = executive.DisplayName,
-                institutionalExecutive = account.IsCastroFallasExecutive
-            });
+            var matches = await db.Accounts.AsNoTracking()
+                .Where(a => a.ArchivedAt == null && a.Status == "Active"
+                    && a.DisplayName.Trim().ToLower() == normalized.ToLower())
+                .Select(a => a.Id)
+                .Take(2)
+                .ToArrayAsync(ct);
+            if (matches.Length == 0) return Results.NotFound();
+            if (matches.Length > 1)
+                return Results.Conflict(new { code = "CRM_ACCOUNT_NAME_AMBIGUOUS" });
+            return await ProjectAccountAsync(db, auth, matches[0], ct);
         });
         return app;
+    }
+
+    private static async Task<IResult?> VerifyReaderAsync(
+        HttpContext http, IConfiguration configuration, IAuthReferenceService auth,
+        CancellationToken ct)
+    {
+        var expectedKey = configuration["Auth:Client:InternalServiceKey"];
+        var providedKey = http.Request.Headers["X-Dhole-Service-Key"].ToString();
+        if (!CrmOperationsIntegrationAccessPolicy.HasServiceKey(expectedKey, providedKey))
+            return Results.Unauthorized();
+
+        // A configured dedicated service reader is preferred. When not
+        // provisioned, use the actual Pricing acceptance actor only after
+        // validating that identity and its CRM read-all scope in Auth.
+        var configuredReader = configuration["OperationsIntegration:ReaderUserId"];
+        Guid readerId;
+        if (string.IsNullOrWhiteSpace(configuredReader))
+        {
+            if (!Guid.TryParse(http.Request.Headers["X-Dhole-Accepted-By"].ToString(),
+                    out readerId) || readerId == Guid.Empty)
+                return Results.Problem(title: "CRM acceptance reader identity missing",
+                    statusCode: StatusCodes.Status503ServiceUnavailable);
+        }
+        else if (!Guid.TryParse(configuredReader, out readerId) || readerId == Guid.Empty)
+        {
+            return Results.Problem(title: "CRM acceptance reader identity invalid",
+                statusCode: StatusCodes.Status503ServiceUnavailable);
+        }
+
+        AuthUserReference? reader;
+        try
+        {
+            reader = await auth.GetActiveAsync(readerId, ct);
+        }
+        catch (Exception error) when (error is not OperationCanceledException)
+        {
+            return Results.Problem(title: "CRM Auth verification unavailable",
+                statusCode: StatusCodes.Status503ServiceUnavailable);
+        }
+        if (reader is null || !CrmOperationsIntegrationAccessPolicy.IsAuthorized(
+                reader.Active, reader.Scopes))
+            return Results.Forbid();
+        return null;
+    }
+
+    private static async Task<IResult> ProjectAccountAsync(
+        CrmDbContext db, IAuthReferenceService auth, Guid accountId, CancellationToken ct)
+    {
+        var account = await db.Accounts.AsNoTracking()
+            .Where(a => a.Id == accountId && a.ArchivedAt == null && a.Status == "Active")
+            .Select(a => new { a.Id, a.DisplayName, a.ExecutiveUserId,
+                a.IsCastroFallasExecutive })
+            .SingleOrDefaultAsync(ct);
+        if (account is null) return Results.NotFound();
+        if (account.ExecutiveUserId == Guid.Empty)
+            return Results.Conflict(new { code = "CRM_EXECUTIVE_UNASSIGNED" });
+
+        var executive = await auth.GetActiveAsync(account.ExecutiveUserId, ct);
+        if (executive is null || !executive.Active)
+            return Results.Conflict(new { code = "CRM_EXECUTIVE_INACTIVE" });
+
+        return Results.Ok(new {
+            accountId = account.Id,
+            accountName = account.DisplayName,
+            executiveUserId = account.ExecutiveUserId,
+            executiveName = executive.DisplayName,
+            institutionalExecutive = account.IsCastroFallasExecutive
+        });
     }
 }
