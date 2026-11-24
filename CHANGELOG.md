@@ -1,3 +1,7 @@
+## [1.45.0] - 2026-11-24
+
+- MINOR: contrato interno de contactos operativos limitado a la cuenta del caso previamente autorizado por Operations; valida clave de servicio y scope activo del solicitante en Auth. Reutiliza la proyección CRM y conserva los ACL de endpoints públicos.
+
 ## [1.44.1] - 2026-11-24 · DH-20261124-OPS-QUOTE-ACCEPTANCE-440
 
 - PATCH: endpoint interno CRM admite resolver una QUO sin accountId únicamente si hay una cuenta activa con nombre exacto único; autoriza con clave interna y lector configurado o actor real verificado por Auth con crm.account.read-all, y confirma ejecutivo activo.

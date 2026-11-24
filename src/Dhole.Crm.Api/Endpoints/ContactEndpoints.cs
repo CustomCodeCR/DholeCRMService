@@ -94,6 +94,11 @@ internal static class ContactEndpoints
     {
         if (!CrmAccess.Scope(h, "crm.contact.read")) return CrmAccess.Denied();
         if (!await OwnsAccount(id, db, h, ct)) return CrmAccess.Denied();
+        return await ProjectOperationsContactsAsync(id, db, ct);
+    }
+
+    internal static async Task<IResult> ProjectOperationsContactsAsync(Guid id, CrmDbContext db, CancellationToken ct)
+    {
         var contacts = await (from link in db.AccountContacts.AsNoTracking()
             join contact in db.Contacts.AsNoTracking() on link.ContactId equals contact.Id
             where link.AccountId == id && link.ActiveTo == null &&

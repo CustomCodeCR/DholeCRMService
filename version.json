@@ -2,9 +2,9 @@
   "schemaVersion": 1,
   "ecosystem": "Dhole",
   "component": "DholeCRMService",
-  "version": "1.44.1",
-  "ecosystemVersion": "1.122.3",
-  "releaseId": "DH-20261124-OPS-QUOTE-ACCEPTANCE-440",
+  "version": "1.45.0",
+  "ecosystemVersion": "1.124.0",
+  "releaseId": "DH-20261124-OPS-QUO-COMPARE",
   "releaseStatus": "candidate-develop-ci-pending",
-  "businessReleaseId": "DH-20261124-OPS-QUOTE-ACCEPTANCE-440"
+  "businessReleaseId": "DH-20261124-OPS-QUO-COMPARE"
 }

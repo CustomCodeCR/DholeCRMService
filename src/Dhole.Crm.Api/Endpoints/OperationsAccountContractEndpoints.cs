@@ -25,6 +25,29 @@ internal static class OperationsAccountContractEndpoints
             return await ProjectAccountAsync(db, auth, accountId, ct);
         });
 
+        // Only the trusted Operations service can assert the case/account binding after its
+        // own case ACL check. Auth still verifies the requesting user's current read scope.
+        app.MapGet("/api/internal/crm/operations/accounts/{accountId:guid}/contacts", async (
+            Guid accountId, HttpContext http, IConfiguration configuration,
+            IAuthReferenceService auth, CrmDbContext db, CancellationToken ct) =>
+        {
+            if (!CrmOperationsIntegrationAccessPolicy.HasServiceKey(configuration["Auth:Client:InternalServiceKey"],
+                    http.Request.Headers["X-Dhole-Service-Key"].ToString())) return Results.Unauthorized();
+            if (!Guid.TryParse(http.Request.Headers["X-Dhole-Operations-Actor"].ToString(), out var actor)
+                || actor == Guid.Empty) return Results.Forbid();
+            AuthUserReference? user;
+            try { user = await auth.GetActiveAsync(actor, ct); }
+            catch (Exception error) when (error is not OperationCanceledException)
+            {
+                return Results.Problem(statusCode: 503, title: "CRM Auth verification unavailable");
+            }
+            if (user is null || !user.Active ||
+                !user.Scopes.Contains("operations.case.read", StringComparer.OrdinalIgnoreCase)) return Results.Forbid();
+            if (!await db.Accounts.AsNoTracking().AnyAsync(x => x.Id == accountId && x.ArchivedAt == null, ct))
+                return Results.NotFound();
+            return await ContactEndpoints.ProjectOperationsContactsAsync(accountId, db, ct);
+        });
+
         // Legacy Pricing quotes may contain a saved client name but no CRM
         // account GUID. Recover only when CRM confirms one exact active match.
         // Ambiguous/nonexistent names remain pending; no phantom accounts.
