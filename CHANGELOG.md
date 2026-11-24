@@ -1,3 +1,10 @@
+## [1.44.0] - 2026-11-23 · DH-20261123-OPS-AUTOSAVE-434
+
+- MINOR candidato: contrato interno seguro de cuenta y ejecutivo para apertura automática de una QUO aceptada, sin crear usuarios ni duplicar CRM.
+- Verifica clave de servicio, identidad real de Auth con permiso crm.account.read-all y ejecutivo activo; carecer de identidad válida impide la generación de expediente.
+- CI .NET, contratos y versionamiento aprobados. Integración Redis/UI y staging no verificados.
+- CRM 1.43.1 → 1.44.0; release global 1.122.0. PR borrador para develop, master/producción intactos.
+
 ## [1.43.1] - 2026-11-23 · DH-20261123-CRM-LEAD-AUDIT-431
 
 - PATCH: historial persistente por prospecto con antes/después, actor Auth, fecha y paginación. Captura altas, ediciones, asignaciones, conversiones, archivos y ubicaciones en la transacción de PostgreSQL del evento.
