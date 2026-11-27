@@ -112,6 +112,22 @@ public sealed class LeadContact
     public DateTime? ActiveTo { get; set; }
 }
 
+// Internal business divisions share the parent account's fiscal identity.
+public sealed class AccountDivision
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid AccountId { get; set; }
+    public string Name { get; set; } = "";
+    public string NormalizedName { get; set; } = "";
+}
+
+public sealed class AccountDivisionContact
+{
+    public Guid AccountId { get; set; }
+    public Guid DivisionId { get; set; }
+    public Guid ContactId { get; set; }
+}
+
 public sealed class AccountContact
 {
     public Guid AccountId { get; set; }

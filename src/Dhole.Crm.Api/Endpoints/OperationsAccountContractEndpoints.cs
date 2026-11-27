@@ -29,7 +29,7 @@ internal static class OperationsAccountContractEndpoints
         // own case ACL check. Auth still verifies the requesting user's current read scope.
         app.MapGet("/api/internal/crm/operations/accounts/{accountId:guid}/contacts", async (
             Guid accountId, HttpContext http, IConfiguration configuration,
-            IAuthReferenceService auth, CrmDbContext db, CancellationToken ct) =>
+            IAuthReferenceService auth, CrmDbContext db, CancellationToken ct, Guid? divisionId, bool? includeDirectory) =>
         {
             if (!CrmOperationsIntegrationAccessPolicy.HasServiceKey(configuration["Auth:Client:InternalServiceKey"],
                     http.Request.Headers["X-Dhole-Service-Key"].ToString())) return Results.Unauthorized();
@@ -45,7 +45,7 @@ internal static class OperationsAccountContractEndpoints
                 !user.Scopes.Contains("operations.case.read", StringComparer.OrdinalIgnoreCase)) return Results.Forbid();
             if (!await db.Accounts.AsNoTracking().AnyAsync(x => x.Id == accountId && x.ArchivedAt == null, ct))
                 return Results.NotFound();
-            return await ContactEndpoints.ProjectOperationsContactsAsync(accountId, db, ct);
+            return await ContactEndpoints.ProjectOperationsContactsAsync(accountId, db, ct, divisionId, includeDirectory == true);
         });
 
         // Legacy Pricing quotes may contain a saved client name but no CRM

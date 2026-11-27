@@ -44,17 +44,18 @@ internal static class PricingClientOptionsEndpoints
         var executive = account.IsCastroFallasExecutive ? "Castro Fallas"
             : (await auth.GetActiveAsync(account.ExecutiveUserId, ct))?.DisplayName;
         return Results.Ok(new { account.Id, account.DisplayName, account.LegalName, account.CountryId,
-            account.ExecutiveUserId, account.IsCastroFallasExecutive, executiveName = executive });
+            account.ExecutiveUserId, account.IsCastroFallasExecutive, executiveName = executive,
+            divisions = await AccountDivisionEndpoints.Summaries(accountId, db, ct) });
     }
 
-    private static async Task<IResult> OperationsContacts(Guid accountId, CrmDbContext db, HttpContext http, CancellationToken ct)
+    private static async Task<IResult> OperationsContacts(Guid accountId, CrmDbContext db, HttpContext http, CancellationToken ct, Guid? divisionId, bool? includeDirectory)
     {
         var scoped = CrmAccess.Scope(http, "operations.crm.account.select") &&
             CrmAccess.Scope(http, "operations.crm.contact.read");
         if (!scoped && !CrmAccess.Scope(http, "crm.contact.read")) return CrmAccess.Denied();
         var accounts = scoped ? OperationalAccounts(db, http) : CrmAccess.VisibleAccounts(db, http);
         if (!await accounts.AnyAsync(a => a.Id == accountId, ct)) return CrmAccess.Denied();
-        return await ContactEndpoints.ProjectOperationsContactsAsync(accountId, db, ct);
+        return await ContactEndpoints.ProjectOperationsContactsAsync(accountId, db, ct, divisionId, includeDirectory == true);
     }
 
     private static async Task<IResult> List(CrmDbContext db, HttpContext http,
