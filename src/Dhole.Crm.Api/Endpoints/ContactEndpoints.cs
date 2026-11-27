@@ -97,8 +97,14 @@ internal static class ContactEndpoints
         return await ProjectOperationsContactsAsync(id, db, ct);
     }
 
-    internal static async Task<IResult> ProjectOperationsContactsAsync(Guid id, CrmDbContext db, CancellationToken ct)
+    internal static async Task<IResult> ProjectOperationsContactsAsync(Guid id, CrmDbContext db, CancellationToken ct, Guid? divisionId = null)
     {
+        if (divisionId.HasValue && !await db.Set<AccountDivision>().AnyAsync(x => x.AccountId == id && x.Id == divisionId, ct))
+            return Results.NotFound();
+        var divisions = await AccountDivisionEndpoints.Summaries(id, db, ct);
+        var memberships = await db.Set<AccountDivisionContact>().AsNoTracking()
+            .Where(x => x.AccountId == id).ToListAsync(ct);
+        var byContact = memberships.ToLookup(x => x.ContactId, x => x.DivisionId);
         var contacts = await (from link in db.AccountContacts.AsNoTracking()
             join contact in db.Contacts.AsNoTracking() on link.ContactId equals contact.Id
             where link.AccountId == id && link.ActiveTo == null &&
@@ -109,7 +115,12 @@ internal static class ContactEndpoints
                 contact.LastName, contact.JobTitle, contact.Email, contact.Phone,
                 contact.CountryId, link.IsPrimary, link.IsOperationsContact
             }).ToListAsync(ct);
-        return Results.Ok(contacts);
+        return Results.Ok(contacts.Where(x => !divisionId.HasValue ||
+                !byContact[x.id].Any() || byContact[x.id].Contains(divisionId.Value))
+            .Select(x => new { x.id, x.accountId, x.Name, x.FirstName, x.LastName, x.JobTitle, x.Email, x.Phone,
+                x.CountryId, x.IsPrimary, x.IsOperationsContact,
+                divisionIds = byContact[x.id].ToArray(),
+                divisions = divisions.Where(d => byContact[x.id].Contains(d.Id)).ToArray() }));
     }
 
     private static async Task<IResult> PatchRoleFlags(
@@ -128,6 +139,9 @@ internal static class ContactEndpoints
             link.IsOperationsContact == request.IsOperationsContact) return Results.Ok(link);
         link.IsPrimary = request.IsPrimary;
         link.IsOperationsContact = request.IsOperationsContact;
+        if (!link.IsOperationsContact)
+            db.RemoveRange(await db.Set<AccountDivisionContact>()
+                .Where(x => x.AccountId == id && x.ContactId == contactId).ToListAsync(ct));
         var account = await db.Accounts.SingleAsync(a => a.Id == id, ct);
         account.RowVersion++;
         account.UpdatedAt = DateTime.UtcNow;

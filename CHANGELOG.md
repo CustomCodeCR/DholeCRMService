@@ -1,5 +1,9 @@
 ## [1.46.0] - 2026-11-27
 
+## [1.47.0] - 2026-11-27
+- Account divisions with account-scoped operational contact memberships, relational migration, and compatible CRM Operations projections.
+
+
 - MINOR: selector operativo de cuentas y proyección mínima de cuenta/contactos logísticos activos con scopes de Operations; no concede lectura general de CRM ni habilita prospectos por el scope operativo. CI y staging pendientes.
 
 ## [1.45.0] - 2026-11-24

@@ -98,6 +98,26 @@ public sealed partial class CrmDbContext(DbContextOptions<CrmDbContext> options)
             e.HasIndex(x => x.ContactId);
             e.HasIndex(x => x.LeadId).IsUnique().HasFilter("is_primary = true AND active_to IS NULL");
         });
+        b.Entity<AccountDivision>(e =>
+        {
+            e.ToTable("crm_account_divisions");
+            e.HasKey(x => x.Id);
+            e.HasAlternateKey(x => new { x.AccountId, x.Id });
+            e.Property(x => x.Name).HasMaxLength(120).IsRequired();
+            e.Property(x => x.NormalizedName).HasMaxLength(120).IsRequired();
+            e.HasIndex(x => new { x.AccountId, x.NormalizedName }).IsUnique();
+            e.HasOne<Account>().WithMany().HasForeignKey(x => x.AccountId).OnDelete(DeleteBehavior.Restrict);
+        });
+        b.Entity<AccountDivisionContact>(e =>
+        {
+            e.ToTable("crm_account_division_contacts");
+            e.HasKey(x => new { x.AccountId, x.DivisionId, x.ContactId });
+            e.HasOne<AccountDivision>().WithMany()
+                .HasForeignKey(x => new { x.AccountId, x.DivisionId })
+                .HasPrincipalKey(x => new { x.AccountId, x.Id }).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne<AccountContact>().WithMany()
+                .HasForeignKey(x => new { x.AccountId, x.ContactId }).OnDelete(DeleteBehavior.Restrict);
+        });
         b.Entity<AccountContact>(e =>
         {
             e.ToTable("crm_account_contacts");

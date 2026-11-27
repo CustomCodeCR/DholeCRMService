@@ -26,6 +26,7 @@ public static class CrmDataEndpoints
         group.MapLeadContacts();
         group.MapPricingClientOptions();
         group.MapContacts();
+        group.MapAccountDivisions();
         group.MapGeoLocations();
         group.MapCommercialPipeline();
         group.MapCommercialOpportunities();
