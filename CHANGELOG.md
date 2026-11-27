@@ -1,3 +1,7 @@
+## [1.46.0] - 2026-11-27
+
+- MINOR: selector operativo de cuentas y proyección mínima de cuenta/contactos logísticos activos con scopes de Operations; no concede lectura general de CRM ni habilita prospectos por el scope operativo. CI y staging pendientes.
+
 ## [1.45.0] - 2026-11-24
 
 - MINOR: contrato interno de contactos operativos limitado a la cuenta del caso previamente autorizado por Operations; valida clave de servicio y scope activo del solicitante en Auth. Reutiliza la proyección CRM y conserva los ACL de endpoints públicos.
