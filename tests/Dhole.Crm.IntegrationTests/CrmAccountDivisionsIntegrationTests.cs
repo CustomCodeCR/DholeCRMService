@@ -39,6 +39,6 @@ public sealed class CrmAccountDivisionsIntegrationTests
         Assert.AreEqual(2, await db.Set<AccountDivisionContact>().CountAsync(x => x.AccountId == a.Id && x.ContactId == person.Id));
         Assert.AreEqual(1, await db.Contacts.CountAsync(x => x.Id == person.Id));
         db.Add(new AccountDivisionContact { AccountId = a.Id, DivisionId = other.Id, ContactId = person.Id });
-        await Assert.ThrowsExceptionAsync<DbUpdateException>(() => db.SaveChangesAsync());
+        await Assert.ThrowsExactlyAsync<DbUpdateException>(() => db.SaveChangesAsync());
     }
 }
