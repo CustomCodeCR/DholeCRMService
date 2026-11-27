@@ -48,14 +48,14 @@ internal static class PricingClientOptionsEndpoints
             divisions = await AccountDivisionEndpoints.Summaries(accountId, db, ct) });
     }
 
-    private static async Task<IResult> OperationsContacts(Guid accountId, CrmDbContext db, HttpContext http, CancellationToken ct, Guid? divisionId)
+    private static async Task<IResult> OperationsContacts(Guid accountId, CrmDbContext db, HttpContext http, CancellationToken ct, Guid? divisionId, bool? includeDirectory)
     {
         var scoped = CrmAccess.Scope(http, "operations.crm.account.select") &&
             CrmAccess.Scope(http, "operations.crm.contact.read");
         if (!scoped && !CrmAccess.Scope(http, "crm.contact.read")) return CrmAccess.Denied();
         var accounts = scoped ? OperationalAccounts(db, http) : CrmAccess.VisibleAccounts(db, http);
         if (!await accounts.AnyAsync(a => a.Id == accountId, ct)) return CrmAccess.Denied();
-        return await ContactEndpoints.ProjectOperationsContactsAsync(accountId, db, ct, divisionId);
+        return await ContactEndpoints.ProjectOperationsContactsAsync(accountId, db, ct, divisionId, includeDirectory == true);
     }
 
     private static async Task<IResult> List(CrmDbContext db, HttpContext http,

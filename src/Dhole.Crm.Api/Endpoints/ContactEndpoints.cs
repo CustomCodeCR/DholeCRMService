@@ -97,7 +97,7 @@ internal static class ContactEndpoints
         return await ProjectOperationsContactsAsync(id, db, ct);
     }
 
-    internal static async Task<IResult> ProjectOperationsContactsAsync(Guid id, CrmDbContext db, CancellationToken ct, Guid? divisionId = null)
+    internal static async Task<IResult> ProjectOperationsContactsAsync(Guid id, CrmDbContext db, CancellationToken ct, Guid? divisionId = null, bool includeDirectory = false)
     {
         if (divisionId.HasValue && !await db.Set<AccountDivision>().AnyAsync(x => x.AccountId == id && x.Id == divisionId, ct))
             return Results.NotFound();
@@ -115,12 +115,13 @@ internal static class ContactEndpoints
                 contact.LastName, contact.JobTitle, contact.Email, contact.Phone,
                 contact.CountryId, link.IsPrimary, link.IsOperationsContact
             }).ToListAsync(ct);
-        return Results.Ok(contacts.Where(x => !divisionId.HasValue ||
+        var projected = contacts.Where(x => !divisionId.HasValue ||
                 !byContact[x.id].Any() || byContact[x.id].Contains(divisionId.Value))
             .Select(x => new { x.id, x.accountId, x.Name, x.FirstName, x.LastName, x.JobTitle, x.Email, x.Phone,
                 x.CountryId, x.IsPrimary, x.IsOperationsContact,
                 divisionIds = byContact[x.id].ToArray(),
-                divisions = divisions.Where(d => byContact[x.id].Contains(d.Id)).ToArray() }));
+                divisions = divisions.Where(d => byContact[x.id].Contains(d.Id)).ToArray() }).ToArray();
+        return includeDirectory ? Results.Ok(new { divisions, contacts = projected }) : Results.Ok(projected);
     }
 
     private static async Task<IResult> PatchRoleFlags(

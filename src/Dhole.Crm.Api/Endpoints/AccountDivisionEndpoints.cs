@@ -37,7 +37,7 @@ internal static class AccountDivisionEndpoints
         var version = await db.Accounts.Where(x => x.Id == id).Select(x => x.RowVersion).SingleAsync(ct);
         var divisions = await Summaries(id, db, ct);
         var memberships = CrmAccess.Scope(h, "crm.contact.read")
-            ? await ActiveMemberships(id, db).ToArrayAsync(ct) : [];
+            ? await ActiveMemberships(id, db).ToArrayAsync(ct) : Array.Empty<AccountDivisionContact>();
         return Results.Ok(new { accountVersion = version, divisions = divisions.Select(x => new {
             x.Id, x.Name, contactIds = memberships.Where(m => m.DivisionId == x.Id).Select(m => m.ContactId)
         }) });
