@@ -22,17 +22,51 @@ internal static class PricingClientOptionsEndpoints
     public static RouteGroupBuilder MapPricingClientOptions(this RouteGroupBuilder group)
     {
         group.MapGet("/pricing-client-options", List);
+        group.MapGet("/operations/accounts/{accountId:guid}", OperationsAccount);
+        group.MapGet("/operations/accounts/{accountId:guid}/contacts", OperationsContacts);
         return group;
+    }
+
+    private static IQueryable<Dhole.Crm.Domain.Account> OperationalAccounts(CrmDbContext db, HttpContext http) =>
+        CrmAccess.Scope(http, "operations.crm.account.select")
+            ? db.Accounts.Where(a => a.ArchivedAt == null && a.Status == "Active")
+            : CrmAccess.VisibleAccounts(db, http);
+
+    private static async Task<IResult> OperationsAccount(Guid accountId, CrmDbContext db, HttpContext http,
+        IAuthReferenceService auth, CancellationToken ct)
+    {
+        if (!CrmAccess.Scope(http, "operations.crm.account.select") && !CrmDataEndpoints.HasRead(http, "account"))
+            return CrmAccess.Denied();
+        var account = await OperationalAccounts(db, http).AsNoTracking().Where(a => a.Id == accountId)
+            .Select(a => new { a.Id, a.DisplayName, a.LegalName, a.CountryId, a.ExecutiveUserId, a.IsCastroFallasExecutive })
+            .SingleOrDefaultAsync(ct);
+        if (account is null) return Results.NotFound();
+        var executive = account.IsCastroFallasExecutive ? "Castro Fallas"
+            : (await auth.GetActiveAsync(account.ExecutiveUserId, ct))?.DisplayName;
+        return Results.Ok(new { account.Id, account.DisplayName, account.LegalName, account.CountryId,
+            account.ExecutiveUserId, account.IsCastroFallasExecutive, executiveName = executive });
+    }
+
+    private static async Task<IResult> OperationsContacts(Guid accountId, CrmDbContext db, HttpContext http, CancellationToken ct)
+    {
+        var scoped = CrmAccess.Scope(http, "operations.crm.account.select") &&
+            CrmAccess.Scope(http, "operations.crm.contact.read");
+        if (!scoped && !CrmAccess.Scope(http, "crm.contact.read")) return CrmAccess.Denied();
+        var accounts = scoped ? OperationalAccounts(db, http) : CrmAccess.VisibleAccounts(db, http);
+        if (!await accounts.AnyAsync(a => a.Id == accountId, ct)) return CrmAccess.Denied();
+        return await ContactEndpoints.ProjectOperationsContactsAsync(accountId, db, ct);
     }
 
     private static async Task<IResult> List(CrmDbContext db, HttpContext http,
         IAuthReferenceService auth, string? mode, string? q, Guid? selectedClientId, Guid? sellerUserId,
         int? page, int? pageSize, CancellationToken ct)
     {
-        if (mode is not ("request" or "create"))
+        if (mode is not ("request" or "create" or "operations"))
             return CrmDataEndpoints.Bad("Invalid pricing client mode");
-        var accountsAllowed = CrmDataEndpoints.HasRead(http, "account");
-        var leadsAllowed = CrmDataEndpoints.HasRead(http, "lead");
+        var operations = mode == "operations";
+        var operationsSelect = operations && CrmAccess.Scope(http, "operations.crm.account.select");
+        var accountsAllowed = operationsSelect || CrmDataEndpoints.HasRead(http, "account");
+        var leadsAllowed = !operations && CrmDataEndpoints.HasRead(http, "lead");
         if (!accountsAllowed && !leadsAllowed) return CrmAccess.Denied();
         if (q?.Length > 220) return CrmDataEndpoints.Bad("Search too long");
         var actor = CrmAccess.UserId(http);
@@ -42,7 +76,10 @@ internal static class PricingClientOptionsEndpoints
             !CrmAccess.Scope(http, "crm.lead.read-all"))
             return CrmAccess.Denied();
 
-        var accounts = CrmAccess.VisibleAccounts(db, http).AsNoTracking()
+        var visible = operationsSelect
+            ? db.Accounts.Where(a => a.ArchivedAt == null && a.Status == "Active")
+            : CrmAccess.VisibleAccounts(db, http);
+        var accounts = visible.AsNoTracking()
             .Where(a => accountsAllowed)
             .Select(a => new OptionRow {
                 Kind = "account", Id = a.Id, DisplayName = a.DisplayName,
